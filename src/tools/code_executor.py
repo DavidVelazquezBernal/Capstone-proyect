@@ -23,6 +23,37 @@ def extract_function_name(code: str) -> str:
     return None
 
 
+def extract_function_parameters(code: str) -> list:
+    """
+    Extrae los nombres de los parámetros de la primera función Python.
+    
+    Args:
+        code (str): El código Python.
+        
+    Returns:
+        list: Lista de nombres de parámetros.
+    """
+    # Buscar la definición de función: def nombre(params):
+    match = re.search(r'def\s+\w+\s*\(([^)]*)\)', code)
+    if match:
+        params_str = match.group(1).strip()
+        if not params_str:
+            return []
+        # Extraer nombres de parámetros (antes de : o = si hay tipado o valor por defecto)
+        params = []
+        for param in params_str.split(','):
+            param = param.strip()
+            # Extraer nombre antes de : o = (tipado o valor por defecto)
+            param_name = re.split(r'[:\s=]', param)[0].strip()
+            if param_name and param_name != '*' and param_name != '**':
+                # Remover * o ** de *args, **kwargs
+                param_name = param_name.lstrip('*')
+                if param_name:
+                    params.append(param_name)
+        return params
+    return []
+
+
 def extract_function_name_ts(code: str) -> str:
     """
     Extrae el nombre de la primera función definida en un bloque de código TypeScript.
@@ -116,13 +147,39 @@ def CodeExecutionToolWithInterpreterPY(code: str, test_data: List[dict]) -> dict
             "traceback": "Error: Could not find function name in the provided code.",
             "results": []
         }
+    
+    # Extraer parámetros de la función para manejo de inputs tipo diccionario
+    function_params = extract_function_parameters(code)
 
     for idx, case in enumerate(test_data, start=1):
         inputs = case.get("input", [])
         expected = case.get("expected")
 
         try:
-            function_call_str = f"print({function_name}({inputs}))"
+            # Preparar los argumentos según el tipo de inputs
+            if isinstance(inputs, list):
+                # Lista de argumentos: usar directamente
+                args_str = ", ".join(repr(arg) for arg in inputs)
+            elif isinstance(inputs, dict):
+                # Si es un diccionario, buscar propiedades que coincidan con parámetros de la función
+                matched_values = []
+                for param in function_params:
+                    if param in inputs:
+                        value = inputs[param]
+                        matched_values.append(repr(value))
+                
+                if matched_values:
+                    # Si encontramos coincidencias, usar esos valores
+                    args_str = ", ".join(matched_values)
+                else:
+                    # Si no hay coincidencias, intentar con 'n' como fallback
+                    value = inputs.get('n', inputs)
+                    args_str = repr(value)
+            else:
+                # Valor único: usar repr() para mantener el tipo
+                args_str = repr(inputs)
+            
+            function_call_str = f"print({function_name}({args_str}))"
 
             #print(f"Sandbox test {idx}:  call: {function_call_str}  expected: {expected}")
             exec_result = sbx.run_code(function_call_str)
