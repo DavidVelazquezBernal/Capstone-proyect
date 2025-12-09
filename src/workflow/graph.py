@@ -7,10 +7,10 @@ from langgraph.graph import StateGraph, END, START
 from models.state import AgentState
 from agents.ingeniero_requisitos import ingeniero_de_requisitos_node
 from agents.product_owner import product_owner_node
-from agents.codificador import codificador_node
+from agents.codificador_corrector import codificador_node
 from agents.analizador_sonarqube import analizador_sonarqube_node
 from agents.generador_unit_tests import generador_unit_tests_node
-from agents.probador_depurador import probador_depurador_node
+from agents.ejecutor_pruebas import ejecutor_pruebas_node
 from agents.stakeholder import stakeholder_node
 
 
@@ -26,17 +26,17 @@ def create_workflow() -> StateGraph:
     # 1. Añadir Nodos (Agentes)
     workflow.add_node("IngenieroRequisitos", ingeniero_de_requisitos_node)
     workflow.add_node("ProductOwner", product_owner_node)
-    workflow.add_node("Codificador", codificador_node)
+    workflow.add_node("CodificadorCorrector", codificador_node)
     workflow.add_node("AnalizadorSonarQube", analizador_sonarqube_node)
     workflow.add_node("GeneradorUnitTests", generador_unit_tests_node)
-    workflow.add_node("ProbadorDepurador", probador_depurador_node)
+    workflow.add_node("EjecutorPruebas", ejecutor_pruebas_node)
     workflow.add_node("Stakeholder", stakeholder_node)
 
     # 2. Definir Transiciones Iniciales y Lineales
     workflow.add_edge(START, "IngenieroRequisitos")
     workflow.add_edge("IngenieroRequisitos", "ProductOwner")
-    workflow.add_edge("ProductOwner", "Codificador")
-    workflow.add_edge("Codificador", "AnalizadorSonarQube")
+    workflow.add_edge("ProductOwner", "CodificadorCorrector")
+    workflow.add_edge("CodificadorCorrector", "AnalizadorSonarQube")
 
     # 3. Transiciones Condicionales
 
@@ -50,26 +50,26 @@ def create_workflow() -> StateGraph:
                   else "QUALITY_FAILED")
         ),
         {
-            "QUALITY_FAILED": "Codificador",
+            "QUALITY_FAILED": "CodificadorCorrector",
             "QUALITY_PASSED": "GeneradorUnitTests",
             "QUALITY_LIMIT_EXCEEDED": END
         }
     )
 
-    # B. Transición del Generador de Unit Tests al Probador
-    workflow.add_edge("GeneradorUnitTests", "ProbadorDepurador")
+    # B. Transición del Generador de Unit Tests al Ejecutor de Pruebas
+    workflow.add_edge("GeneradorUnitTests", "EjecutorPruebas")
 
     # C. Bucle de Depuración (Interno: Corrección de Código)
     # Incluye control de límite de intentos
     workflow.add_conditional_edges(
-        "ProbadorDepurador",
+        "EjecutorPruebas",
         lambda x: (
             "PASSED" if x['pruebas_superadas']
             else ("DEBUG_LIMIT_EXCEEDED" if x['debug_attempt_count'] >= x['max_debug_attempts']
                   else "FAILED")
         ),
         {
-            "FAILED": "Codificador",
+            "FAILED": "CodificadorCorrector",
             "PASSED": "Stakeholder",
             "DEBUG_LIMIT_EXCEEDED": END
         }

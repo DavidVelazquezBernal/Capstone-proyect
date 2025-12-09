@@ -1,6 +1,6 @@
-"""
-Agente 3: Codificador
-Responsable de generar y corregir código Python según requisitos formales.
+"""Agente 3: Codificador/Corrector
+Responsable de generar código según requisitos formales y corregir errores.
+Corrige tanto errores de ejecución (traceback) como problemas de calidad (SonarQube).
 """
 
 import re

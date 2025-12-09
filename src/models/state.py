@@ -14,7 +14,7 @@ class AgentState(TypedDict):
     # Contexto y gestión de bucles
     max_attempts: int  # Máximo de reintentos antes de fallo final
     attempt_count: int  # Contador de intentos en el ciclo externo (stakeholder)
-    debug_attempt_count: int  # Contador de intentos en el bucle de depuración (probador-codificador)
+    debug_attempt_count: int  # Contador de intentos en el bucle de depuración (ejecutor_pruebas-codificador_corrector)
     max_debug_attempts: int  # Máximo de intentos en el bucle de depuración
     feedback_stakeholder: str
 

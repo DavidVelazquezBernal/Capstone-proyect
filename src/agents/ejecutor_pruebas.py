@@ -1,6 +1,6 @@
-"""
-Agente 4: Probador/Depurador
-Responsable de generar y ejecutar casos de prueba sobre el código generado.
+"""Agente 4: Ejecutor de Pruebas
+Responsable de generar casos de prueba funcionales y ejecutarlos sobre el código generado.
+Valida que el código funcione correctamente según los requisitos.
 """
 
 import re
@@ -13,21 +13,21 @@ from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto
 
 
-def probador_depurador_node(state: AgentState) -> AgentState:
+def ejecutor_pruebas_node(state: AgentState) -> AgentState:
     """
-    Nodo del Probador/Depurador.
-    Genera casos de prueba y ejecuta el código para validar su corrección.
+    Nodo del Ejecutor de Pruebas.
+    Genera casos de prueba funcionales y ejecuta el código para validar su corrección.
     """
     # PASO 1: Generar casos de test
-    print("--- 4.1 🧪 Probador/Depurador --- Generar casos de test")
+    print("--- 4.1 🧪 Ejecutor de Pruebas --- Generar casos de test")
 
     contexto_llm1 = f"Código generado: {state['codigo_generado']}"
     respuesta_llm1 = call_gemini(Prompts.PROBADOR_GENERADOR_TESTS, contexto_llm1)
     test_cases = re.sub(r'```python|```|\n', '', respuesta_llm1).strip()
     print(f"Test cases: {test_cases}")
 
-    # PASO 2: Probar casos de test
-    print("--- 4.2 🧪 Probador/Depurador --- Probar casos de test")
+    # PASO 2: Ejecutar casos de test
+    print("--- 4.2 🧪 Ejecutor de Pruebas --- Ejecutar casos de test")
 
     contexto_llm2 = (
         f"Código-generado: {state['codigo_generado']}\n"
