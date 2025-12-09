@@ -57,9 +57,12 @@ def detectar_lenguaje_y_extension(requisitos_formales: str) -> tuple[str, str, s
     
     try:
         requisitos = json.loads(requisitos_formales or '{}')
+        # Buscar en varios campos posibles
         lenguaje_version = requisitos.get('lenguaje_version', '').lower()
+        lenguaje_campo = requisitos.get('lenguaje', '').lower()
+        lenguaje_detectado = lenguaje_version or lenguaje_campo
         
-        if 'typescript' in lenguaje_version or 'ts' in lenguaje_version:
+        if 'typescript' in lenguaje_detectado or 'ts' in lenguaje_detectado:
             lenguaje = "typescript"
             extension = ".ts"
             patron_limpieza = r'```typescript|```'

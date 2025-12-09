@@ -62,6 +62,7 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         "traceback": "",
         "sonarqube_issues": "",
         "sonarqube_passed": False,
+        "tests_unitarios_generados": "",
         "requisito_clarificado": "",
         "requisitos_formales": "",
         "codigo_generado": ""
@@ -158,9 +159,9 @@ def main():
     #     "y quiero que la salida sea un string con una frase descriptiva."
     # )    
 
-    prompt = (
-        "Quiero una función simple en Python que capitalice la primera letra de cada palabra "        
-    )
+    # prompt = (
+    #     "Quiero una función simple en Python que capitalice la primera letra de cada palabra "        
+    # )
 
 
     # Opción 2: TypeScript
@@ -175,10 +176,13 @@ def main():
     # )
 
     # prompt = (
-    #     "Quiero una función simple en TypeScript apitalice la primera letra de cada palabra "        
+    #      "Quiero una función simple en TypeScript que capitalice la primera letra de cada palabra "        
     # )
 
-
+    prompt = {
+        "Quiero una función simple en TypeScript que valide si un correo electrónico es válido, "
+        "y quiero que la salida sea un string con una frase descriptiva."
+    }
     
     final_state = run_development_workflow(prompt, max_attempts=3)
     

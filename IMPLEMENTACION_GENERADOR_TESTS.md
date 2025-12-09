@@ -1,0 +1,158 @@
+# Resumen de Implementación: Nodo Generador de Unit Tests
+
+## 🎯 Objetivo
+Crear un nuevo nodo "Codificador-Generador-Unit Test" que genera tests unitarios automáticamente después del análisis de SonarQube y antes de la fase de pruebas funcionales.
+
+## ✅ Cambios Realizados
+
+### 1. Nuevo Agente: `generador_unit_tests.py`
+**Ubicación**: `src/agents/generador_unit_tests.py`
+
+**Funcionalidad**:
+- Detecta el lenguaje del código (TypeScript o Python)
+- Genera tests unitarios usando el LLM:
+  - **TypeScript**: Formato Vitest
+  - **Python**: Formato pytest
+- Guarda los tests en el directorio `output/`
+- Actualiza el estado con los tests generados
+
+### 2. Nuevo Prompt: `GENERADOR_UNIT_TESTS`
+**Ubicación**: `src/config/prompts.py`
+
+**Características del prompt**:
+- Instruye al LLM para generar tests según el lenguaje
+- Define estructura de tests (describe/it para Vitest, test_ para pytest)
+- Especifica cobertura: casos normales, edge cases, excepciones
+- Incluye instrucciones sobre imports y sintaxis correcta
+
+### 3. Actualización del Estado
+**Ubicación**: `src/models/state.py`
+
+**Campo agregado**:
+```python
+tests_unitarios_generados: str  # Tests unitarios generados (vitest/pytest)
+```
+
+### 4. Actualización del Grafo de Workflow
+**Ubicación**: `src/workflow/graph.py`
+
+**Cambios**:
+- Importación del nuevo nodo `generador_unit_tests_node`
+- Adición del nodo `GeneradorUnitTests` al grafo
+- Modificación de la transición condicional de SonarQube:
+  - `QUALITY_PASSED` ahora apunta a `GeneradorUnitTests` (antes iba a `ProbadorDepurador`)
+- Nueva transición directa: `GeneradorUnitTests → ProbadorDepurador`
+
+**Flujo actualizado**:
+```
+AnalizadorSonarQube → [Si pasa] → GeneradorUnitTests → ProbadorDepurador
+                   ↓
+            [Si falla] → Codificador
+```
+
+### 5. Actualización del Estado Inicial
+**Ubicación**: `src/main.py`
+
+**Cambio**:
+```python
+initial_state = {
+    ...
+    "tests_unitarios_generados": "",  # Nuevo campo
+    ...
+}
+```
+
+### 6. Documentación Actualizada
+
+**Nuevos archivos**:
+- `GENERADOR_UNIT_TESTS.md`: Documentación completa del nuevo nodo
+
+**Archivos modificados**:
+- `FLOW_DIAGRAM.md`: Diagrama de flujo actualizado con el nuevo nodo
+
+## 📊 Flujo Actualizado
+
+### Secuencia Normal
+```
+1. Ingeniero Requisitos
+2. Product Owner
+3. Codificador
+4. Analizador SonarQube (calidad de código)
+5. Generador Unit Tests ← NUEVO
+6. Probador/Depurador (tests funcionales)
+7. Stakeholder (validación de negocio)
+```
+
+### Características del Nodo
+
+#### ✅ Ventajas
+- **Sin ejecución**: Solo genera el código, no lo ejecuta
+- **Sin bucles**: Siempre continúa al siguiente paso
+- **Frameworks estándar**: Usa Vitest y pytest
+- **Documentación viva**: Los tests sirven como documentación
+
+#### 📁 Archivos Generados
+- TypeScript: `unit_tests_req{X}_sq{Y}.test.ts`
+- Python: `test_unit_req{X}_sq{Y}.test.py`
+
+Donde:
+- `X` = número de intento global
+- `Y` = número de intento de corrección SonarQube
+
+#### 🧪 Contenido de los Tests
+Los tests generados incluyen:
+- Casos normales (happy path)
+- Casos límite (edge cases)
+- Manejo de errores y excepciones
+- Validación de tipos (cuando aplica)
+
+## 🔧 Archivos Modificados
+
+1. `src/agents/generador_unit_tests.py` - **NUEVO**
+2. `src/config/prompts.py` - Agregado `GENERADOR_UNIT_TESTS`
+3. `src/models/state.py` - Agregado campo `tests_unitarios_generados`
+4. `src/workflow/graph.py` - Integración del nuevo nodo
+5. `src/main.py` - Inicialización del nuevo campo
+6. `FLOW_DIAGRAM.md` - Diagrama actualizado
+7. `GENERADOR_UNIT_TESTS.md` - **NUEVO** - Documentación completa
+
+## 🚀 Próximos Pasos para Usar
+
+1. **Ejecutar el sistema**:
+   ```powershell
+   python src/main.py
+   ```
+
+2. **Verificar salida**:
+   - Los tests unitarios se guardarán en `output/`
+   - Buscar archivos `*.test.ts` o `test_*.py`
+
+3. **Ejecutar tests (opcional)**:
+   - TypeScript: `vitest run unit_tests_req1_sq0.test.ts`
+   - Python: `pytest test_unit_req1_sq0.test.py`
+
+## 📝 Notas Importantes
+
+- ⚠️ Los tests NO se ejecutan automáticamente en el flujo
+- 📦 Los tests generados están listos para ejecutarse con los frameworks estándar
+- 🔄 No afecta los bucles de corrección existentes
+- ✅ Validación manual: Se puede ejecutar los tests fuera del flujo
+
+## 🎨 Beneficios Implementados
+
+1. **Calidad**: Asegura cobertura de tests desde el inicio
+2. **Documentación**: Los tests documentan el comportamiento esperado
+3. **Mantenibilidad**: Facilita futuras modificaciones
+4. **Estándares**: Usa frameworks y convenciones de la industria
+
+## ✔️ Verificación
+
+Para verificar que todo funciona:
+
+```powershell
+# Desde el directorio src
+cd "c:\ACADEMIA\IIA\Capstone proyect v2\src"
+python -c "from agents.generador_unit_tests import generador_unit_tests_node; from config.prompts import Prompts; print('✅ OK')"
+```
+
+Salida esperada: `✅ OK`

@@ -156,7 +156,7 @@ def probador_depurador_node(state: AgentState) -> AgentState:
         state['pruebas_superadas'] = False
         state['traceback'] = respuesta_dict.get("traceback", "")
         state['debug_attempt_count'] += 1  # Incrementar contador de intentos de depuración
-        print(f"   -> Resultado: FAILED. Traceback: {state['traceback'][:50]}...")
+        print(f"   -> Resultado: FAILED. Traceback: {state['traceback']}...")
         print(f"   -> Intento de depuración: {state['debug_attempt_count']}/{state['max_debug_attempts']}")
         print(f"   ->        OUTPUT: {state['pruebas_superadas']}")
         

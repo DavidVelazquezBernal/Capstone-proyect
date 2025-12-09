@@ -9,6 +9,7 @@ from agents.ingeniero_requisitos import ingeniero_de_requisitos_node
 from agents.product_owner import product_owner_node
 from agents.codificador import codificador_node
 from agents.analizador_sonarqube import analizador_sonarqube_node
+from agents.generador_unit_tests import generador_unit_tests_node
 from agents.probador_depurador import probador_depurador_node
 from agents.stakeholder import stakeholder_node
 
@@ -27,6 +28,7 @@ def create_workflow() -> StateGraph:
     workflow.add_node("ProductOwner", product_owner_node)
     workflow.add_node("Codificador", codificador_node)
     workflow.add_node("AnalizadorSonarQube", analizador_sonarqube_node)
+    workflow.add_node("GeneradorUnitTests", generador_unit_tests_node)
     workflow.add_node("ProbadorDepurador", probador_depurador_node)
     workflow.add_node("Stakeholder", stakeholder_node)
 
@@ -49,14 +51,15 @@ def create_workflow() -> StateGraph:
         ),
         {
             "QUALITY_FAILED": "Codificador",
-            "QUALITY_PASSED": "ProbadorDepurador",
+            "QUALITY_PASSED": "GeneradorUnitTests",
             "QUALITY_LIMIT_EXCEEDED": END
         }
     )
 
-    # B. Bucle de Depuración (Interno: Corrección de Código)
+    # B. Transición del Generador de Unit Tests al Probador
+    workflow.add_edge("GeneradorUnitTests", "ProbadorDepurador")
 
-    # B. Bucle de Depuración (Interno: Corrección de Código)
+    # C. Bucle de Depuración (Interno: Corrección de Código)
     # Incluye control de límite de intentos
     workflow.add_conditional_edges(
         "ProbadorDepurador",

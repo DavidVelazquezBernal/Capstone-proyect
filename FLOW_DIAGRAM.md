@@ -10,10 +10,12 @@ graph TD
     
     COD --> SQ[3.5 Analizador SonarQube<br/>Análisis de calidad]
     
-    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| PROB[4. Probador/Depurador<br/>Tests funcionales]
+    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| GUT[3.6 Generador Unit Tests<br/>Genera tests unitarios]
     SQ -->|❌ Issues encontrados| SQCHECK{Intentos SQ<br/>< MAX?}
     SQCHECK -->|Sí| COD
     SQCHECK -->|No| ENDLIMIT1[❌ FIN<br/>Límite calidad excedido]
+    
+    GUT --> PROB[4. Probador/Depurador<br/>Tests funcionales]
     
     PROB -->|✅ Tests pasan| SH[5. Stakeholder<br/>Validación negocio]
     PROB -->|❌ Tests fallan| DEBUGCHECK{Intentos Debug<br/>< MAX?}
@@ -31,6 +33,7 @@ graph TD
     style ENDLIMIT2 fill:#FFB6C1
     style ENDFINAL fill:#FFB6C1
     style SQ fill:#87CEEB
+    style GUT fill:#98FB98
     style COD fill:#FFD700
     style PROB fill:#FFA500
     style SH fill:#DDA0DD
@@ -38,15 +41,16 @@ graph TD
 
 ## 🔄 Los Tres Bucles de Corrección
 
-### Bucle A: Calidad de Código (NUEVO)
+### Bucle A: Calidad de Código
 ```
 Codificador → SonarQube → [Issues?] → Codificador
                   ↓
-              [OK] → Continúa
+              [OK] → Generador Unit Tests → Continúa
 ```
 - **Límite**: 2 intentos (configurable)
 - **Salida límite**: `QUALITY_LIMIT_EXCEEDED`
 - **Verifica**: Bugs, vulnerabilidades, code smells
+- **Nuevo**: Genera tests unitarios (vitest/pytest) tras pasar calidad
 
 ### Bucle B: Depuración Funcional
 ```
@@ -69,16 +73,16 @@ Ing. Requisitos → ... → Stakeholder → [Rechaza?] → Ing. Requisitos
 - **Verifica**: Cumplimiento de visión de negocio
 
 ## 📈 Orden de Ejecución
-
 ### Secuencia Normal (Todo OK)
 1. Ingeniero Requisitos → clarifica
 2. Product Owner → formaliza
 3. Codificador → genera código
 4. **SonarQube** → ✅ calidad OK
-5. Probador → ✅ tests pasan
-6. Stakeholder → ✅ valida
+5. **Generador Unit Tests** → genera tests unitarios (vitest/pytest)
+6. Probador → ✅ tests pasan
+7. Stakeholder → ✅ valida
+8. ✅ **FIN EXITOSO**alida
 7. ✅ **FIN EXITOSO**
-
 ### Escenario con Correcciones de Calidad
 1. Ingeniero Requisitos → clarifica
 2. Product Owner → formaliza
@@ -87,8 +91,10 @@ Ing. Requisitos → ... → Stakeholder → [Rechaza?] → Ing. Requisitos
 5. **Vuelve a Codificador** (intento 2, SQ=1)
 6. Codificador → corrige issues
 7. **SonarQube** → ✅ 1 CRITICAL issue (aceptable)
-8. Probador → ✅ tests pasan
-9. Stakeholder → ✅ valida
+8. **Generador Unit Tests** → genera tests unitarios
+9. Probador → ✅ tests pasan
+10. Stakeholder → ✅ valida
+11. ✅ **FIN EXITOSO**lida
 10. ✅ **FIN EXITOSO**
 
 ### Escenario Límite de Calidad Excedido

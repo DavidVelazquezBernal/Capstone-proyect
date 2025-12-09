@@ -33,5 +33,8 @@ class AgentState(TypedDict):
     sonarqube_attempt_count: int  # Contador de intentos de corrección de SonarQube
     max_sonarqube_attempts: int  # Máximo de intentos de corrección de calidad
 
+    # Unit Tests Generation
+    tests_unitarios_generados: str  # Tests unitarios generados (vitest/pytest)
+
     # Validación
     validado: bool
