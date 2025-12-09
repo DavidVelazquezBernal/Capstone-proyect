@@ -1,8 +1,10 @@
 """
 Cliente LLM para interacción con Google Gemini.
+Incluye manejo de errores y reintentos automáticos.
 """
 
 import os
+import time
 from typing import Optional
 from pydantic import BaseModel
 from google import genai
@@ -90,17 +92,52 @@ def call_gemini(
         return response.text
 
     except APIError as e:
-        # Detectar errores 503 (Service Unavailable) o ResourceExhausted
+        # Detectar errores 503 (Service Unavailable) o sobrecarga
         error_message = str(e)
-        if "503" in error_message or "SERVICE_UNAVAILABLE" in error_message or "ResourceExhausted" in error_message:
+        
+        if "503" in error_message or "UNAVAILABLE" in error_message or "overloaded" in error_message.lower():
             print(f"\n{'='*60}")
-            print("🚫 ERROR CRÍTICO: SERVICIO NO DISPONIBLE (503)")
+            print("⚠️ ERROR 503: SERVICIO SOBRECARGADO")
             print(f"{'='*60}")
-            print(f"El servicio de Gemini está temporalmente no disponible.")
-            print(f"Detalles del error: {e}")
+            print(f"❌ El modelo de Gemini está sobrecargado")
+            print(f"📊 Detalles: {e}")
+            print(f"\n🔄 REINTENTANDO con espera exponencial...")
             print(f"{'='*60}\n")
-            # Lanzar excepción específica para cancelar el proceso
-            raise SystemExit(f"PROCESO CANCELADO: Error 503 - Servicio no disponible. {e}")
+            
+            # Reintentar con backoff exponencial
+            max_retries = settings.MAX_API_RETRIES
+            for attempt in range(1, max_retries + 1):
+                wait_time = settings.RETRY_BASE_DELAY ** attempt  # 2, 4, 8 segundos
+                print(f"🔄 Intento {attempt}/{max_retries} - Esperando {wait_time}s...")
+                time.sleep(wait_time)
+                
+                try:
+                    response = client.models.generate_content(
+                        model=settings.MODEL_NAME,
+                        contents=full_prompt,
+                        config=config,
+                    )
+                    print(f"✅ Reintento exitoso en intento {attempt}")
+                    return response.text
+                except APIError as retry_error:
+                    if attempt == max_retries:
+                        print(f"\n{'='*60}")
+                        print("❌ TODOS LOS REINTENTOS FALLARON")
+                        print(f"{'='*60}")
+                        print(f"El servicio de Gemini sigue no disponible después de {max_retries} intentos")
+                        print(f"Última error: {retry_error}")
+                        print(f"\n💡 RECOMENDACIONES:")
+                        print(f"   1. Espera 5-10 minutos e intenta de nuevo")
+                        print(f"   2. Verifica el estado de Google AI: https://status.cloud.google.com/")
+                        print(f"   3. Considera usar otro modelo si está disponible")
+                        print(f"{'='*60}\n")
+                        raise SystemExit(f"PROCESO CANCELADO: Servicio de Gemini no disponible después de {max_retries} reintentos.")
+                    else:
+                        print(f"   ❌ Intento {attempt} falló: {retry_error}")
+                        continue
+        
+        # Otros errores de API
         return f"ERROR_API: No se pudo conectar con Gemini. {e}"
+        
     except Exception as e:
         return f"ERROR_GENERAL: {e}"

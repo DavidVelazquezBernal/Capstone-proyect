@@ -55,9 +55,13 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         "attempt_count": 0,
         "debug_attempt_count": 0,
         "max_debug_attempts": settings.MAX_DEBUG_ATTEMPTS,
+        "sonarqube_attempt_count": 0,
+        "max_sonarqube_attempts": settings.MAX_SONARQUBE_ATTEMPTS,
         "pruebas_superadas": False,
         "validado": False,
         "traceback": "",
+        "sonarqube_issues": "",
+        "sonarqube_passed": False,
         "requisito_clarificado": "",
         "requisitos_formales": "",
         "codigo_generado": ""

@@ -27,5 +27,11 @@ class AgentState(TypedDict):
     traceback: str
     pruebas_superadas: bool
 
+    # SonarQube Analysis
+    sonarqube_issues: str  # Reporte de issues de SonarQube
+    sonarqube_passed: bool  # Si el análisis de calidad pasó
+    sonarqube_attempt_count: int  # Contador de intentos de corrección de SonarQube
+    max_sonarqube_attempts: int  # Máximo de intentos de corrección de calidad
+
     # Validación
     validado: bool

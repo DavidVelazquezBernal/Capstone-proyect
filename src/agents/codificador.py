@@ -15,13 +15,25 @@ def codificador_node(state: AgentState) -> AgentState:
     """
     Nodo del Codificador.
     Genera código que satisface los requisitos formales o corrige errores.
+    Puede corregir errores de ejecución (traceback) o issues de calidad (sonarqube_issues).
     """
     print("--- 3. 💻 Codificador ---")
 
-    contexto_llm = (
-        f"Requisitos Formales (JSON): {state['requisitos_formales']}\n"
-        f"Traceback para corrección: {state['traceback']}"
-    )
+    # Construir contexto con todas las correcciones necesarias
+    contexto_llm = f"Requisitos Formales (JSON): {state['requisitos_formales']}\n"
+    
+    # Añadir traceback si hay errores de ejecución
+    if state['traceback']:
+        contexto_llm += f"\nTraceback para corrección de errores de ejecución:\n{state['traceback']}\n"
+    
+    # Añadir issues de SonarQube si hay problemas de calidad
+    if state.get('sonarqube_issues'):
+        contexto_llm += f"\nInstrucciones de corrección de calidad (SonarQube):\n{state['sonarqube_issues']}\n"
+        print(f"   -> Corrigiendo issues de calidad de código (SonarQube)")
+    
+    # Añadir código previo si existe para facilitar la corrección
+    if state.get('codigo_generado') and (state['traceback'] or state.get('sonarqube_issues')):
+        contexto_llm += f"\nCódigo anterior a corregir:\n{state['codigo_generado']}\n"
 
     respuesta_llm = call_gemini(Prompts.CODIFICADOR, contexto_llm)
 
@@ -29,7 +41,7 @@ def codificador_node(state: AgentState) -> AgentState:
     state['codigo_generado'] = respuesta_llm
     state['traceback'] = ""
     
-    print(f"   -> Código generado para pruebas.")
+    print(f"   -> Código generado/corregido.")
     print(f"   ->        OUTPUT: {state['codigo_generado']}")
 
     # Guardar output en archivo con extensión correcta
@@ -38,8 +50,8 @@ def codificador_node(state: AgentState) -> AgentState:
     )
     codigo_limpio = re.sub(patron_limpieza, '', state['codigo_generado']).strip()
     
-    # Incluir intento de requisito y de debug
-    nombre_archivo = f"3_codificador_req{state['attempt_count']}_debug{state['debug_attempt_count']}{extension}"
+    # Incluir intento de requisito, de debug y de sonarqube
+    nombre_archivo = f"3_codificador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
     guardar_fichero_texto(
         nombre_archivo,
         codigo_limpio,

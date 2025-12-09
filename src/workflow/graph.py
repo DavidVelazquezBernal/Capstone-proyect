@@ -8,6 +8,7 @@ from models.state import AgentState
 from agents.ingeniero_requisitos import ingeniero_de_requisitos_node
 from agents.product_owner import product_owner_node
 from agents.codificador import codificador_node
+from agents.analizador_sonarqube import analizador_sonarqube_node
 from agents.probador_depurador import probador_depurador_node
 from agents.stakeholder import stakeholder_node
 
@@ -25,6 +26,7 @@ def create_workflow() -> StateGraph:
     workflow.add_node("IngenieroRequisitos", ingeniero_de_requisitos_node)
     workflow.add_node("ProductOwner", product_owner_node)
     workflow.add_node("Codificador", codificador_node)
+    workflow.add_node("AnalizadorSonarQube", analizador_sonarqube_node)
     workflow.add_node("ProbadorDepurador", probador_depurador_node)
     workflow.add_node("Stakeholder", stakeholder_node)
 
@@ -32,11 +34,29 @@ def create_workflow() -> StateGraph:
     workflow.add_edge(START, "IngenieroRequisitos")
     workflow.add_edge("IngenieroRequisitos", "ProductOwner")
     workflow.add_edge("ProductOwner", "Codificador")
-    workflow.add_edge("Codificador", "ProbadorDepurador")
+    workflow.add_edge("Codificador", "AnalizadorSonarQube")
 
     # 3. Transiciones Condicionales
 
-    # A. Bucle de Depuración (Interno: Corrección de Código)
+    # A. Bucle de Calidad de Código (SonarQube: Corrección de Issues de Calidad)
+    # Incluye control de límite de intentos
+    workflow.add_conditional_edges(
+        "AnalizadorSonarQube",
+        lambda x: (
+            "QUALITY_PASSED" if x['sonarqube_passed']
+            else ("QUALITY_LIMIT_EXCEEDED" if x['sonarqube_attempt_count'] >= x['max_sonarqube_attempts']
+                  else "QUALITY_FAILED")
+        ),
+        {
+            "QUALITY_FAILED": "Codificador",
+            "QUALITY_PASSED": "ProbadorDepurador",
+            "QUALITY_LIMIT_EXCEEDED": END
+        }
+    )
+
+    # B. Bucle de Depuración (Interno: Corrección de Código)
+
+    # B. Bucle de Depuración (Interno: Corrección de Código)
     # Incluye control de límite de intentos
     workflow.add_conditional_edges(
         "ProbadorDepurador",
@@ -52,7 +72,7 @@ def create_workflow() -> StateGraph:
         }
     )
 
-    # B. Bucle de Validación (Externo: Reingeniería de Requisitos / Fallo Final)
+    # C. Bucle de Validación (Externo: Reingeniería de Requisitos / Fallo Final)
     workflow.add_conditional_edges(
         "Stakeholder",
         lambda x: (
