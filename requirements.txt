@@ -1,0 +1,27 @@
+# Dependencias principales del proyecto
+# Sistema Multiagente de Desarrollo Ágil con LangGraph
+
+# LLM y Framework
+google-genai>=0.3.0
+langgraph>=0.2.0
+langchain-core>=0.3.0
+
+# Validación de datos - versiones compatibles
+pydantic>=2.0.0,<3.0.0
+pydantic-core>=2.0.0
+
+# Ejecución segura de código
+e2b-code-interpreter>=1.0.0
+
+# Gestión de entorno
+python-dotenv>=1.0.0
+
+# Visualización (opcional para notebooks)
+ipython>=8.0.0
+
+# Utilidades
+typing-extensions>=4.0.0
+annotated-types>=0.4.0
+
+# Dependencias de compresión y serialización requeridas por langchain
+zstandard>=0.19.0
