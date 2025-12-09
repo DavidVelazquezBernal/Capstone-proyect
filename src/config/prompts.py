@@ -109,6 +109,15 @@ class Prompts:
     Si todos los casos pasan, generar un informe con estado "PASSED".
     Si alguno falla, generar un informe con estado "FAILED" e incluir el Traceback/proveniencia del fallo proporcionado por la herramienta.
 
+    CRÍTICO - Manejo de Errores Esperados:
+    - Si el valor "expected" es un mensaje de error o excepción (ej: "La entrada debe ser...", "Error:", etc.)
+      Y el código lanza una excepción con ese mensaje, entonces el test debe marcarse como "PASSED".
+    - Compara el mensaje de error lanzado con el valor "expected". Si coinciden (aunque sea parcialmente), es PASSED.
+    - Solo marca como FAILED si:
+      * Se esperaba un valor normal pero se obtuvo un error
+      * Se esperaba un error pero no se lanzó
+      * Se esperaba un error pero el mensaje es diferente
+
     Formato de salida:
     Un diccionario que contiene:
       "status": "PASSED" | "FAILED",

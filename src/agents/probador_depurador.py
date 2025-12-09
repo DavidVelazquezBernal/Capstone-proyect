@@ -127,13 +127,21 @@ def probador_depurador_node(state: AgentState) -> AgentState:
                 status = result_case.get("result", "N/A")
                 traceback_case = result_case.get("traceback", "")
 
-                print(f"🧪 Caso de Prueba #{case_num} - Estado: {status}")
+                # Emoji según el estado
+                status_emoji = "✅" if status == "PASSED" else "❌"
+                
+                print(f"🧪 Caso de Prueba #{case_num} - Estado: {status_emoji} {status}")
                 print(f"  ➡️ Entrada (Input): {input_val}")
                 print(f"  ✅ Esperado (Expected): {expected}")
-                print(f"  ❌ Obtenido (Actual): {actual}")
+                
+                # Si es un error esperado que se lanzó correctamente, mostrar de forma positiva
+                if status == "PASSED" and ("Error" in str(expected) or "debe ser" in str(expected)):
+                    print(f"  ✅ Error lanzado correctamente: {str(actual)[:100]}...")
+                else:
+                    print(f"  📤 Obtenido (Actual): {actual}")
 
-                if status != "PASSED":
-                    print(f"  ⚠️ Traceback del Caso: {traceback_case or 'N/A'}")
+                if status != "PASSED" and traceback_case:
+                    print(f"  ⚠️ Traceback del Caso: {traceback_case[:200]}...")
 
                 print("-" * 20)
 
