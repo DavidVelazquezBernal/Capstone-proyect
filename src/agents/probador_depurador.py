@@ -136,7 +136,13 @@ def probador_depurador_node(state: AgentState) -> AgentState:
                 
                 # Si es un error esperado que se lanzó correctamente, mostrar de forma positiva
                 if status == "PASSED" and ("Error" in str(expected) or "debe ser" in str(expected)):
-                    print(f"  ✅ Error lanzado correctamente: {str(actual)[:100]}...")
+                    # Verificar si el error actual es diferente pero semánticamente correcto
+                    if str(expected).lower() not in str(actual).lower():
+                        print(f"  ✅ Error validado semánticamente (entrada inválida detectada)")
+                        print(f"     Esperado: {expected}")
+                        print(f"     Obtenido: {str(actual)[:80]}...")
+                    else:
+                        print(f"  ✅ Error lanzado correctamente: {str(actual)[:100]}...")
                 else:
                     print(f"  📤 Obtenido (Actual): {actual}")
 

@@ -153,10 +153,10 @@ def main():
     #     "y quiero que la salida sea una frase."
     # )
 
-    prompt = (
-        "Quiero una función simple en Python para generar el factorial de un número, "
-        "y quiero que la salida sea un string con una frase descriptiva."
-    )    
+    # prompt = (
+    #     "Quiero una función simple en Python para generar el factorial de un número, "
+    #     "y quiero que la salida sea un string con una frase descriptiva."
+    # )    
 
 
     # Opción 2: TypeScript
@@ -165,10 +165,10 @@ def main():
     #     "y quiero que la salida sea un string con una frase descriptiva."
     # )
 
-    # prompt = (
-    #     "Quiero una función simple en TypeScript para generar el factorial de un número, "
-    #     "y quiero que la salida sea un string con una frase descriptiva."
-    # )
+    prompt = (
+        "Quiero una función simple en TypeScript para generar el factorial de un número, "
+        "y quiero que la salida sea un string con una frase descriptiva."
+    )
     
     final_state = run_development_workflow(prompt, max_attempts=3)
     

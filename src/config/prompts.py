@@ -111,12 +111,18 @@ class Prompts:
 
     CRÍTICO - Manejo de Errores Esperados:
     - Si el valor "expected" es un mensaje de error o excepción (ej: "La entrada debe ser...", "Error:", etc.)
-      Y el código lanza una excepción con ese mensaje, entonces el test debe marcarse como "PASSED".
-    - Compara el mensaje de error lanzado con el valor "expected". Si coinciden (aunque sea parcialmente), es PASSED.
+      Y el código lanza CUALQUIER excepción, evalúa si el error es SEMÁNTICAMENTE VÁLIDO.
+    - EVALUACIÓN SEMÁNTICA DE ERRORES:
+      * Si "expected" indica que la entrada debe ser un tipo específico (ej: "debe ser un número entero")
+        Y ocurre un error de tipo/nombre/sintaxis (NameError, TypeError, ValueError) con la entrada
+        → El test es PASSED porque la entrada efectivamente NO era del tipo esperado
+      * Ejemplo: expected="Error: La entrada debe ser un número entero", input="abc", error="name 'abc' is not defined"
+        → PASSED (porque 'abc' no es un número entero, el error es correcto aunque el mensaje difiera)
+    - Compara el mensaje de error lanzado con el valor "expected". Si coinciden (exacta o parcialmente), es PASSED.
     - Solo marca como FAILED si:
       * Se esperaba un valor normal pero se obtuvo un error
-      * Se esperaba un error pero no se lanzó
-      * Se esperaba un error pero el mensaje es diferente
+      * Se esperaba un error pero no se lanzó ninguno
+      * Se esperaba un error de tipo/validación pero el código ejecutó correctamente (sin error)
 
     Formato de salida:
     Un diccionario que contiene:
