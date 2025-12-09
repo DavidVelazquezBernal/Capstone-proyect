@@ -24,7 +24,7 @@ class Settings:
     
     # Configuración del flujo de trabajo
     MAX_ATTEMPTS: int = 1  # Máximo de ciclos completos antes de fallo
-    MAX_DEBUG_ATTEMPTS: int = 1  # Máximo de intentos en el bucle de depuración (Probador-Codificador)
+    MAX_DEBUG_ATTEMPTS: int = 3 # Máximo de intentos en el bucle de depuración (Probador-Codificador)
     
     # Directorios
     OUTPUT_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "output")

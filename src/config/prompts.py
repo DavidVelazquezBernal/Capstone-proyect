@@ -58,12 +58,17 @@ class Prompts:
     Incluir pruebas pequeñas o ejemplos de uso mínimos dentro del propio bloque de código si es pertinente.
 
     Output Esperado:
-    Código completo, envuelto en un bloque de código markdown con la etiqueta python.
+    Código completo, envuelto en un bloque de código markdown con la etiqueta python o typescript según corresponda.
 
     Requisitos de calidad:
     La función debe contener comentarios explicativos donde sea útil.
     Manejo básico de errores con excepciones bien descritas según el lenguaje pedido.
     Tipos de entrada y salida tipados según el lenguaje pedido (type hints) cuando sea posible.
+    
+    IMPORTANTE - Manejo de precisión numérica:
+    Para TypeScript: Si la función realiza operaciones con números de punto flotante (decimales), DEBE redondear el resultado 
+    para evitar errores de precisión binaria. Usa: Math.round(resultado * 1e10) / 1e10 antes de devolver o formatear el valor.
+    Para Python: Si trabajas con decimales y necesitas precisión exacta, considera redondear con round() o usar el módulo decimal.
     """
     
     PROBADOR_GENERADOR_TESTS = """

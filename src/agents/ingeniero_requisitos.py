@@ -6,7 +6,9 @@ Responsable de clarificar y refinar los requisitos iniciales o feedback del stak
 import re
 from models.state import AgentState
 from config.prompts import Prompts
+from config.settings import settings
 from llm.gemini_client import call_gemini
+from tools.file_utils import guardar_fichero_texto
 
 
 def ingeniero_de_requisitos_node(state: AgentState) -> AgentState:
@@ -32,5 +34,12 @@ def ingeniero_de_requisitos_node(state: AgentState) -> AgentState:
 
     print(f"   -> Requisito Clarificado. Intento: {state['attempt_count']}/{state['max_attempts']}")
     print(f"   ->        OUTPUT: \n{state['requisito_clarificado']}")
+    
+    # Guardar output en archivo
+    guardar_fichero_texto(
+        f"1_ingeniero_requisitos_intento_{state['attempt_count']}.txt",
+        state['requisito_clarificado'],
+        directorio=settings.OUTPUT_DIR
+    )
     
     return state

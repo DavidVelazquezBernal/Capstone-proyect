@@ -6,7 +6,9 @@ Responsable de formalizar requisitos en especificaciones técnicas ejecutables.
 from models.state import AgentState
 from models.schemas import FormalRequirements
 from config.prompts import Prompts
+from config.settings import settings
 from llm.gemini_client import call_gemini
+from tools.file_utils import guardar_fichero_texto
 
 
 def product_owner_node(state: AgentState) -> AgentState:
@@ -30,6 +32,13 @@ def product_owner_node(state: AgentState) -> AgentState:
         state['requisitos_formales'] = req_data.model_dump_json(indent=2)
         print(f"   -> Requisitos Formales generados (JSON validado).")
         print(f"   ->        OUTPUT: \n{state['requisitos_formales']}")
+        
+        # Guardar output en archivo
+        guardar_fichero_texto(
+            f"2_product_owner_intento_{state['attempt_count']}.json",
+            state['requisitos_formales'],
+            directorio=settings.OUTPUT_DIR
+        )
     except Exception as e:
         state['requisitos_formales'] = (
             f"ERROR_PARSING: Fallo al validar JSON. {e}. "

@@ -6,7 +6,9 @@ Responsable de validar que el código cumple la visión de negocio.
 import re
 from models.state import AgentState
 from config.prompts import Prompts
+from config.settings import settings
 from llm.gemini_client import call_gemini
+from tools.file_utils import guardar_fichero_texto
 
 
 def stakeholder_node(state: AgentState) -> AgentState:
@@ -33,6 +35,13 @@ def stakeholder_node(state: AgentState) -> AgentState:
     if "VALIDADO" in respuesta_llm:
         state['validado'] = True
         print("   -> Resultado: VALIDADO. Proyecto Terminado.")
+        
+        # Guardar validación exitosa
+        guardar_fichero_texto(
+            f"5_stakeholder_intento_{state['attempt_count']}_VALIDADO.txt",
+            f"Validación: APROBADO\n\nRespuesta:\n{respuesta_llm}",
+            directorio=settings.OUTPUT_DIR
+        )
     else:
         state['validado'] = False
         # Extraer el feedback de rechazo
@@ -42,5 +51,12 @@ def stakeholder_node(state: AgentState) -> AgentState:
         print(f"   -> Resultado: RECHAZADO.")
         print(f"   -> Motivo: {state['feedback_stakeholder']}")
         print("   -> Volviendo a Ingeniero de Requisitos.")
+        
+        # Guardar validación rechazada
+        guardar_fichero_texto(
+            f"5_stakeholder_intento_{state['attempt_count']}_RECHAZADO.txt",
+            f"Validación: RECHAZADO\n\nMotivo:\n{state['feedback_stakeholder']}\n\nRespuesta completa:\n{respuesta_llm}",
+            directorio=settings.OUTPUT_DIR
+        )
 
     return state

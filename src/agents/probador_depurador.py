@@ -8,7 +8,9 @@ import json
 from typing import List, Dict, Any
 from models.state import AgentState
 from config.prompts import Prompts
+from config.settings import settings
 from llm.gemini_client import call_gemini
+from tools.file_utils import guardar_fichero_texto
 
 
 def probador_depurador_node(state: AgentState) -> AgentState:
@@ -38,18 +40,59 @@ def probador_depurador_node(state: AgentState) -> AgentState:
     )
 
     print(f"Respuesta del LLM de testeo: {respuesta_llm2}")
+    
+    # Validar que la respuesta no sea None o vacía
+    if not respuesta_llm2 or respuesta_llm2 == "None" or respuesta_llm2.lower() == "none":
+        print(f"   ❌ ERROR: El LLM no devolvió una respuesta válida (None o vacío).")
+        state['pruebas_superadas'] = False
+        state['traceback'] = "ERROR: El LLM de testeo devolvió None. No se pudo ejecutar las pruebas."
+        state['debug_attempt_count'] += 1
+        
+        # Guardar el error
+        output_content = f"Status: ERROR\n\nTest Cases:\n{test_cases}\n\nError:\nEl LLM devolvió None o respuesta vacía"
+        guardar_fichero_texto(
+            f"4_probador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_ERROR.txt",
+            output_content,
+            directorio=settings.OUTPUT_DIR
+        )
+        return state
+    
+    # Limpiar marcadores JSON
     respuesta_llm2 = re.sub(r'```json|```', '', respuesta_llm2).strip()
 
+    # Intentar parsear el JSON
     try:
         respuesta_dict = json.loads(respuesta_llm2)
     except json.JSONDecodeError as e:
-        print(f"Error al decodificar JSON: {e}")
+        print(f"   ❌ ERROR al decodificar JSON: {e}")
+        print(f"   Contenido recibido: {respuesta_llm2[:200]}")
         state['pruebas_superadas'] = False
+        state['traceback'] = f"ERROR JSON: {str(e)}. Contenido: {respuesta_llm2[:100]}"
+        state['debug_attempt_count'] += 1
+        
+        # Guardar el error
+        output_content = f"Status: ERROR\n\nTest Cases:\n{test_cases}\n\nError de JSON:\n{str(e)}\n\nContenido recibido:\n{respuesta_llm2}"
+        guardar_fichero_texto(
+            f"4_probador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_ERROR.txt",
+            output_content,
+            directorio=settings.OUTPUT_DIR
+        )
         return state
 
-    if not respuesta_dict or respuesta_dict == "None":
+    # Validar que respuesta_dict sea un diccionario válido
+    if not respuesta_dict or not isinstance(respuesta_dict, dict):
+        print(f"   ❌ ERROR: La respuesta parseada no es un diccionario válido.")
         state['pruebas_superadas'] = False
-        print(f"   -> Resultado: FAILED. No se pudo parsear la respuesta del LLM.")
+        state['traceback'] = f"ERROR: Respuesta inválida del LLM: {type(respuesta_dict)}"
+        state['debug_attempt_count'] += 1
+        
+        # Guardar el error
+        output_content = f"Status: ERROR\n\nTest Cases:\n{test_cases}\n\nError:\nRespuesta no es un diccionario válido: {respuesta_dict}"
+        guardar_fichero_texto(
+            f"4_probador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_ERROR.txt",
+            output_content,
+            directorio=settings.OUTPUT_DIR
+        )
         return state
 
     # Evaluar resultado
@@ -58,6 +101,14 @@ def probador_depurador_node(state: AgentState) -> AgentState:
         state['debug_attempt_count'] = 0  # Resetear contador de depuración al pasar
         print(f"   -> Resultado: TRUE")
         print(f"   ->        OUTPUT: {state['pruebas_superadas']}")
+        
+        # Guardar resultado de pruebas exitosas
+        output_content = f"Status: PASSED\n\nTest Cases:\n{test_cases}\n\nResultados:\n{json.dumps(respuesta_dict, indent=2)}"
+        guardar_fichero_texto(
+            f"4_probador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_PASSED.txt",
+            output_content,
+            directorio=settings.OUTPUT_DIR
+        )
         
         # Mostrar información de depuración
         if respuesta_dict.get("results"):
@@ -94,5 +145,13 @@ def probador_depurador_node(state: AgentState) -> AgentState:
         print(f"   -> Resultado: FAILED. Traceback: {state['traceback'][:50]}...")
         print(f"   -> Intento de depuración: {state['debug_attempt_count']}/{state['max_debug_attempts']}")
         print(f"   ->        OUTPUT: {state['pruebas_superadas']}")
+        
+        # Guardar resultado de pruebas fallidas
+        output_content = f"Status: FAILED\n\nTest Cases:\n{test_cases}\n\nTraceback:\n{state['traceback']}\n\nResultados:\n{json.dumps(respuesta_dict, indent=2)}"
+        guardar_fichero_texto(
+            f"4_probador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_FAILED.txt",
+            output_content,
+            directorio=settings.OUTPUT_DIR
+        )
 
     return state
