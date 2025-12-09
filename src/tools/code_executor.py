@@ -47,7 +47,42 @@ def extract_function_name_ts(code: str) -> str:
     return None
 
 
-def CodeExecutionToolWithInterpreter(code: str, test_data: List[dict]) -> dict:
+def extract_function_parameters_ts(code: str) -> list:
+    """
+    Extrae los nombres de los parámetros de la primera función TypeScript.
+    
+    Args:
+        code (str): El código TypeScript.
+        
+    Returns:
+        list: Lista de nombres de parámetros.
+    """
+    # Buscar diferentes patrones de funciones
+    patterns = [
+        r'function\s+\w+\s*\(([^)]*)\)',  # function name(params)
+        r'(?:const|let|var)\s+\w+\s*=\s*function\s*\(([^)]*)\)',  # const name = function(params)
+        r'(?:const|let|var)\s+\w+\s*=\s*\(([^)]*)\)\s*=>'  # const name = (params) =>
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, code)
+        if match:
+            params_str = match.group(1).strip()
+            if not params_str:
+                return []
+            # Extraer nombres de parámetros (antes del : si hay tipado)
+            params = []
+            for param in params_str.split(','):
+                param = param.strip()
+                # Extraer nombre antes de : o = (tipado o valor por defecto)
+                param_name = re.split(r'[:\s=]', param)[0].strip()
+                if param_name:
+                    params.append(param_name)
+            return params
+    return []
+
+
+def CodeExecutionToolWithInterpreterPY(code: str, test_data: List[dict]) -> dict:
     """
     Ejecución segura de código Python contra datos de prueba usando E2B Sandbox.
 
@@ -89,12 +124,12 @@ def CodeExecutionToolWithInterpreter(code: str, test_data: List[dict]) -> dict:
         try:
             function_call_str = f"print({function_name}({inputs}))"
 
-            print(f"Sandbox test {idx}:  call: {function_call_str}  expected: {expected}")
+            #print(f"Sandbox test {idx}:  call: {function_call_str}  expected: {expected}")
             exec_result = sbx.run_code(function_call_str)
             #time.sleep(1)  # Pausa entre ejecuciones de test
 
-            print(f"test {idx}:  exec_result: {exec_result}")
-            print(f"           {exec_result.logs}")
+            # print(f"test {idx}:  exec_result: {exec_result}")
+            # print(f"           {exec_result.logs}")
             
             # exec_result es un objeto Execution, no un dict - usar atributos
             if exec_result.error:
@@ -217,9 +252,19 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
             "traceback": "Error: Could not find function name in the provided TypeScript code.",
             "results": []
         }
+    
+    # Extraer parámetros de la función para manejo de inputs tipo diccionario
+    function_params = extract_function_parameters_ts(code)
 
     # Escribir el código TypeScript en un archivo
     sbx.files.write("/tmp/code.ts", code)
+    
+    # Intentar instalar esbuild si no está disponible
+    # Esto solo se ejecutará una vez por sandbox
+    try:
+        sbx.commands.run("cd /tmp && npm list esbuild || npm install esbuild", timeout=30)
+    except Exception as e:
+        print(f"Warning: Could not verify/install esbuild: {e}")
     
     for idx, case in enumerate(test_data, start=1):
         inputs = case.get("input", [])
@@ -230,28 +275,60 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
             # Convertir inputs de Python a formato TypeScript/JavaScript
             if isinstance(inputs, list):
                 args_str = ", ".join([repr(arg) if isinstance(arg, str) else str(arg) for arg in inputs])
+            elif isinstance(inputs, dict):
+                # Si es un diccionario, buscar propiedades que coincidan con parámetros de la función
+                matched_values = []
+                for param in function_params:
+                    if param in inputs:
+                        value = inputs[param]
+                        matched_values.append(str(value) if not isinstance(value, str) else repr(value))
+                
+                if matched_values:
+                    # Si encontramos coincidencias, usar esos valores
+                    args_str = ", ".join(matched_values)
+                else:
+                    # Si no hay coincidencias, intentar con 'n' como fallback
+                    args_str = str(inputs.get('n', inputs))            
             else:
                 args_str = repr(inputs) if isinstance(inputs, str) else str(inputs)
 
-            # Crear un script de prueba que importa y ejecuta la función
-            test_script = f"""
-                import {{ {function_name} }} from './code';
+            # Usar esbuild para transpilar TypeScript a JavaScript en memoria y ejecutar
+            # esbuild es más ligero y está comúnmente disponible en entornos Node.js
+            transpile_and_run = f"""
+                const esbuild = require('esbuild');
+                const fs = require('fs');
+                
+                // Leer el código TypeScript
+                const tsCode = fs.readFileSync('/tmp/code.ts', 'utf8');
+                
+                // Transpilar a JavaScript
+                const result = esbuild.transformSync(tsCode, {{
+                    loader: 'ts',
+                    format: 'cjs',
+                }});
+                
+                // Guardar el JavaScript transpilado
+                fs.writeFileSync('/tmp/code.js', result.code);
+                
+                // Importar y ejecutar
+                const {{ {function_name} }} = require('./code');
                 console.log({function_name}({args_str}));
             """
             
-            sbx.files.write("/tmp/test.ts", test_script)
+            sbx.files.write("/tmp/run.js", transpile_and_run)
             
-            # Ejecutar con ts-node
-            exec_result = sbx.run_code(f"cd /tmp && npx ts-node test.ts")
+            # Ejecutar el script que transpila y ejecuta
+            exec_result = sbx.commands.run("cd /tmp && node run.js")
 
             print(f"Sandbox test {idx}:  call: {function_name}({args_str})  expected: {expected}")
             print(f"test {idx}:  exec_result: {exec_result}")
-            print(f"           {exec_result.logs}")
+            print(f"           stdout: {exec_result.stdout}")
+            print(f"           stderr: {exec_result.stderr}")
             
-            # Manejar errores
-            if exec_result.error:
-                traceback = str(exec_result.error)
-                error_value = exec_result.error.value if hasattr(exec_result.error, 'value') else str(exec_result.error)
+            # Manejar errores - commands.run() retorna un objeto diferente
+            if exec_result.exit_code != 0 or exec_result.stderr:
+                traceback = exec_result.stderr if exec_result.stderr else "Error desconocido"
+                error_value = traceback
                 
                 # Si hay un error, verificar si coincide con el expected
                 if error_value == expected:
@@ -278,7 +355,7 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
                     all_success = False
                     continue
             
-            if not exec_result.logs.stdout:
+            if not exec_result.stdout:
                 print(f"... TOOL TS ENTRÓ NO HAY STDOUT")
                 results.append({
                     "case": idx,
@@ -291,11 +368,8 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
                 all_success = False
                 continue
 
-            # La salida está en logs.stdout (es una lista)
-            output = exec_result.logs.stdout[0] if exec_result.logs.stdout else None
-            # Limpiar salida si existe
-            if output:
-                output = output.strip()
+            # La salida está en stdout (es un string, no una lista)
+            output = exec_result.stdout.strip()
             
             if output == expected:
                 results.append({

@@ -65,6 +65,11 @@ class Prompts:
     Manejo básico de errores con excepciones bien descritas según el lenguaje pedido.
     Tipos de entrada y salida tipados según el lenguaje pedido (type hints) cuando sea posible.
     
+    CRÍTICO - Para TypeScript:
+    TODAS las funciones DEBEN ser exportadas usando 'export' para que puedan ser importadas en los tests.
+    Ejemplo correcto: export function nombreFuncion(param: tipo): tipo { ... }
+    O bien: export const nombreFuncion = (param: tipo): tipo => { ... }
+    
     IMPORTANTE - Manejo de precisión numérica:
     Para TypeScript: Si la función realiza operaciones con números de punto flotante (decimales), DEBE redondear el resultado 
     para evitar errores de precisión binaria. Usa: Math.round(resultado * 1e10) / 1e10 antes de devolver o formatear el valor.
@@ -89,8 +94,16 @@ class Prompts:
     Objetivo: Simula la ejecución segura de código contra datos de prueba.
 
     Instrucción Principal:
-    1. Simula la ejecución segura de código contra datos de prueba con los argumentos de Test a usar.
-    2. Evalúa la salida de la herramienta.
+    1. Identifica el lenguaje del código generado (Python o TypeScript).
+    2. Usa la herramienta correcta según el lenguaje:
+       - Para código Python: Usa CodeExecutionToolWithInterpreterPY
+       - Para código TypeScript: Usa CodeExecutionToolWithInterpreterTS
+    3. Simula la ejecución segura de código contra datos de prueba con los argumentos de Test a usar.
+    4. Evalúa la salida de la herramienta.
+
+    IMPORTANTE - Detección de lenguaje:
+    - Si el código contiene 'def ', 'import ', o usa sintaxis Python → Usa CodeExecutionToolWithInterpreterPY
+    - Si el código contiene 'function', 'const', 'let', '=>', 'interface', o sintaxis TypeScript → Usa CodeExecutionToolWithInterpreterTS
 
     Evaluar la salida:
     Si todos los casos pasan, generar un informe con estado "PASSED".
@@ -111,6 +124,7 @@ class Prompts:
     Notas:
     Si algún caso falla, incluye el traceback asociado en el detalle correspondiente.
     Asegúrate de que el tipo de datos que pasas a la Tool que ejecutes coincida con el esperado.
+    CRÍTICO: Selecciona la herramienta correcta según el lenguaje del código para evitar errores de ejecución.
     """
     
     STAKEHOLDER = """

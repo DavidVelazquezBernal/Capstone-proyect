@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from google import genai
 from google.genai.errors import APIError
 from config.settings import settings
+from tools.code_executor import CodeExecutionToolWithInterpreterPY, CodeExecutionToolWithInterpreterTS
 
 # Inicialización del cliente Gemini
 # try:
@@ -72,9 +73,9 @@ def call_gemini(
             f"No añadas explicaciones ni texto adicional."
         )
     elif allow_use_tool:
-        # Importación local para evitar dependencia circular
-        from tools.code_executor import CodeExecutionToolWithInterpreter
-        available_tools = [CodeExecutionToolWithInterpreter]
+        
+        # Proveer ambas herramientas para que el modelo elija según el lenguaje
+        available_tools = [CodeExecutionToolWithInterpreterPY, CodeExecutionToolWithInterpreterTS]
         config["tools"] = available_tools
         full_prompt += "Genera únicamente el bloque de texto solicitado en tu Output Esperado. No añadas explicaciones."
     else:
@@ -89,6 +90,17 @@ def call_gemini(
         return response.text
 
     except APIError as e:
+        # Detectar errores 503 (Service Unavailable) o ResourceExhausted
+        error_message = str(e)
+        if "503" in error_message or "SERVICE_UNAVAILABLE" in error_message or "ResourceExhausted" in error_message:
+            print(f"\n{'='*60}")
+            print("🚫 ERROR CRÍTICO: SERVICIO NO DISPONIBLE (503)")
+            print(f"{'='*60}")
+            print(f"El servicio de Gemini está temporalmente no disponible.")
+            print(f"Detalles del error: {e}")
+            print(f"{'='*60}\n")
+            # Lanzar excepción específica para cancelar el proceso
+            raise SystemExit(f"PROCESO CANCELADO: Error 503 - Servicio no disponible. {e}")
         return f"ERROR_API: No se pudo conectar con Gemini. {e}"
     except Exception as e:
         return f"ERROR_GENERAL: {e}"
