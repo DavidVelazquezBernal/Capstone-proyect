@@ -429,30 +429,56 @@ def formatear_reporte_sonarqube(resultado: Dict[str, Any]) -> str:
     reporte.append(f"   💨 CODE SMELLS:      {by_type.get('CODE_SMELL', 0)}")
     reporte.append(f"   🔥 SECURITY HOTSPOT: {by_type.get('SECURITY_HOTSPOT', 0)}\n")
     
-    # Detalles de issues críticos y bloqueantes
-    issues_criticos = [i for i in issues if i.get('severity') in ['BLOCKER', 'CRITICAL']]
+    # Agrupar issues por severidad para mejor organización
+    issues_por_severidad = {
+        'BLOCKER': [],
+        'CRITICAL': [],
+        'MAJOR': [],
+        'MINOR': [],
+        'INFO': []
+    }
     
-    if issues_criticos:
+    for issue in issues:
+        severidad = issue.get('severity', 'INFO')
+        if severidad in issues_por_severidad:
+            issues_por_severidad[severidad].append(issue)
+    
+    # Mostrar detalles de todos los issues, agrupados por severidad
+    if issues:
         reporte.append("=" * 60)
-        reporte.append("🚨 ISSUES CRÍTICOS Y BLOQUEANTES:")
+        reporte.append("📋 DETALLE DE ISSUES ENCONTRADOS:")
         reporte.append("=" * 60)
         
-        for issue in issues_criticos:
-            reporte.append(f"\n[{issue.get('severity')}] Línea {issue.get('line', 'N/A')}")
-            reporte.append(f"Regla: {issue.get('rule', 'N/A')}")
-            reporte.append(f"Tipo: {issue.get('type', 'N/A')}")
-            reporte.append(f"Mensaje: {issue.get('message', 'Sin mensaje')}")
-    
-    # Lista todos los issues si hay pocos
-    if len(issues) <= 10 and len(issues) > len(issues_criticos):
-        reporte.append("\n" + "=" * 60)
-        reporte.append("📋 TODOS LOS ISSUES:")
-        reporte.append("=" * 60)
+        # Emojis por severidad
+        severity_emojis = {
+            'BLOCKER': '🔴',
+            'CRITICAL': '🟠',
+            'MAJOR': '🟡',
+            'MINOR': '🔵',
+            'INFO': '⚪'
+        }
         
-        for issue in issues:
-            if issue not in issues_criticos:
-                reporte.append(f"\n[{issue.get('severity')}] Línea {issue.get('line', 'N/A')}")
-                reporte.append(f"Mensaje: {issue.get('message', 'Sin mensaje')}")
+        # Mostrar issues en orden de severidad
+        for severidad in ['BLOCKER', 'CRITICAL', 'MAJOR', 'MINOR', 'INFO']:
+            issues_severidad = issues_por_severidad[severidad]
+            
+            if issues_severidad:
+                emoji = severity_emojis.get(severidad, '⚪')
+                reporte.append(f"\n{emoji} {severidad} ({len(issues_severidad)} issues):")
+                reporte.append("-" * 60)
+                
+                for idx, issue in enumerate(issues_severidad, 1):
+                    reporte.append(f"\n  Issue #{idx}:")
+                    reporte.append(f"    📍 Línea:   {issue.get('line', 'N/A')}")
+                    reporte.append(f"    📏 Regla:   {issue.get('rule', 'N/A')}")
+                    reporte.append(f"    🏷️  Tipo:    {issue.get('type', 'N/A')}")
+                    reporte.append(f"    💬 Mensaje: {issue.get('message', 'Sin mensaje')}")
+                    
+                    # Si hay información adicional del issue
+                    if issue.get('component'):
+                        reporte.append(f"    📁 Archivo:  {issue.get('component')}")
+                    if issue.get('effort'):
+                        reporte.append(f"    ⏱️  Esfuerzo: {issue.get('effort')}")
     
     reporte.append("\n" + "=" * 60)
     
