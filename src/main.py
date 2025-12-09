@@ -3,10 +3,33 @@ Punto de entrada principal del sistema multiagente de desarrollo ágil.
 Orquesta el flujo completo de generación de código.
 """
 
+import os
 import re
+import shutil
 from config.settings import settings
 from workflow.graph import create_workflow, visualize_graph
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
+
+
+def delete_output_folder():
+    """
+    Limpia el contenido del directorio output/ al inicio de cada ejecución.
+    Elimina todos los archivos y subdirectorios pero mantiene la carpeta.
+    """
+    if os.path.exists(settings.OUTPUT_DIR):
+        for filename in os.listdir(settings.OUTPUT_DIR):
+            file_path = os.path.join(settings.OUTPUT_DIR, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(f"⚠️ No se pudo eliminar {file_path}: {e}")
+        print(f"🗑️  Directorio '{settings.OUTPUT_DIR}' limpiado.\n")
+    else:
+        os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
+        print(f"📁 Directorio '{settings.OUTPUT_DIR}' creado.\n")
 
 
 def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
@@ -21,6 +44,8 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
     if not settings.validate():
         print("❌ ERROR: Configuración incompleta. Verifica las variables de entorno.")
         return None
+
+    delete_output_folder()
 
     # Estado inicial
     initial_state = {
@@ -125,8 +150,13 @@ def main():
     # )
     
     # Opción 2: TypeScript
+    # prompt = (
+    #     "Quiero una función simple en TypeScript para sumar un array de números, "
+    #     "y quiero que la salida sea un string con una frase descriptiva."
+    # )
+
     prompt = (
-        "Quiero una función simple en TypeScript para sumar un array de números, "
+        "Quiero una función simple en TypeScript para generar el factorial de un número, "
         "y quiero que la salida sea un string con una frase descriptiva."
     )
     
