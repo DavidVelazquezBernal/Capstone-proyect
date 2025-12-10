@@ -208,15 +208,21 @@ sonar-scanner \
 
 ## 🎯 Usar con el Sistema Multiagente
 
-Una vez configurado, el sistema usará la API de SonarQube automáticamente:
+El sistema usa análisis estático básico automáticamente:
 
 ```python
-# En sonarqube_mcp_real.py ya está preparado
-from tools.sonarqube_mcp_real import analizar_archivo_con_mejor_metodo_disponible
+# En sonarqube_mcp.py
+from tools.sonarqube_mcp import analizar_codigo_con_sonarqube
 
-# Analizará con la API de SonarQube si está configurada
-result = analizar_archivo_con_mejor_metodo_disponible("ruta/al/archivo.py")
+# Analiza código con reglas estáticas de SonarQube
+result = analizar_codigo_con_sonarqube(codigo, "archivo.py")
 ```
+
+**Nota:** El análisis estático detecta:
+- Credenciales hardcodeadas (BLOCKER)
+- Complejidad ciclomática alta (CRITICAL)
+- Code smells comunes (MAJOR/MINOR)
+- Problemas de seguridad básicos
 
 ---
 

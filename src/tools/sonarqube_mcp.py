@@ -15,7 +15,7 @@ from config.settings import settings
 
 def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str, Any]:
     """
-    Analiza código usando SonarQube MCP.
+    Analiza código usando análisis estático de SonarQube.
     
     Args:
         codigo: Código fuente a analizar
@@ -34,10 +34,7 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str,
         with open(temp_file, 'w', encoding='utf-8') as f:
             f.write(codigo)
         
-        # Aquí se integraría con las herramientas MCP de SonarQube
-        # Por ahora, implementamos una versión que simula la integración
-        # y que puede ser reemplazada con la conexión real a SonarQube
-        
+        # Análisis estático básico
         issues = _analizar_archivo_sonarqube(temp_file)
         
         # Generar resumen
