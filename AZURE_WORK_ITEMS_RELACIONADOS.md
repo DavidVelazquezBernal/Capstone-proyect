@@ -23,7 +23,7 @@ El sistema ahora guarda el **ID del PBI creado** en el estado compartido (`state
 ### 1. **Flujo Automático** ⭐ NUEVO
 
 ```
-Requirements Manager → Crea PBI #2020946
+Product Owner → Crea PBI #2020946
                     ↓
          state['azure_pbi_id'] = 2020946
                     ↓
@@ -466,7 +466,7 @@ El Personal Access Token debe tener:
 ### Archivos del Proyecto
 
 - `src/models/state.py` - Estado con `azure_pbi_id`, `azure_implementation_task_id`, `azure_testing_task_id`
-- `src/agents/requirements_manager.py` - Creación y guardado del PBI
+- `src/agents/product_owner.py` - Creación y guardado del PBI
 - `src/agents/codificador_corrector.py` - Creación de Tasks y guardado de IDs
 - `src/agents/ejecutor_pruebas.py` - Adjunto de tests cuando pasan
 - `src/agents/stakeholder.py` - Adjunto de código final cuando valida

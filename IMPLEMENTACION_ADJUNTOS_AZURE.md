@@ -108,7 +108,7 @@ state['azure_testing_task_id'] = task_testing['id']
 ## 📊 Flujo Completo
 
 ```
-1. Requirements Manager
+1. Product Owner
    ↓ Crea PBI #2020946
    ↓ state['azure_pbi_id'] = 2020946
 

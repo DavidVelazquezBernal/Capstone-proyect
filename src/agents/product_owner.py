@@ -1,6 +1,6 @@
 """
-Agente 2: Product Owner
-Responsable de formalizar requisitos en especificaciones técnicas ejecutables.
+Agente: Product Owner
+Responsable de clarificar, formalizar requisitos y crear PBIs en Azure DevOps.
 """
 
 import time
@@ -21,23 +21,34 @@ logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 def product_owner_node(state: AgentState) -> AgentState:
     """
     Nodo del Product Owner.
-    Transforma requisitos clarificados en especificación formal JSON validada.
+    Procesa el input del usuario y/o feedback del stakeholder, genera especificación
+    formal JSON validada, y crea PBI en Azure DevOps.
     """
     logger.info("=" * 60)
-    logger.info("💼 PRODUCT OWNER - INICIO")
+    logger.info("📋 PRODUCT OWNER - INICIO")
     logger.info("=" * 60)
     
+    # Log del contexto de entrada
     log_agent_execution(
         logger,
-        "Product Owner",
-        "Formalizando requisitos",
-        {"intento": state['attempt_count']}
+        "Requirements Manager",
+        "Procesando requisitos",
+        {
+            "intento": f"{state['attempt_count'] + 1}/{state['max_attempts']}",
+            "tiene_feedback": bool(state['feedback_stakeholder'])
+        }
     )
 
-    contexto_llm = f"Requisito Clarificado: {state['requisito_clarificado']}"
+    # Construir contexto para el LLM
+    contexto_llm = f"""
+Prompt Inicial del Usuario: {state['prompt_inicial']}
+
+Feedback del Stakeholder (si aplica): {state['feedback_stakeholder'] if state['feedback_stakeholder'] else 'Ninguno - Primera iteración'}
+"""
+    
     logger.debug(f"Contexto LLM: {contexto_llm[:200]}...")
 
-    # Llamar al LLM con medición de tiempo
+    # Llamar al LLM con medición de tiempo y schema JSON
     start_time = time.time()
     respuesta_llm = call_gemini(
         Prompts.PRODUCT_OWNER, 
@@ -51,6 +62,9 @@ def product_owner_node(state: AgentState) -> AgentState:
     try:
         # Validar y almacenar la salida JSON del LLM
         req_data = FormalRequirements.model_validate_json(respuesta_llm)
+        
+        logger.info("✅ Requisitos formalizados y validados correctamente")
+        logger.debug(f"JSON generado: {req_data.model_dump_json(indent=2)[:200]}...")
         
         # === INICIO: Integración con Azure DevOps ===
         azure_metadata = None
@@ -68,7 +82,7 @@ def product_owner_node(state: AgentState) -> AgentState:
                     story_points = estimate_story_points(req_data.model_dump())
                     logger.info(f"📊 Story Points estimados: {story_points}")
                     
-                    # Preparar descripción y criterios de aceptación
+                    # Preparar descripción y criterios de aceptación en HTML
                     description = f"""
                     <h3>Objetivo Funcional</h3>
                     <p>{req_data.objetivo_funcional}</p>
@@ -121,8 +135,12 @@ def product_owner_node(state: AgentState) -> AgentState:
                             story_points=story_points
                         )
                         
+                        # Guardar el PBI ID en el estado para futuros work items
+                        state['azure_pbi_id'] = pbi['id']
+                        
                         logger.info(f"✅ PBI #{pbi['id']} creado en Azure DevOps")
                         logger.info(f"🔗 {pbi['_links']['html']['href']}")
+                        logger.info(f"💾 PBI ID guardado para asociar work items posteriores")
                     else:
                         logger.warning("⚠️ No se pudo crear el PBI en Azure DevOps")
                         
@@ -140,11 +158,18 @@ def product_owner_node(state: AgentState) -> AgentState:
         else:
             state['requisitos_formales'] = req_data.model_dump_json(indent=2)
         
-        logger.info("✅ Requisitos formales generados y validados")
-        logger.debug(f"Output JSON (primeros 200 chars): {state['requisitos_formales'][:200]}...")
+        # Actualizar estado
+        state['requisito_clarificado'] = req_data.objetivo_funcional  # Mantener retrocompatibilidad
+        state['feedback_stakeholder'] = ""  # Limpiar feedback procesado
+        state['attempt_count'] += 1
+        state['debug_attempt_count'] = 0
+        state['sonarqube_attempt_count'] = 0
+        
+        logger.info(f"✅ Requisitos procesados exitosamente")
+        logger.info(f"Intento: {state['attempt_count']}/{state['max_attempts']}")
         
         # Guardar output en archivo
-        nombre_archivo = f"2_product_owner_intento_{state['attempt_count']}.json"
+        nombre_archivo = f"1_product_owner_intento_{state['attempt_count']}.json"
         success = guardar_fichero_texto(
             nombre_archivo,
             state['requisitos_formales'],
@@ -159,14 +184,14 @@ def product_owner_node(state: AgentState) -> AgentState:
         )
         
     except Exception as e:
-        logger.error(f"Error al validar JSON: {e}")
+        logger.error(f"❌ Error al validar o procesar requisitos: {e}")
         state['requisitos_formales'] = (
             f"ERROR_PARSING: Fallo al validar JSON. {e}. "
             f"LLM Output: {respuesta_llm[:100]}"
         )
-        logger.error("Fallo de parsing en Product Owner")
+        logger.error("Fallo de parsing en Requirements Manager")
 
-    logger.info("💼 PRODUCT OWNER - FIN")
+    logger.info("📋 REQUIREMENTS MANAGER - FIN")
     logger.info("=" * 60)
     
     return state

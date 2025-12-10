@@ -6,7 +6,7 @@ Prompts centralizados para todos los agentes del sistema.
 class Prompts:
     """Repositorio centralizado de prompts para cada agente"""
     
-    REQUIREMENTS_MANAGER = """
+    PRODUCT_OWNER = """
     Rol:
     Requirements Manager - Ingeniero de Requisitos y Product Owner combinados.
 
