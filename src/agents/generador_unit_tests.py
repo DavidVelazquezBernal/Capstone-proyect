@@ -16,7 +16,7 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     Nodo del Generador de Unit Tests.
     Genera tests unitarios para el código generado según el lenguaje.
     """
-    print("--- 3.6 🧪 Generador de Unit Tests ---")
+    print(f"\n--- 3.6 🧪 Generador de Unit Tests ---")
     
     # Obtener información del código
     lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(

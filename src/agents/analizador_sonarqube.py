@@ -9,11 +9,8 @@ from config.prompts import Prompts
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
-from tools.sonarqube_mcp import (
-    analizar_codigo_con_sonarqube,
-    formatear_reporte_sonarqube,
-    es_codigo_aceptable
-)
+from tools.sonarqube_mcp import analizar_codigo_con_sonarqube, formatear_reporte_sonarqube, es_codigo_aceptable
+
 
 
 def analizador_sonarqube_node(state: AgentState) -> AgentState:

@@ -378,9 +378,9 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
             exec_result = sbx.commands.run("cd /tmp && node run.js")
 
             print(f"Sandbox test {idx}:  call: {function_name}({args_str})  expected: {expected}")
-            print(f"test {idx}:  exec_result: {exec_result}")
-            print(f"           stdout: {exec_result.stdout}")
-            print(f"           stderr: {exec_result.stderr}")
+            #print(f"test {idx}:  exec_result: {exec_result}")
+            #print(f"           stdout: {exec_result.stdout}")
+            #print(f"           stderr: {exec_result.stderr}")
             
             # Manejar errores - commands.run() retorna un objeto diferente
             if exec_result.exit_code != 0 or exec_result.stderr:
@@ -389,7 +389,7 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
                 
                 # Si hay un error, verificar si coincide con el expected
                 if error_value == expected:
-                    print(f"... TOOL TS: Error esperado coincide con el resultado")
+                    #print(f"... TOOL TS: Error esperado coincide con el resultado")
                     results.append({
                         "case": idx,
                         "success": True,
@@ -413,7 +413,7 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
                     continue
             
             if not exec_result.stdout:
-                print(f"... TOOL TS ENTRÓ NO HAY STDOUT")
+                #print(f"... TOOL TS ENTRÓ NO HAY STDOUT")
                 results.append({
                     "case": idx,
                     "success": False,
@@ -449,7 +449,7 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
                 all_success = False
 
         except Exception as e:
-            print(f"... TOOL TS ENTRÓ POR EXCEPCIÓN: {e}")
+            #print(f"... TOOL TS ENTRÓ POR EXCEPCIÓN: {e}")
             tb = getattr(e, "traceback", str(e))
             results.append({
                 "case": idx,

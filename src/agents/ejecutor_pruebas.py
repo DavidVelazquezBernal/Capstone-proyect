@@ -19,7 +19,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
     Genera casos de prueba funcionales y ejecuta el código para validar su corrección.
     """
     # PASO 1: Generar casos de test
-    print("--- 4.1 🧪 Ejecutor de Pruebas --- Generar casos de test")
+    print(f"\n--- 4.1 🧪 Ejecutor de Pruebas --- Generar casos de test")
 
     contexto_llm1 = f"Código generado: {state['codigo_generado']}"
     respuesta_llm1 = call_gemini(Prompts.PROBADOR_GENERADOR_TESTS, contexto_llm1)
@@ -27,7 +27,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
     print(f"Test cases: {test_cases}")
 
     # PASO 2: Ejecutar casos de test
-    print("--- 4.2 🧪 Ejecutor de Pruebas --- Ejecutar casos de test")
+    print(f"\n--- 4.2 🧪 Ejecutor de Pruebas --- Ejecutar casos de test")
 
     contexto_llm2 = (
         f"Código-generado: {state['codigo_generado']}\n"
