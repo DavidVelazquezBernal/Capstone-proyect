@@ -60,6 +60,11 @@ def stakeholder_node(state: AgentState) -> AgentState:
             directorio=settings.OUTPUT_DIR
         )
         
+        # === AZURE DEVOPS: Adjuntar código final cuando se valida ===
+        if state.get('azure_pbi_id') and state.get('azure_implementation_task_id'):
+            _adjuntar_codigo_final_azure_devops(state)
+        # === FIN: Adjuntar código final a Azure DevOps ===
+        
         log_agent_execution(logger, "Stakeholder", "completado", {
             "resultado": "aprobado",
             "intento": state['attempt_count']
@@ -89,3 +94,74 @@ def stakeholder_node(state: AgentState) -> AgentState:
         })
 
     return state
+
+
+def _adjuntar_codigo_final_azure_devops(state: AgentState) -> None:
+    """
+    Adjunta el archivo codigo_final.ts al PBI y a la Task de Implementación en Azure DevOps.
+    
+    Args:
+        state: Estado compartido con azure_pbi_id y azure_implementation_task_id
+    """
+    try:
+        from tools.azure_devops_integration import AzureDevOpsClient
+        from tools.file_utils import detectar_lenguaje_y_extension
+        import os
+        
+        # Detectar lenguaje para construir nombre del archivo
+        lenguaje, extension, _ = detectar_lenguaje_y_extension(
+            state.get('requisitos_formales', '')
+        )
+        
+        # Ruta del archivo codigo_final
+        codigo_final_path = os.path.join(settings.OUTPUT_DIR, f"codigo_final{extension}")
+        
+        # Validar que el archivo existe
+        if not os.path.exists(codigo_final_path):
+            logger.warning(f"⚠️ Archivo codigo_final{extension} no encontrado")
+            return
+        
+        azure_client = AzureDevOpsClient()
+        
+        pbi_id = state['azure_pbi_id']
+        task_id = state['azure_implementation_task_id']
+        
+        logger.info("=" * 60)
+        logger.info("📎 ADJUNTANDO CÓDIGO FINAL A AZURE DEVOPS")
+        logger.info("-" * 60)
+        logger.info(f"📄 Archivo: codigo_final{extension}")
+        logger.info(f"🎯 PBI: #{pbi_id}")
+        logger.info(f"⚙️ Task Implementación: #{task_id}")
+        
+        # Adjuntar al PBI
+        success_pbi = azure_client.attach_file(
+            work_item_id=pbi_id,
+            file_path=codigo_final_path,
+            comment="✅ Código final validado por el Stakeholder - Listo para producción"
+        )
+        
+        if success_pbi:
+            logger.info(f"✅ Código final adjuntado al PBI #{pbi_id}")
+        else:
+            logger.warning(f"⚠️ No se pudo adjuntar al PBI #{pbi_id}")
+        
+        # Adjuntar a la Task de Implementación
+        success_task = azure_client.attach_file(
+            work_item_id=task_id,
+            file_path=codigo_final_path,
+            comment=f"✅ Implementación completa y validada - {os.path.getsize(codigo_final_path)} bytes"
+        )
+        
+        if success_task:
+            logger.info(f"✅ Código final adjuntado a Task #{task_id}")
+        else:
+            logger.warning(f"⚠️ No se pudo adjuntar a Task #{task_id}")
+        
+        if success_pbi and success_task:
+            logger.info("🎉 Código final adjuntado exitosamente a ambos work items")
+        
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.warning(f"⚠️ No se pudo adjuntar código final a Azure DevOps: {e}")
+        logger.debug(f"Stack trace: {e}", exc_info=True)

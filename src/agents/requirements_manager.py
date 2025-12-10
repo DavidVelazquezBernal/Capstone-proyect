@@ -135,8 +135,12 @@ Feedback del Stakeholder (si aplica): {state['feedback_stakeholder'] if state['f
                             story_points=story_points
                         )
                         
+                        # Guardar el PBI ID en el estado para futuros work items
+                        state['azure_pbi_id'] = pbi['id']
+                        
                         logger.info(f"✅ PBI #{pbi['id']} creado en Azure DevOps")
                         logger.info(f"🔗 {pbi['_links']['html']['href']}")
+                        logger.info(f"💾 PBI ID guardado para asociar work items posteriores")
                     else:
                         logger.warning("⚠️ No se pudo crear el PBI en Azure DevOps")
                         

@@ -323,6 +323,332 @@ class AzureDevOpsClient:
         except Exception as e:
             logger.error(f"❌ Excepción al agregar comentario: {e}")
             return False
+    
+    def create_task(
+        self,
+        title: str,
+        description: str,
+        parent_id: Optional[int] = None,
+        assigned_to: Optional[str] = None,
+        remaining_work: Optional[float] = None,
+        tags: Optional[List[str]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Crea una Task en Azure DevOps, opcionalmente asociada a un PBI padre.
+        
+        Args:
+            title: Título de la tarea
+            description: Descripción detallada
+            parent_id: ID del PBI padre (opcional)
+            assigned_to: Email del asignado (opcional)
+            remaining_work: Horas de trabajo restante (opcional)
+            tags: Lista de etiquetas (opcional)
+        
+        Returns:
+            Dict con información del work item creado o None si falla
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return None
+        
+        try:
+            url = (
+                f"{self.base_url}/{self.project}/_apis/wit/workitems/"
+                f"$Task?api-version={self.api_version}"
+            )
+            
+            operations = [
+                {"op": "add", "path": "/fields/System.Title", "value": title},
+                {"op": "add", "path": "/fields/System.Description", "value": description}
+            ]
+            
+            # Agregar iteration y area path si están configurados
+            if self.iteration_path:
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.IterationPath",
+                    "value": self.iteration_path
+                })
+            
+            if self.area_path:
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.AreaPath",
+                    "value": self.area_path
+                })
+            
+            # Agregar remaining work
+            if remaining_work is not None:
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/Microsoft.VSTS.Scheduling.RemainingWork",
+                    "value": remaining_work
+                })
+            
+            # Agregar asignación
+            if assigned_to:
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.AssignedTo",
+                    "value": assigned_to
+                })
+            
+            # Agregar tags
+            if tags:
+                tags_str = "; ".join(tags)
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.Tags",
+                    "value": tags_str
+                })
+            
+            # Agregar relación padre-hijo si se especifica parent_id
+            if parent_id:
+                operations.append({
+                    "op": "add",
+                    "path": "/relations/-",
+                    "value": {
+                        "rel": "System.LinkTypes.Hierarchy-Reverse",
+                        "url": f"{self.base_url}/_apis/wit/workItems/{parent_id}"
+                    }
+                })
+            
+            headers = self._get_headers("application/json-patch+json")
+            response = requests.post(url, json=operations, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                work_item = response.json()
+                work_item_id = work_item['id']
+                work_item_url = work_item['_links']['html']['href']
+                
+                logger.info(f"✅ Task creada exitosamente: ID {work_item_id}")
+                if parent_id:
+                    logger.info(f"🔗 Asociada al PBI #{parent_id}")
+                logger.info(f"🔗 URL: {work_item_url}")
+                
+                log_agent_execution(
+                    logger,
+                    "AzureDevOps",
+                    "Task creada",
+                    {"id": work_item_id, "title": title, "parent_id": parent_id}
+                )
+                
+                return work_item
+            else:
+                logger.error(f"❌ Error al crear Task: {response.status_code}")
+                logger.error(f"Respuesta: {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción al crear Task: {e}")
+            return None
+    
+    def create_bug(
+        self,
+        title: str,
+        repro_steps: str,
+        parent_id: Optional[int] = None,
+        severity: str = "3 - Medium",
+        priority: int = 2,
+        tags: Optional[List[str]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Crea un Bug en Azure DevOps, opcionalmente asociado a un PBI padre.
+        
+        Args:
+            title: Título del bug
+            repro_steps: Pasos para reproducir (soporta HTML)
+            parent_id: ID del PBI padre (opcional)
+            severity: Severidad ("1 - Critical", "2 - High", "3 - Medium", "4 - Low")
+            priority: Prioridad (1-4)
+            tags: Lista de etiquetas (opcional)
+        
+        Returns:
+            Dict con información del work item creado o None si falla
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return None
+        
+        try:
+            url = (
+                f"{self.base_url}/{self.project}/_apis/wit/workitems/"
+                f"$Bug?api-version={self.api_version}"
+            )
+            
+            operations = [
+                {"op": "add", "path": "/fields/System.Title", "value": title},
+                {"op": "add", "path": "/fields/Microsoft.VSTS.TCM.ReproSteps", "value": repro_steps},
+                {"op": "add", "path": "/fields/Microsoft.VSTS.Common.Severity", "value": severity},
+                {"op": "add", "path": "/fields/Microsoft.VSTS.Common.Priority", "value": priority}
+            ]
+            
+            # Agregar iteration y area path si están configurados
+            if self.iteration_path:
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.IterationPath",
+                    "value": self.iteration_path
+                })
+            
+            if self.area_path:
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.AreaPath",
+                    "value": self.area_path
+                })
+            
+            # Agregar tags
+            if tags:
+                tags_str = "; ".join(tags)
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.Tags",
+                    "value": tags_str
+                })
+            
+            # Agregar relación padre-hijo si se especifica parent_id
+            if parent_id:
+                operations.append({
+                    "op": "add",
+                    "path": "/relations/-",
+                    "value": {
+                        "rel": "System.LinkTypes.Hierarchy-Reverse",
+                        "url": f"{self.base_url}/_apis/wit/workItems/{parent_id}"
+                    }
+                })
+            
+            headers = self._get_headers("application/json-patch+json")
+            response = requests.post(url, json=operations, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                work_item = response.json()
+                work_item_id = work_item['id']
+                work_item_url = work_item['_links']['html']['href']
+                
+                logger.info(f"✅ Bug creado exitosamente: ID {work_item_id}")
+                if parent_id:
+                    logger.info(f"🔗 Asociado al PBI #{parent_id}")
+                logger.info(f"🔗 URL: {work_item_url}")
+                
+                log_agent_execution(
+                    logger,
+                    "AzureDevOps",
+                    "Bug creado",
+                    {"id": work_item_id, "title": title, "parent_id": parent_id}
+                )
+                
+                return work_item
+            else:
+                logger.error(f"❌ Error al crear Bug: {response.status_code}")
+                logger.error(f"Respuesta: {response.text}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción al crear Bug: {e}")
+            return None
+    
+    def attach_file(
+        self,
+        work_item_id: int,
+        file_path: str,
+        comment: Optional[str] = None
+    ) -> bool:
+        """
+        Adjunta un archivo a un Work Item en Azure DevOps.
+        
+        Args:
+            work_item_id: ID del work item
+            file_path: Ruta completa del archivo a adjuntar
+            comment: Comentario opcional para el adjunto
+        
+        Returns:
+            bool: True si se adjuntó exitosamente
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return False
+        
+        try:
+            import os
+            
+            # Verificar que el archivo existe
+            if not os.path.exists(file_path):
+                logger.error(f"❌ Archivo no encontrado: {file_path}")
+                return False
+            
+            # Paso 1: Subir el archivo al attachment storage
+            upload_url = f"{self.base_url}/_apis/wit/attachments?fileName={os.path.basename(file_path)}&api-version={self.api_version}"
+            
+            with open(file_path, 'rb') as file:
+                file_content = file.read()
+            
+            upload_headers = {
+                "Content-Type": "application/octet-stream",
+                "Authorization": f"Basic {self._encode_pat()}"
+            }
+            
+            upload_response = requests.post(
+                upload_url,
+                data=file_content,
+                headers=upload_headers,
+                timeout=60
+            )
+            
+            if upload_response.status_code != 201:
+                logger.error(f"❌ Error al subir archivo: {upload_response.status_code}")
+                logger.error(f"Respuesta: {upload_response.text}")
+                return False
+            
+            attachment_data = upload_response.json()
+            attachment_url = attachment_data['url']
+            
+            # Paso 2: Vincular el attachment al work item
+            link_url = f"{self.base_url}/_apis/wit/workitems/{work_item_id}?api-version={self.api_version}"
+            
+            operations = [{
+                "op": "add",
+                "path": "/relations/-",
+                "value": {
+                    "rel": "AttachedFile",
+                    "url": attachment_url,
+                    "attributes": {
+                        "comment": comment or f"Archivo adjunto: {os.path.basename(file_path)}"
+                    }
+                }
+            }]
+            
+            link_headers = self._get_headers("application/json-patch+json")
+            link_response = requests.patch(
+                link_url,
+                json=operations,
+                headers=link_headers,
+                timeout=30
+            )
+            
+            if link_response.status_code == 200:
+                logger.info(f"✅ Archivo '{os.path.basename(file_path)}' adjuntado al Work Item #{work_item_id}")
+                
+                log_agent_execution(
+                    logger,
+                    "AzureDevOps",
+                    "Archivo adjuntado",
+                    {
+                        "work_item_id": work_item_id,
+                        "file_name": os.path.basename(file_path),
+                        "file_size": len(file_content)
+                    }
+                )
+                
+                return True
+            else:
+                logger.error(f"❌ Error al vincular archivo: {link_response.status_code}")
+                logger.error(f"Respuesta: {link_response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción al adjuntar archivo: {e}")
+            return False
 
 
 def estimate_story_points(requisitos: Dict[str, Any]) -> int:

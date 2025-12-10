@@ -76,7 +76,10 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         "tests_unitarios_generados": "",
         "requisito_clarificado": "",
         "requisitos_formales": "",
-        "codigo_generado": ""
+        "codigo_generado": "",
+        "azure_pbi_id": None,
+        "azure_implementation_task_id": None,
+        "azure_testing_task_id": None
     }
 
     logger.info("=" * 55)

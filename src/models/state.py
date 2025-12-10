@@ -23,6 +23,11 @@ class AgentState(TypedDict):
     requisitos_formales: str  # JSON de Pydantic
     codigo_generado: str
 
+    # Azure DevOps Integration
+    azure_pbi_id: int | None  # ID del PBI padre creado en Azure DevOps
+    azure_implementation_task_id: int | None  # ID de la Task de implementación
+    azure_testing_task_id: int | None  # ID de la Task de testing
+
     # QA
     traceback: str
     pruebas_superadas: bool

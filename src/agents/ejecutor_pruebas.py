@@ -145,6 +145,16 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
             )
             
             log_file_operation(logger, "guardar", f"{settings.OUTPUT_DIR}/{nombre_archivo}", success=True)
+            
+            # === AZURE DEVOPS: Adjuntar archivo de tests cuando pasen ===
+            if state.get('azure_pbi_id') and state.get('azure_testing_task_id'):
+                _adjuntar_tests_azure_devops(
+                    state,
+                    test_path,
+                    attempt,
+                    sq_attempt
+                )
+            # === FIN: Adjuntar tests a Azure DevOps ===
         else:
             state['debug_attempt_count'] += 1
             
@@ -481,3 +491,74 @@ def _mostrar_resumen_ejecucion(result: Dict[str, Any]) -> None:
     
     logger.info("=" * 60)
 
+
+def _adjuntar_tests_azure_devops(
+    state: AgentState,
+    test_file_path: str,
+    attempt: int,
+    sq_attempt: int
+) -> None:
+    """
+    Adjunta el archivo de tests unitarios al PBI y a la Task de Testing en Azure DevOps.
+    
+    Args:
+        state: Estado compartido con azure_pbi_id y azure_testing_task_id
+        test_file_path: Ruta completa del archivo de tests generado
+        attempt: Número de intento de requisitos
+        sq_attempt: Número de intento de SonarQube
+    """
+    try:
+        from tools.azure_devops_integration import AzureDevOpsClient
+        import os
+        
+        # Validar que el archivo existe
+        if not os.path.exists(test_file_path):
+            logger.warning(f"⚠️ Archivo de tests no encontrado: {test_file_path}")
+            return
+        
+        azure_client = AzureDevOpsClient()
+        
+        # Nombre descriptivo del archivo
+        file_name = os.path.basename(test_file_path)
+        pbi_id = state['azure_pbi_id']
+        task_id = state['azure_testing_task_id']
+        
+        logger.info("=" * 60)
+        logger.info("📎 ADJUNTANDO TESTS UNITARIOS A AZURE DEVOPS")
+        logger.info("-" * 60)
+        logger.info(f"📄 Archivo: {file_name}")
+        logger.info(f"🎯 PBI: #{pbi_id}")
+        logger.info(f"🧪 Task Testing: #{task_id}")
+        
+        # Adjuntar al PBI
+        success_pbi = azure_client.attach_file(
+            work_item_id=pbi_id,
+            file_path=test_file_path,
+            comment=f"✅ Tests unitarios generados (req{attempt}_sq{sq_attempt}) - Todos los tests pasaron"
+        )
+        
+        if success_pbi:
+            logger.info(f"✅ Tests adjuntados al PBI #{pbi_id}")
+        else:
+            logger.warning(f"⚠️ No se pudo adjuntar al PBI #{pbi_id}")
+        
+        # Adjuntar a la Task de Testing
+        success_task = azure_client.attach_file(
+            work_item_id=task_id,
+            file_path=test_file_path,
+            comment=f"✅ Suite de tests unitarios completa - {os.path.getsize(test_file_path)} bytes"
+        )
+        
+        if success_task:
+            logger.info(f"✅ Tests adjuntados a Task #{task_id}")
+        else:
+            logger.warning(f"⚠️ No se pudo adjuntar a Task #{task_id}")
+        
+        if success_pbi and success_task:
+            logger.info("🎉 Tests unitarios adjuntados exitosamente a ambos work items")
+        
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.warning(f"⚠️ No se pudieron adjuntar tests a Azure DevOps: {e}")
+        logger.debug(f"Stack trace: {e}", exc_info=True)
