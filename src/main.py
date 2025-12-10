@@ -6,9 +6,13 @@ Orquesta el flujo completo de generación de código.
 import os
 import re
 import shutil
+import time
 from config.settings import settings
 from workflow.graph import create_workflow, visualize_graph
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
+from utils.logger import setup_logger, log_agent_execution
+
+logger = setup_logger(__name__, level=settings.get_log_level())
 
 
 def delete_output_folder():
@@ -32,11 +36,11 @@ def delete_output_folder():
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)
             except Exception as e:
-                print(f"⚠️ No se pudo eliminar {file_path}: {e}")
-        print(f"🗑️  Directorio '{settings.OUTPUT_DIR}' limpiado.\n")
+                logger.warning(f"⚠️ No se pudo eliminar {file_path}: {e}")
+        logger.info(f"🗑️ Directorio '{settings.OUTPUT_DIR}' limpiado")
     else:
         os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
-        print(f"📁 Directorio '{settings.OUTPUT_DIR}' creado.\n")
+        logger.info(f"📁 Directorio '{settings.OUTPUT_DIR}' creado")
 
 
 def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
@@ -49,7 +53,7 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
     """
     # Validar configuración
     if not settings.validate():
-        print("❌ ERROR: Configuración incompleta. Verifica las variables de entorno.")
+        logger.error("❌ Configuración incompleta. Verifica las variables de entorno.")
         return None
 
     delete_output_folder()
@@ -75,12 +79,12 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         "codigo_generado": ""
     }
 
-    print("\n\n#####################################################")
-    print("INICIO DEL FLUJO MULTIAGENTE DE DESARROLLO (LANGGRAPH)")
-    print("#####################################################")
-    print(f"Prompt Inicial: {prompt_inicial}")
-    print(f"Máximo de Intentos: {initial_state['max_attempts']}")
-    print("#####################################################\n")
+    logger.info("=" * 55)
+    logger.info("INICIO DEL FLUJO MULTIAGENTE DE DESARROLLO (LANGGRAPH)")
+    logger.info("=" * 55)
+    logger.info(f"Prompt Inicial: {prompt_inicial}")
+    logger.info(f"Máximo de Intentos: {initial_state['max_attempts']}")
+    logger.info("=" * 55)
 
     # Crear y compilar el workflow
     app = create_workflow()
@@ -90,23 +94,28 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
 
     # Acumular el estado a medida que el grafo se ejecuta
     current_final_state = initial_state.copy()
+    
+    workflow_start = time.time()
 
     for step, node_output_map in enumerate(app.stream(initial_state), 1):
-        print(f"\n===== CICLO DE TRABAJO, PASO {step} =====")
+        logger.debug(f"===== CICLO DE TRABAJO, PASO {step} =====")
         
         # Actualizar el estado acumulado
         for node_name, delta_dict in node_output_map.items():
             current_final_state.update(delta_dict)
 
+    workflow_duration = time.time() - workflow_start
+
     # El estado final es el estado acumulado después de que el stream ha terminado
     final_state = current_final_state
 
-    print("\n\n#####################################################")
-    print("ESTADO FINAL DEL PROYECTO")
-    print("#####################################################")
+    logger.info("=" * 55)
+    logger.info("ESTADO FINAL DEL PROYECTO")
+    logger.info("=" * 55)
+    logger.info(f"Duración total: {workflow_duration:.2f}s")
 
     if final_state is None:
-        print("❌ El flujo no produjo un estado final o falló prematuramente.")
+        logger.error("❌ El flujo no produjo un estado final o falló prematuramente.")
         return None
 
     # Mostrar resultado
@@ -114,20 +123,23 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
     debug_exceeded = final_state.get('debug_attempt_count', 0) >= final_state.get('max_debug_attempts', 5)
     
     if debug_exceeded:
-        print(f"❌ Validación Final: FALLÓ - LÍMITE DE DEPURACIÓN EXCEDIDO ✗")
-        print("-" * 40)
-        print(f"Intentos de Depuración: {final_state.get('debug_attempt_count')}/{final_state.get('max_debug_attempts')}")
-        print(f"Intentos de Requisitos: {final_state['attempt_count']}")
-        print("\n❌ El código no pudo pasar las pruebas después de múltiples intentos de corrección.")
-        print(f"Último traceback: {final_state.get('traceback', 'N/A')[:200]}")
+        logger.error(f"❌ Validación Final: FALLÓ - LÍMITE DE DEPURACIÓN EXCEDIDO")
+        logger.info("-" * 40)
+        logger.info(f"Intentos de Depuración: {final_state.get('debug_attempt_count')}/{final_state.get('max_debug_attempts')}")
+        logger.info(f"Intentos de Requisitos: {final_state['attempt_count']}")
+        logger.error("❌ El código no pudo pasar las pruebas después de múltiples intentos de corrección.")
+        logger.debug(f"Último traceback: {final_state.get('traceback', 'N/A')[:200]}")
     else:
-        print(f"✅ Validación Final: {'APROBADO ✓' if validado else 'FALLÓ TRAS INTENTOS ✗'}")
-        print("-" * 40)
-        print(f"Intentos Totales: {final_state['attempt_count']}")
+        if validado:
+            logger.info("✅ Validación Final: APROBADO")
+        else:
+            logger.warning("❌ Validación Final: FALLÓ TRAS INTENTOS")
+        logger.info("-" * 40)
+        logger.info(f"Intentos Totales: {final_state['attempt_count']}")
     
     if validado:
-        print("\n📝 Código Final Validado:")
-        print(f"\n{final_state['codigo_generado']}\n")
+        logger.info(f"📝 Código Final Validado")
+        logger.debug(f"Código: {final_state['codigo_generado'][:200]}...")
         
         # Detectar el lenguaje y guardar con la extensión correcta
         lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
@@ -142,16 +154,29 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
             codigo_limpio, 
             directorio=settings.OUTPUT_DIR
         )
-        print(f"\n💾 Código guardado en: {settings.OUTPUT_DIR}/{nombre_archivo}")
+        logger.info(f"💾 Código guardado en: {settings.OUTPUT_DIR}/{nombre_archivo}")
+        
+        log_agent_execution(logger, "Workflow", "completado exitosamente", {
+            "archivo": nombre_archivo,
+            "intentos": final_state['attempt_count'],
+            "duracion": f"{workflow_duration:.2f}s"
+        })
     else:
-        print("\n❌ El proyecto no fue validado después de los intentos permitidos.")
-        print(f"Último feedback: {final_state.get('feedback_stakeholder', 'N/A')}")
+        logger.warning("❌ El proyecto no fue validado después de los intentos permitidos.")
+        logger.info(f"Último feedback: {final_state.get('feedback_stakeholder', 'N/A')[:200]}")
+        
+        log_agent_execution(logger, "Workflow", "completado sin validación", {
+            "intentos": final_state['attempt_count'],
+            "duracion": f"{workflow_duration:.2f}s"
+        })
 
     return final_state
 
 
 def main():
     """Función principal para ejecución directa del script."""
+    
+    logger.info("🚀 Iniciando sistema multiagente de desarrollo")
     
     # Ejemplos de uso - Descomentar el prompt que quieras usar
     
@@ -203,9 +228,9 @@ def main():
     final_state = run_development_workflow(prompt, max_attempts=3)
     
     if final_state and final_state.get('validado'):
-        print("\n🎉 ¡Flujo completado exitosamente!")
+        logger.info("🎉 ¡Flujo completado exitosamente!")
     else:
-        print("\n⚠️ El flujo terminó sin validación exitosa.")
+        logger.warning("⚠️ El flujo terminó sin validación exitosa.")
 
 
 if __name__ == "__main__":

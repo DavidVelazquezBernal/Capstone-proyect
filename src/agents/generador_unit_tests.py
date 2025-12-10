@@ -4,11 +4,15 @@ Responsable de generar tests unitarios (vitest para TypeScript, pytest para Pyth
 """
 
 import re
+import time
 from models.state import AgentState
 from config.prompts import Prompts
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
+from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
+
+logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
 def generador_unit_tests_node(state: AgentState) -> AgentState:
@@ -16,7 +20,9 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     Nodo del Generador de Unit Tests.
     Genera tests unitarios para el código generado según el lenguaje.
     """
-    print(f"\n--- 3.6 🧪 Generador de Unit Tests ---")
+    log_agent_execution(logger, "Generador Unit Tests", "iniciado", {
+        "requisito_id": state['attempt_count']
+    })
     
     # Obtener información del código
     lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
@@ -24,8 +30,8 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     )
     codigo_limpio = re.sub(patron_limpieza, '', state['codigo_generado']).strip()
     
-    print(f"   -> Lenguaje detectado: {lenguaje}")
-    print(f"   -> Generando tests unitarios...")
+    logger.info(f"🔍 Lenguaje detectado: {lenguaje}")
+    logger.info("🧪 Generando tests unitarios...")
     
     # Determinar nombres de archivos
     attempt = state['attempt_count']
@@ -39,6 +45,9 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
         codigo_filename = f"3_codificador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
         test_filename = f"test_unit_req{attempt}_sq{sq_attempt}.py"
     
+    logger.debug(f"Archivo de código: {codigo_filename}")
+    logger.debug(f"Archivo de tests: {test_filename}")
+    
     # Preparar contexto para el LLM con nombre de archivo correcto
     contexto_llm = (
         f"Requisitos formales:\n{state['requisitos_formales']}\n\n"
@@ -50,7 +59,12 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     )
     
     # Llamar al LLM para generar los tests
+    logger.info("🤖 Llamando a LLM para generar tests...")
+    start_time = time.time()
     tests_generados = call_gemini(Prompts.GENERADOR_UNIT_TESTS, contexto_llm)
+    duration = time.time() - start_time
+    
+    log_llm_call(logger, "generacion_tests", duration=duration)
     
     # Limpiar bloques de código markdown (```typescript, ```python, etc.)
     tests_generados = re.sub(r'^```(?:typescript|python|ts|py)\s*\n?', '', tests_generados, flags=re.MULTILINE)
@@ -58,14 +72,20 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     tests_generados = tests_generados.strip()
     
     # Guardar tests generados
-    guardar_fichero_texto(
+    resultado = guardar_fichero_texto(
         test_filename,
         tests_generados,
         directorio=settings.OUTPUT_DIR
     )
     
-    print(f"   ✅ Tests unitarios generados: {test_filename}")
-    print(f"   -> Los tests han sido guardados en: {settings.OUTPUT_DIR}/{test_filename}")
+    logger.info(f"Tests unitarios generados: {test_filename}")
+    
+    log_agent_execution(logger, "Generador Unit Tests", "completado", {
+        "archivo_tests": test_filename,
+        "archivo_codigo": codigo_filename,
+        "lenguaje": lenguaje,
+        "guardado": resultado
+    })
     
     # Almacenar los tests en el estado (por si se necesitan después)
     state['tests_unitarios_generados'] = tests_generados

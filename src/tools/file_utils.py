@@ -4,6 +4,10 @@ Utilidades para manejo de archivos y operaciones de I/O.
 
 import json
 import os
+from utils.logger import setup_logger, log_file_operation
+from config.settings import settings
+
+logger = setup_logger(__name__, level=settings.get_log_level())
 
 
 def guardar_fichero_texto(nombre_fichero: str, contenido: str, directorio: str = None) -> bool:
@@ -33,11 +37,11 @@ def guardar_fichero_texto(nombre_fichero: str, contenido: str, directorio: str =
         with open(ruta_completa, "w", encoding="utf-8") as file:
             file.write(contenido)
 
-        print(f"✅ Fichero '{ruta_completa}' guardado exitosamente.")
+        log_file_operation(logger, "guardar", ruta_completa, success=True)
         return True
 
     except IOError as e:
-        print(f"❌ Error al guardar el fichero '{nombre_fichero}': {e}")
+        log_file_operation(logger, "guardar", nombre_fichero, success=False, error=str(e))
         return False
 
 
@@ -66,8 +70,11 @@ def detectar_lenguaje_y_extension(requisitos_formales: str) -> tuple[str, str, s
             lenguaje = "typescript"
             extension = ".ts"
             patron_limpieza = r'```typescript|```'
-    except (json.JSONDecodeError, AttributeError):
+        
+        logger.debug(f"Lenguaje detectado: {lenguaje}, extensión: {extension}")
+    except (json.JSONDecodeError, AttributeError) as e:
         # Si hay error al parsear, se mantiene Python por defecto
+        logger.warning(f"Error al detectar lenguaje: {e}. Usando Python por defecto.")
         pass
     
     return lenguaje, extension, patron_limpieza

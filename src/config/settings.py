@@ -39,6 +39,15 @@ class Settings:
     # Directorios
     OUTPUT_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "output")
     
+    # Configuración de Logging
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    LOG_TO_FILE: bool = os.getenv("LOG_TO_FILE", "true").lower() == "true"
+    
+    def get_log_level(self) -> int:
+        """Convierte string de nivel a constante de logging"""
+        import logging
+        return getattr(logging, self.LOG_LEVEL.upper(), logging.INFO)
+    
     @classmethod
     def validate(cls) -> bool:
         """Valida que las configuraciones críticas estén presentes"""

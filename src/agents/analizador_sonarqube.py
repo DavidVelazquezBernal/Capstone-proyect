@@ -4,12 +4,16 @@ Responsable de verificar la calidad del código generado usando SonarQube antes 
 """
 
 import re
+import time
 from models.state import AgentState
 from config.prompts import Prompts
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
 from tools.sonarqube_mcp import analizar_codigo_con_sonarqube, formatear_reporte_sonarqube, es_codigo_aceptable
+from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
+
+logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
 
@@ -18,7 +22,10 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     Nodo del Analizador SonarQube.
     Analiza la calidad del código generado y determina si cumple los estándares.
     """
-    print("--- 3.5 🔍 Analizador SonarQube ---")
+    log_agent_execution(logger, "Analizador SonarQube", "iniciado", {
+        "requisito_id": state['attempt_count'],
+        "intento_sonarqube": state['sonarqube_attempt_count']
+    })
     
     # Obtener información del código
     lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
@@ -29,15 +36,14 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     # Generar nombre de archivo para análisis
     nombre_archivo = f"analisis_sonarqube_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
     
-    print(f"   -> Analizando código con SonarQube...")
-    print(f"   -> Archivo: {nombre_archivo}")
+    logger.info(f"🔍 Analizando código con SonarQube - Archivo: {nombre_archivo}")
     
     # Analizar código con SonarQube
     resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo)
     
     # Formatear reporte
     reporte_formateado = formatear_reporte_sonarqube(resultado_analisis)
-    print(f"\n{reporte_formateado}\n")
+    logger.debug(f"Reporte generado:\n{reporte_formateado[:500]}...")
     
     # Guardar reporte
     nombre_reporte = f"3.5_sonarqube_report_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}.txt"
@@ -51,13 +57,18 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     codigo_aceptable = es_codigo_aceptable(resultado_analisis)
     
     if codigo_aceptable:
-        print("   ✅ Código \"revisado\" por SonarQube")
+        logger.info("Código aprobado por SonarQube")
         state['sonarqube_passed'] = True
         state['sonarqube_issues'] = ""
         # Resetear contador cuando pasa
         state['sonarqube_attempt_count'] = 0
+        
+        log_agent_execution(logger, "Analizador SonarQube", "completado", {
+            "resultado": "aprobado",
+            "reporte": nombre_reporte
+        })
     else:
-        print("   ❌ Código rechazado por SonarQube - requiere correcciones")
+        logger.warning("❌ Código rechazado por SonarQube - requiere correcciones")
         state['sonarqube_passed'] = False
         state['sonarqube_attempt_count'] += 1
         
@@ -68,7 +79,13 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
             f"Requisitos formales:\n{state['requisitos_formales']}"
         )
         
+        logger.info("🤖 Generando instrucciones de corrección con LLM...")
+        start_time = time.time()
         instrucciones_correccion = call_gemini(Prompts.ANALIZADOR_SONARQUBE, contexto_llm)
+        duration = time.time() - start_time
+        
+        log_llm_call(logger, "analisis_sonarqube", duration=duration)
+        
         state['sonarqube_issues'] = instrucciones_correccion
         
         # Guardar instrucciones de corrección
@@ -79,7 +96,13 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
             directorio=settings.OUTPUT_DIR
         )
         
-        print(f"   -> Instrucciones de corrección generadas")
-        print(f"   -> Intento de corrección SonarQube: {state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}")
+        logger.info(f"➡️ Instrucciones de corrección generadas - Intento {state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}")
+        
+        log_agent_execution(logger, "Analizador SonarQube", "completado", {
+            "resultado": "rechazado",
+            "intento": f"{state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}",
+            "reporte": nombre_reporte,
+            "instrucciones": nombre_instrucciones
+        })
     
     return state

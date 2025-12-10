@@ -4,11 +4,15 @@ Responsable de validar que el código cumple la visión de negocio.
 """
 
 import re
+import time
 from models.state import AgentState
 from config.prompts import Prompts
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto
+from utils.logger import setup_logger, log_agent_execution, log_llm_call
+
+logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
 def stakeholder_node(state: AgentState) -> AgentState:
@@ -16,12 +20,20 @@ def stakeholder_node(state: AgentState) -> AgentState:
     Nodo del Stakeholder.
     Valida si el código cumple con la intención de negocio.
     """
-    print("--- 5. ✅ Stakeholder ---")
+    log_agent_execution(logger, "✅ Stakeholder", "iniciado", {
+        "intento": state['attempt_count'],
+        "max_intentos": state['max_attempts']
+    })
 
     # Comprobar si se excedió el límite de intentos
     if state['attempt_count'] >= state['max_attempts']:
         state['validado'] = False
-        print(f"   ❌ LÍMITE DE INTENTOS EXCEDIDO ({state['max_attempts']}). PROYECTO FALLIDO.")
+        logger.error(f"❌ LÍMITE DE INTENTOS EXCEDIDO ({state['max_attempts']}). PROYECTO FALLIDO.")
+        
+        log_agent_execution(logger, "Stakeholder", "completado", {
+            "resultado": "fallido",
+            "razon": "limite_intentos_excedido"
+        })
         return state
 
     contexto_llm = (
@@ -29,12 +41,17 @@ def stakeholder_node(state: AgentState) -> AgentState:
         f"Requisitos Formales (JSON): {state['requisitos_formales']}"
     )
     
+    logger.info("🔍 Validando código con stakeholder...")
+    start_time = time.time()
     respuesta_llm = call_gemini(Prompts.STAKEHOLDER, contexto_llm)
+    duration = time.time() - start_time
+    
+    log_llm_call(logger, "validacion_stakeholder", duration=duration)
 
     # Lógica de transición de validación
     if "VALIDADO" in respuesta_llm:
         state['validado'] = True
-        print("   -> Resultado: VALIDADO. Proyecto Terminado.")
+        logger.info("✅ Resultado: VALIDADO. Proyecto Terminado.")
         
         # Guardar validación exitosa
         guardar_fichero_texto(
@@ -42,15 +59,21 @@ def stakeholder_node(state: AgentState) -> AgentState:
             f"Validación: APROBADO\n\nRespuesta:\n{respuesta_llm}",
             directorio=settings.OUTPUT_DIR
         )
+        
+        log_agent_execution(logger, "Stakeholder", "completado", {
+            "resultado": "aprobado",
+            "intento": state['attempt_count']
+        })
     else:
         state['validado'] = False
         # Extraer el feedback de rechazo
         feedback_match = re.search(r'Motivo: (.*)', respuesta_llm, re.DOTALL)
         if feedback_match:
             state['feedback_stakeholder'] = feedback_match.group(1).strip()
-        print(f"   -> Resultado: RECHAZADO.")
-        print(f"   -> Motivo: {state['feedback_stakeholder']}")
-        print("   -> Volviendo a Ingeniero de Requisitos.")
+        
+        logger.warning("❌ Resultado: RECHAZADO.")
+        logger.info(f"📋 Motivo: {state['feedback_stakeholder']}")
+        logger.info("➡️ Volviendo a Ingeniero de Requisitos.")
         
         # Guardar validación rechazada
         guardar_fichero_texto(
@@ -58,5 +81,11 @@ def stakeholder_node(state: AgentState) -> AgentState:
             f"Validación: RECHAZADO\n\nMotivo:\n{state['feedback_stakeholder']}\n\nRespuesta completa:\n{respuesta_llm}",
             directorio=settings.OUTPUT_DIR
         )
+        
+        log_agent_execution(logger, "Stakeholder", "completado", {
+            "resultado": "rechazado",
+            "motivo": state['feedback_stakeholder'][:100],
+            "intento": state['attempt_count']
+        })
 
     return state
