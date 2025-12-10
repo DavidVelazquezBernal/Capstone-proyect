@@ -20,6 +20,10 @@ def stakeholder_node(state: AgentState) -> AgentState:
     Nodo del Stakeholder.
     Valida si el código cumple con la intención de negocio.
     """
+    logger.info("=" * 60)
+    logger.info("🙋‍♂️ STAKEHOLDER - INICIO")
+    logger.info("=" * 60)
+
     log_agent_execution(logger, "✅ Stakeholder", "iniciado", {
         "intento": state['attempt_count'],
         "max_intentos": state['max_attempts']

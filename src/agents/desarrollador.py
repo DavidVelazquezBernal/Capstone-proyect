@@ -24,6 +24,10 @@ def desarrollador_node(state: AgentState) -> AgentState:
     Genera código que satisface los requisitos formales o corrige errores.
     Puede corregir errores de ejecución (traceback) o issues de calidad (sonarqube_issues).
     """
+    logger.info("=" * 60)
+    logger.info("💻 DESARROLLADOR - INICIO")
+    logger.info("=" * 60)
+
     log_agent_execution(logger, "Desarrollador", "iniciado", {
         "requisito_id": state['attempt_count'],
         "debug_attempt": state['debug_attempt_count'],

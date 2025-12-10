@@ -22,6 +22,10 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     Nodo del Analizador SonarQube.
     Analiza la calidad del código generado y determina si cumple los estándares.
     """
+    logger.info("=" * 60)
+    logger.info("🧪 ANALIZADOR SONARQUBE - INICIO")
+    logger.info("=" * 60)
+
     log_agent_execution(logger, "Analizador SonarQube", "iniciado", {
         "requisito_id": state['attempt_count'],
         "intento_sonarqube": state['sonarqube_attempt_count']

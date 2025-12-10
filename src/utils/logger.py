@@ -53,7 +53,6 @@ class AgentFormatter(logging.Formatter):
     """Formatter especializado para logs de agentes con emojis"""
     
     AGENT_EMOJIS = {
-        'ingeniero_requisitos': '🙋‍♂️',
         'product_owner': '💼',
         'desarrollador': '💻',
         'analizador_sonarqube': '🔍',
@@ -150,29 +149,6 @@ def setup_logger(
     
     return logger
 
-
-def log_state_transition(logger: logging.Logger, from_node: str, to_node: str, state: dict):
-    """
-    Log estructurado para transiciones de estado en el workflow.
-    
-    Args:
-        logger: Logger a usar
-        from_node: Nodo de origen
-        to_node: Nodo de destino
-        state: Estado actual (solo se loguean campos clave)
-    """
-    logger.info(
-        f"Transición: {from_node} → {to_node}",
-        extra={
-            'transition': {
-                'from': from_node,
-                'to': to_node,
-                'attempt': state.get('attempt_count', 0),
-                'debug_attempt': state.get('debug_attempt_count', 0),
-                'sonarqube_attempt': state.get('sonarqube_attempt_count', 0)
-            }
-        }
-    )
 
 
 def log_agent_execution(
