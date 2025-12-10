@@ -5,8 +5,7 @@ Define el flujo de trabajo entre agentes y las transiciones condicionales.
 
 from langgraph.graph import StateGraph, END, START
 from models.state import AgentState
-from agents.ingeniero_requisitos import ingeniero_de_requisitos_node
-from agents.product_owner import product_owner_node
+from agents.requirements_manager import requirements_manager_node
 from agents.codificador_corrector import codificador_node
 from agents.analizador_sonarqube import analizador_sonarqube_node
 from agents.generador_unit_tests import generador_unit_tests_node
@@ -24,8 +23,7 @@ def create_workflow() -> StateGraph:
     workflow = StateGraph(AgentState)
 
     # 1. Añadir Nodos (Agentes)
-    workflow.add_node("IngenieroRequisitos", ingeniero_de_requisitos_node)
-    workflow.add_node("ProductOwner", product_owner_node)
+    workflow.add_node("RequirementsManager", requirements_manager_node)
     workflow.add_node("CodificadorCorrector", codificador_node)
     workflow.add_node("AnalizadorSonarQube", analizador_sonarqube_node)
     workflow.add_node("GeneradorUnitTests", generador_unit_tests_node)
@@ -33,9 +31,8 @@ def create_workflow() -> StateGraph:
     workflow.add_node("Stakeholder", stakeholder_node)
 
     # 2. Definir Transiciones Iniciales y Lineales
-    workflow.add_edge(START, "IngenieroRequisitos")
-    workflow.add_edge("IngenieroRequisitos", "ProductOwner")
-    workflow.add_edge("ProductOwner", "CodificadorCorrector")
+    workflow.add_edge(START, "RequirementsManager")
+    workflow.add_edge("RequirementsManager", "CodificadorCorrector")
     workflow.add_edge("CodificadorCorrector", "AnalizadorSonarQube")
 
     # 3. Transiciones Condicionales
@@ -84,7 +81,7 @@ def create_workflow() -> StateGraph:
                   else "RECHAZADO")
         ),
         {
-            "RECHAZADO": "IngenieroRequisitos",
+            "RECHAZADO": "RequirementsManager",
             "VALIDADO": END,
             "FAILED_FINAL": END,
         }
