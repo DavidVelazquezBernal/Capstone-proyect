@@ -89,6 +89,78 @@ def call_gemini(
             contents=full_prompt,
             config=config,
         )
+        if not response.text or response.text == "None" or response.text.lower() == "none":
+            print(f"\n{'='*60}")
+            print("❌ ERROR: EL LLM NO DEVOLVIÓ RESPUESTA VÁLIDA")
+            print(f"{'='*60}")
+            print(f"📋 Información de diagnóstico:")
+            print(f"   • Modelo usado: {settings.MODEL_NAME}")
+            print(f"   • Respuesta vacía: {response.text is None or response.text == ''}")
+            print(f"   • Valor de response.text: {repr(response.text)}")
+            print(f"   • Tipo de response: {type(response)}")
+            
+            # Verificar si hay candidatos en la respuesta
+            if hasattr(response, 'candidates') and response.candidates:
+                print(f"   • Candidatos disponibles: {len(response.candidates)}")
+                for i, candidate in enumerate(response.candidates):
+                    print(f"   • Candidato {i+1}:")
+                    if hasattr(candidate, 'finish_reason'):
+                        finish_reason = str(candidate.finish_reason)
+                        print(f"     - Finish reason: {finish_reason}")
+                        
+                        # Diagnóstico específico para MALFORMED_FUNCTION_CALL
+                        if "MALFORMED_FUNCTION_CALL" in finish_reason:
+                            print(f"\n{'='*60}")
+                            print("🔧 DIAGNÓSTICO: MALFORMED_FUNCTION_CALL")
+                            print(f"{'='*60}")
+                            print(f"El modelo intentó llamar a una herramienta pero la llamada está mal formada.")
+                            print(f"\n📊 Detalles del candidato:")
+                            
+                            # Mostrar contenido completo del candidato
+                            if hasattr(candidate, 'content') and candidate.content:
+                                print(f"   • Contenido del candidato:")
+                                print(f"     {candidate.content}")
+                                
+                                # Verificar si hay function_calls
+                                if hasattr(candidate.content, 'parts'):
+                                    print(f"\n   • Partes del contenido ({len(candidate.content.parts)} partes):")
+                                    for j, part in enumerate(candidate.content.parts):
+                                        print(f"     - Parte {j+1}: {type(part).__name__}")
+                                        if hasattr(part, 'function_call'):
+                                            print(f"       → Function call detectada:")
+                                            print(f"         Nombre: {part.function_call.name if hasattr(part.function_call, 'name') else 'N/A'}")
+                                            print(f"         Argumentos: {part.function_call.args if hasattr(part.function_call, 'args') else 'N/A'}")
+                                        elif hasattr(part, 'text'):
+                                            print(f"       → Texto: {part.text[:200]}...")
+                            
+                            # Mostrar herramientas disponibles
+                            if allow_use_tool:
+                                print(f"\n   • Herramientas configuradas:")
+                                if 'tools' in config:
+                                    for tool in config['tools']:
+                                        tool_name = tool.__name__ if hasattr(tool, '__name__') else str(tool)
+                                        print(f"     - {tool_name}")
+                            
+                            print(f"\n💡 Posibles causas:")
+                            print(f"   1. El modelo generó argumentos con formato JSON inválido")
+                            print(f"   2. Los argumentos no coinciden con el schema de la herramienta")
+                            print(f"   3. Falta algún argumento requerido por la herramienta")
+                            print(f"   4. El nombre de la función es incorrecto")
+                            print(f"{'='*60}\n")
+                    
+                    if hasattr(candidate, 'safety_ratings'):
+                        print(f"     - Safety ratings: {candidate.safety_ratings}")
+                    if hasattr(candidate, 'content'):
+                        print(f"     - Content disponible: {candidate.content is not None}")
+            else:
+                print(f"   • No hay candidatos en la respuesta")
+            
+            # Verificar bloqueos de seguridad
+            if hasattr(response, 'prompt_feedback'):
+                print(f"   • Prompt feedback: {response.prompt_feedback}")
+            
+            print(f"{'='*60}\n")
+            raise APIError("El LLM devolvió None o respuesta vacía.")
         return response.text
 
     except APIError as e:

@@ -175,14 +175,19 @@ def main():
     #     "y quiero que la salida sea un string con una frase descriptiva."
     # )
 
+    prompt = (
+        "Quiero una función simple en TypeScript para generar el factorial de dos números y luego los sume, "
+        "y quiero que la salida sea un string con una frase descriptiva."
+    )
+
     # prompt = (
     #      "Quiero una función simple en TypeScript que capitalice la primera letra de cada palabra "        
     # )
 
-    prompt = {
-        "Quiero una función simple en TypeScript que valide si un correo electrónico es válido, "
-        "y quiero que la salida sea un string con una frase descriptiva."
-    }
+    # prompt = {
+    #     "Quiero una función simple en TypeScript que valide si un correo electrónico es válido, "
+    #     "y quiero que la salida sea un string con una frase descriptiva."
+    # }
     
     final_state = run_development_workflow(prompt, max_attempts=3)
     

@@ -112,17 +112,31 @@ class Prompts:
     CRÍTICO - Manejo de Errores Esperados:
     - Si el valor "expected" es un mensaje de error o excepción (ej: "La entrada debe ser...", "Error:", etc.)
       Y el código lanza CUALQUIER excepción, evalúa si el error es SEMÁNTICAMENTE VÁLIDO.
+    
+    - REGLA FUNDAMENTAL DE VALIDACIÓN DE ERRORES:
+      * Si "expected" contiene un mensaje de error (Error, debe ser, entrada inválida, etc.)
+      * Y la herramienta devuelve un error (exit code != 0, excepción lanzada, throw Error)
+      * → El test es PASSED (el código validó correctamente la entrada inválida)
+      * NO importa si el mensaje exacto difiere, lo importante es que se lanzó un error como se esperaba
+    
     - EVALUACIÓN SEMÁNTICA DE ERRORES:
       * Si "expected" indica que la entrada debe ser un tipo específico (ej: "debe ser un número entero")
-        Y ocurre un error de tipo/nombre/sintaxis (NameError, TypeError, ValueError) con la entrada
+        Y ocurre un error de tipo/nombre/sintaxis (NameError, TypeError, ValueError, throw Error) con la entrada
         → El test es PASSED porque la entrada efectivamente NO era del tipo esperado
-      * Ejemplo: expected="Error: La entrada debe ser un número entero", input="abc", error="name 'abc' is not defined"
+      * Ejemplo 1 (Python): expected="Error: La entrada debe ser un número entero", input="abc", error="name 'abc' is not defined"
         → PASSED (porque 'abc' no es un número entero, el error es correcto aunque el mensaje difiera)
-    - Compara el mensaje de error lanzado con el valor "expected". Si coinciden (exacta o parcialmente), es PASSED.
+      * Ejemplo 2 (TypeScript): expected="Error: Ambos números deben ser enteros", input=-1, error="throw new Error('Ambos números de entrada deben ser enteros no negativos.')"
+        → PASSED (se esperaba error y se lanzó error, la validación funcionó)
+    
+    - CASOS DE COINCIDENCIA DE ERRORES:
+      * Si "expected" contiene palabras clave del error (Error, debe, entrada, inválido, negativo, positivo, etc.)
+      * Y el error actual contiene esas mismas palabras clave o similares
+      * → PASSED (coincidencia semántica)
+    
     - Solo marca como FAILED si:
-      * Se esperaba un valor normal pero se obtuvo un error
-      * Se esperaba un error pero no se lanzó ninguno
-      * Se esperaba un error de tipo/validación pero el código ejecutó correctamente (sin error)
+      * Se esperaba un valor normal (número, string, etc.) pero se obtuvo un error
+      * Se esperaba un error pero NO se lanzó ninguno (código ejecutó sin error)
+      * Se esperaba un error de validación pero el código retornó un resultado normal
 
     Formato de salida:
     Un diccionario que contiene:
@@ -223,6 +237,10 @@ class Prompts:
     - Asegúrate de que los imports coincidan con las exportaciones del código original
     - Incluye comentarios explicativos donde sea útil
     - Los nombres de los tests deben ser descriptivos y claros
+    - Usa convenciones de estilo del lenguaje correspondiente
+    - Asegúrate de que el código de tests sea autocontenido y no dependa de configuraciones externas
+    - Cada test debe ser independiente y no afectar el estado global
+    - Todas las variables deben estar tipificadas correctamente según el lenguaje
     """
     
     STAKEHOLDER = """
