@@ -27,11 +27,26 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     print(f"   -> Lenguaje detectado: {lenguaje}")
     print(f"   -> Generando tests unitarios...")
     
-    # Preparar contexto para el LLM
+    # Determinar nombres de archivos
+    attempt = state['attempt_count']
+    sq_attempt = state['sonarqube_attempt_count']
+    debug_attempt = state['debug_attempt_count']
+    
+    if lenguaje.lower() == 'typescript':
+        codigo_filename = f"3_codificador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.ts"
+        test_filename = f"unit_tests_req{attempt}_sq{sq_attempt}.test.ts"
+    else:  # Python
+        codigo_filename = f"3_codificador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
+        test_filename = f"test_unit_req{attempt}_sq{sq_attempt}.py"
+    
+    # Preparar contexto para el LLM con nombre de archivo correcto
     contexto_llm = (
         f"Requisitos formales:\n{state['requisitos_formales']}\n\n"
         f"Código generado:\n{state['codigo_generado']}\n\n"
-        f"Lenguaje: {lenguaje}\n"
+        f"Lenguaje: {lenguaje}\n\n"
+        f"IMPORTANTE: El archivo de código se llama '{codigo_filename}' (sin extensión en el import).\n"
+        f"Para TypeScript: import {{ ClassName }} from './{codigo_filename.replace('.ts', '')}';\n"
+        f"Para Python: from {codigo_filename.replace('.py', '')} import function_or_class\n"
     )
     
     # Llamar al LLM para generar los tests
@@ -42,23 +57,15 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     tests_generados = re.sub(r'\n?```\s*$', '', tests_generados)
     tests_generados = tests_generados.strip()
     
-    # Determinar extensión del archivo de tests
-    if lenguaje.lower() == 'typescript':
-        extension_test = '.test.ts'
-        nombre_test = f"unit_tests_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}{extension_test}"
-    else:  # Python
-        extension_test = '.test.py'
-        nombre_test = f"test_unit_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}{extension_test}"
-    
     # Guardar tests generados
     guardar_fichero_texto(
-        nombre_test,
+        test_filename,
         tests_generados,
         directorio=settings.OUTPUT_DIR
     )
     
-    print(f"   ✅ Tests unitarios generados: {nombre_test}")
-    print(f"   -> Los tests han sido guardados en: {settings.OUTPUT_DIR}/{nombre_test}")
+    print(f"   ✅ Tests unitarios generados: {test_filename}")
+    print(f"   -> Los tests han sido guardados en: {settings.OUTPUT_DIR}/{test_filename}")
     
     # Almacenar los tests en el estado (por si se necesitan después)
     state['tests_unitarios_generados'] = tests_generados

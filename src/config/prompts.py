@@ -55,7 +55,12 @@ class Prompts:
     Instrucción Principal:
     Si se incluye un 'traceback', analizar el error y corregir el código existente para que compile y ejecute sin errores.
     Producir una única función en Python o Typescript (según la petición formal) autocontenida que implemente la lógica solicitada, con entradas y salidas claramente definidas y sin dependencias externas.
-    Incluir pruebas pequeñas o ejemplos de uso mínimos dentro del propio bloque de código si es pertinente.
+    
+    IMPORTANTE - Ejemplos de uso:
+    Si incluyes ejemplos de uso o pruebas de demostración, DEBEN estar completamente comentados.
+    - Para TypeScript: Usar // para líneas individuales o /* */ para bloques
+    - Para Python: Usar # para líneas individuales o ''' ''' para bloques
+    Los ejemplos NO deben ejecutarse automáticamente al importar el código.
 
     Output Esperado:
     Código completo, envuelto en un bloque de código markdown con la etiqueta python o typescript según corresponda.
@@ -87,6 +92,137 @@ class Prompts:
           {"input": [10, -5], "expected": 5}
       ]
     2. Asegúrate que el diccionario contiene DIEZ CASOS DE TEST.
+    """
+    
+    PROBADOR_GENERADOR_ESTRUCTURA_TESTS = """
+    Rol:
+    Especialista en Testing y Generación de Casos de Prueba.
+
+    Objetivo:
+    Analizar el código generado y crear una estructura JSON con casos de prueba completos y bien definidos.
+    IMPORTANTE: Detectar si el código es una CLASE con múltiples métodos o una FUNCIÓN individual.
+
+    Instrucción Principal:
+    1. Analiza el código generado y los requisitos formales.
+    2. Identifica el lenguaje del código (Python o TypeScript).
+    3. Identifica la estructura del código:
+       - CLASE: Si tiene 'class', '__init__', 'self' (Python) o 'class', 'constructor', 'this' (TypeScript)
+       - FUNCIÓN: Si solo tiene 'def' (Python) o 'function', 'const x = ()' (TypeScript)
+    4. Genera casos de prueba que cubran:
+       - Casos normales (happy path)
+       - Casos límite (edge cases)
+       - Casos de error (si aplica)
+    5. Devuelve ÚNICAMENTE un JSON válido con la estructura especificada.
+
+    Detección del Lenguaje:
+    - Python: Si ves 'def', 'import', 'print(', ':' después de paréntesis, 'class'
+    - TypeScript: Si ves 'function', 'const', 'let', '=>', 'console.log', tipos como ': number', 'class'
+
+    === IMPORTANTE: ESTRUCTURA PARA CLASES ===
+    
+    Si el código es una CLASE con múltiples métodos:
+    
+    1. Identifica TODOS los métodos públicos de la clase
+    2. Para cada método, genera múltiples casos de prueba
+    3. Usa esta estructura JSON:
+    
+    {{
+      "language": "python" | "typescript",
+      "code_type": "class",
+      "class_name": "NombreDeLaClase",
+      "test_cases": [
+        {{
+          "method": "nombre_del_metodo",
+          "input": [arg1, arg2, ...],
+          "expected": "resultado_como_string"
+        }},
+        {{
+          "method": "otro_metodo",
+          "input": [arg1],
+          "expected": "resultado_como_string"
+        }}
+      ]
+    }}
+    
+    Ejemplo para clase Calculator:
+    {{
+      "language": "typescript",
+      "code_type": "class",
+      "class_name": "Calculator",
+      "test_cases": [
+        {{"method": "add", "input": [2, 3], "expected": "5"}},
+        {{"method": "add", "input": [0, 0], "expected": "0"}},
+        {{"method": "add", "input": [-5, 3], "expected": "-2"}},
+        {{"method": "subtract", "input": [5, 3], "expected": "2"}},
+        {{"method": "subtract", "input": [0, 5], "expected": "-5"}},
+        {{"method": "multiply", "input": [3, 4], "expected": "12"}},
+        {{"method": "multiply", "input": [0, 5], "expected": "0"}},
+        {{"method": "divide", "input": [10, 2], "expected": "5"}},
+        {{"method": "divide", "input": [7, 0], "expected": "Error: No se puede dividir por cero."}}
+      ]
+    }}
+
+    === ESTRUCTURA PARA FUNCIONES ===
+    
+    Si el código es una FUNCIÓN individual:
+    
+    {{
+      "language": "python" | "typescript",
+      "code_type": "function",
+      "function_name": "nombre_funcion",
+      "test_cases": [
+        {{
+          "input": [arg1, arg2, ...],
+          "expected": "resultado_como_string"
+        }},
+        {{
+          "input": [arg1],
+          "expected": "resultado_como_string"
+        }}
+      ]
+    }}
+    
+    Ejemplo para función factorial:
+    {{
+      "language": "python",
+      "code_type": "function",
+      "function_name": "factorial",
+      "test_cases": [
+        {{"input": [5], "expected": "120"}},
+        {{"input": [0], "expected": "1"}},
+        {{"input": [1], "expected": "1"}},
+        {{"input": [10], "expected": "3628800"}}
+      ]
+    }}
+
+    IMPORTANTE - Formato de 'expected':
+    - Para números: "120", "5", "0", "3.14"
+    - Para strings: "Hello World", "resultado"
+    - Para booleanos: "true", "false" o "True", "False"
+    - Para errores: El mensaje de error exacto como aparecería en la salida
+    - Para objetos/arrays: La representación string del objeto
+
+    Directrices de Generación para CLASES:
+    1. Genera al menos 2-4 casos de prueba por CADA método público
+    2. NO pruebes métodos privados (private, con _ en Python)
+    3. Incluye casos normales, límite y errores para cada método
+    4. El campo "method" debe ser el nombre exacto del método en el código
+    5. Si un método lanza excepciones, incluye casos que las provoquen
+
+    Directrices de Generación para FUNCIONES:
+    1. Genera al menos 3-5 casos de prueba variados
+    2. Incluye casos normales y casos límite
+    3. Si el código maneja errores, incluye casos que generen esos errores
+    
+    Directrices GENERALES:
+    1. Asegúrate de que 'input' siempre sea un array, incluso para un solo argumento
+    2. Asegúrate de que 'expected' siempre sea un string
+    3. NO incluyas explicaciones ni texto adicional
+    4. NO uses comillas triples ni marcadores de código
+    5. El JSON debe ser parseable directamente con json.loads() o JSON.parse()
+    6. SIEMPRE incluye el campo "code_type" ("class" o "function")
+    7. Si es clase, SIEMPRE incluye "class_name" y el campo "method" en cada test_case
+    8. Si es función, SIEMPRE incluye "function_name"
     """
     
     PROBADOR_EJECUTOR_TESTS = """
@@ -207,12 +343,20 @@ class Prompts:
        - Python: Usar pytest con fixtures y assertions claras
 
     Para TypeScript (Vitest):
-    - Importar las funciones correctamente: import { nombreFuncion } from './archivo'
+    - CRÍTICO: SIEMPRE importar TODAS las funciones de vitest que uses al inicio del archivo:
+      import { describe, it, test, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest'
+    - Importar las funciones del código: import { nombreFuncion } from './archivo'
     - Usar describe() para agrupar tests relacionados
-    - Usar it() o test() para cada caso de prueba, preperiblemente test.each() para múltiples casos
+    - IMPORTANTE: Usar it() para cada caso de prueba individual, NO usar test() directamente
+    - EXCEPCIÓN: test.each() SI es válido para múltiples casos con la misma lógica
     - Usar expect() con matchers apropiados (.toBe(), .toEqual(), .toThrow(), etc.)
+    - Si usas beforeEach, afterEach, beforeAll, afterAll: DEBEN estar en el import de vitest
     - Incluir tests para casos normales, casos edge y manejo de errores
-    - Agregar imports necesarios: import { describe, it, expect } from 'vitest'
+    
+    Sintaxis correcta de tests en Vitest:
+    ✅ CORRECTO: it('should do something', () => { ... })
+    ✅ CORRECTO: test.each([...])('should handle %s', (input) => { ... })
+    ❌ INCORRECTO: test('should do something', () => { ... })
 
     Para Python (pytest):
     - Importar las funciones correctamente: from modulo import funcion

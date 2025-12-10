@@ -10,12 +10,12 @@ graph TD
     
     COD --> SQ[3.5 Analizador SonarQube<br/>Análisis de calidad]
     
-    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| GUT[3.6 Generador Unit Tests<br/>Genera tests unitarios]
+    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| GUT[3.6 Generador Unit Tests<br/>Genera tests vitest/pytest]
     SQ -->|❌ Issues encontrados| SQCHECK{Intentos SQ<br/>< MAX?}
     SQCHECK -->|Sí| COD
     SQCHECK -->|No| ENDLIMIT1[❌ FIN<br/>Límite calidad excedido]
     
-    GUT --> PROB[4. Probador/Depurador<br/>Tests funcionales]
+    GUT --> PROB[4. Ejecutor de Pruebas<br/>Ejecuta tests unitarios]
     
     PROB -->|✅ Tests pasan| SH[5. Stakeholder<br/>Validación negocio]
     PROB -->|❌ Tests fallan| DEBUGCHECK{Intentos Debug<br/>< MAX?}
@@ -45,21 +45,24 @@ graph TD
 ```
 Codificador → SonarQube → [Issues?] → Codificador
                   ↓
-              [OK] → Generador Unit Tests → Continúa
+              [OK] → Generador Unit Tests → Ejecutor Pruebas → Continúa
 ```
 - **Límite**: 2 intentos (configurable)
 - **Salida límite**: `QUALITY_LIMIT_EXCEEDED`
 - **Verifica**: Bugs, vulnerabilidades, code smells
-- **Nuevo**: Genera tests unitarios (vitest/pytest) tras pasar calidad
-
+- **Genera**: Tests unitarios con vitest (TypeScript) o pytest (Python)
+- **Ejecuta**: Tests directamente sin sandbox (mejora de performance)
 ### Bucle B: Depuración Funcional
 ```
-Codificador → Probador → [Falla?] → Codificador
-                  ↓
-              [Pasa] → Continúa
+Generador Unit Tests → Ejecutor Pruebas → [Falla?] → Codificador
+                            ↓
+                        [Pasa] → Continúa
 ```
 - **Límite**: 3 intentos (configurable)
 - **Salida límite**: `DEBUG_LIMIT_EXCEEDED`
+- **Verifica**: Ejecución correcta de tests unitarios
+- **Frameworks**: vitest para TypeScript, pytest para Python
+- **Reportes**: Estadísticas detalladas (total, pasados, fallidos)
 - **Verifica**: Ejecución correcta, tests funcionales
 
 ### Bucle C: Validación de Negocio
@@ -71,18 +74,18 @@ Ing. Requisitos → ... → Stakeholder → [Rechaza?] → Ing. Requisitos
 - **Límite**: 1 ciclo completo (configurable)
 - **Salida límite**: `FAILED_FINAL`
 - **Verifica**: Cumplimiento de visión de negocio
-
-## 📈 Orden de Ejecución
 ### Secuencia Normal (Todo OK)
 1. Ingeniero Requisitos → clarifica
 2. Product Owner → formaliza
 3. Codificador → genera código
 4. **SonarQube** → ✅ calidad OK
-5. **Generador Unit Tests** → genera tests unitarios (vitest/pytest)
-6. Probador → ✅ tests pasan
+5. **Generador Unit Tests** → genera tests (vitest/pytest)
+6. **Ejecutor Pruebas** → ✅ tests pasan (estadísticas: 40/40)
 7. Stakeholder → ✅ valida
 8. ✅ **FIN EXITOSO**alida
+8. ✅ **FIN EXITOSO**alida
 7. ✅ **FIN EXITOSO**
+### Escenario con Correcciones de Calidad
 ### Escenario con Correcciones de Calidad
 1. Ingeniero Requisitos → clarifica
 2. Product Owner → formaliza
@@ -91,12 +94,10 @@ Ing. Requisitos → ... → Stakeholder → [Rechaza?] → Ing. Requisitos
 5. **Vuelve a Codificador** (intento 2, SQ=1)
 6. Codificador → corrige issues
 7. **SonarQube** → ✅ 1 CRITICAL issue (aceptable)
-8. **Generador Unit Tests** → genera tests unitarios
-9. Probador → ✅ tests pasan
+8. **Generador Unit Tests** → genera tests
+9. **Ejecutor Pruebas** → ✅ tests pasan
 10. Stakeholder → ✅ valida
-11. ✅ **FIN EXITOSO**lida
-10. ✅ **FIN EXITOSO**
-
+11. ✅ **FIN EXITOSO**
 ### Escenario Límite de Calidad Excedido
 1. Ingeniero Requisitos → clarifica
 2. Product Owner → formaliza
@@ -135,21 +136,20 @@ state = {
 
 ### Ejemplos
 ```
-1_ingeniero_requisitos_req0.txt
-2_product_owner_req0.json
-3_codificador_req0_debug0_sq0.py
-3_codificador_req0_debug0_sq1.py    ← 1ra corrección calidad
-3_codificador_req0_debug0_sq2.py    ← 2da corrección calidad
-3.5_sonarqube_report_req0_sq0.txt
-3.5_sonarqube_report_req0_sq1.txt
-3.5_sonarqube_instrucciones_req0_sq1.txt
-4_probador_tests_req0_debug0.txt
-4_probador_resultado_req0_debug0.json
-5_stakeholder_validacion_req0.txt
-codigo_final.py
+### Ejemplos
 ```
-
-## 🔧 Configuración de Límites
+1_ingeniero_requisitos_intento_1.txt
+2_product_owner_intento_1.json
+3_codificador_req1_debug0_sq0.ts
+3_codificador_req1_debug0_sq1.ts    ← 1ra corrección calidad
+3_codificador_req1_debug1_sq0.ts    ← 1ra corrección después de test fallido
+3.5_sonarqube_report_req1_sq0.txt
+3.5_sonarqube_report_req1_sq1.txt
+unit_tests_req1_sq0.test.ts         ← Tests generados (vitest)
+4_probador_req1_debug0_PASSED.txt   ← Resultado ejecución tests
+4_probador_req1_debug1_FAILED.txt   ← Tests fallidos con estadísticas
+codigo_final.ts
+```🔧 Configuración de Límites
 
 ```python
 # En src/config/settings.py
@@ -181,10 +181,15 @@ Codificador → Probador
 
 ### Ahora (con SonarQube)
 ```
-Codificador → SonarQube → Probador
+### Ahora (con SonarQube y Tests Modernos)
+```
+Codificador → SonarQube → Generador Tests → Ejecutor Pruebas
 ```
 - ✅ Detección automática de issues
-- ✅ Código más seguro
-- ✅ Mejor mantenibilidad
+- ✅ Código más seguro y mantenible
+- ✅ Tests profesionales con vitest/pytest
+- ✅ Ejecución directa sin sandbox (~3x más rápido)
+- ✅ Estadísticas detalladas (total, pasados, fallidos)
+- ✅ Output limpio sin códigos ANSI
 - ✅ Estándares profesionales
 - ✅ Reducción de deuda técnica

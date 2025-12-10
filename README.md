@@ -30,9 +30,10 @@ Capstone proyect v2/
 │   │   ├── __init__.py
 │   │   ├── ingeniero_requisitos.py  # Agente 1: Clarificación
 │   │   ├── product_owner.py         # Agente 2: Formalización
-│   │   ├── codificador.py           # Agente 3: Desarrollo
+│   │   ├── codificador_corrector.py # Agente 3: Desarrollo y corrección
 │   │   ├── analizador_sonarqube.py  # Agente 3.5: Análisis de calidad
-│   │   ├── probador_depurador.py    # Agente 4: QA
+│   │   ├── generador_unit_tests.py  # Agente 3.6: Generación de tests
+│   │   ├── ejecutor_pruebas.py      # Agente 4: Ejecución de tests
 │   │   └── stakeholder.py           # Agente 5: Validación
 │   │
 │   ├── llm/                         # Cliente LLM
@@ -65,19 +66,33 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+**Para testing (requerido):**
+```bash
+# TypeScript - Instalar en directorio output/
+cd output
+npm install -D vitest
+cd ..
+
+# Python
+pip install pytest
+```
+
+**Nota:** El sistema crea automáticamente `package.json` en `output/` si no existe.
+
 4. **Configurar variables de entorno**
 
 Crear archivo `.env` en la raíz del proyecto:
 ```env
 # APIs requeridas
 GEMINI_API_KEY=tu_clave_api_aqui
-E2B_API_KEY=tu_clave_e2b_aqui
 
 # SonarQube (opcional - para análisis avanzado)
 SONARQUBE_URL=https://sonarcloud.io
 SONARQUBE_TOKEN=tu_token_aqui
 SONARQUBE_PROJECT_KEY=tu_proyecto_key
 ```
+
+**Nota:** E2B ya no es requerido. El sistema usa vitest/pytest directamente.
 
 **Nota:** Las credenciales de SonarQube son **opcionales**. El sistema funciona con análisis estático básico sin ellas.
 
@@ -119,17 +134,15 @@ El sistema detecta automáticamente el lenguaje del código generado:
 
 El código se limpia automáticamente de marcadores markdown (` ```python `, ` ```typescript `, ` ``` `).
 
-## 🏗️ Arquitectura
-
-### Flujo de Trabajo
-
 ```
 START → Ingeniero Requisitos → Product Owner → Codificador → SonarQube Analyzer
            ↑                                        ↑               ↓
            |                                        |          ¿Calidad OK?
            |                                        ←──────── NO (max 2 intentos)
            |                                                      ↓
-           |                                                   Probador
+           |                                              Generador Unit Tests
+           |                                                      ↓
+           |                                              Ejecutor de Pruebas
            |                                                      ↓
            |                                                   ¿Pasa?
            |                                                      ↓
@@ -140,16 +153,21 @@ START → Ingeniero Requisitos → Product Owner → Codificador → SonarQube A
            ←──────────────────────────────────────────────────  NO
                                                                  ↓
                                                                 END
-```
-
+```        |                                                      ↓
+           ←──────────────────────────────────────────────────  NO
+                                                                 ↓
+                                                                END
 ### Agentes
 
 1. **Ingeniero de Requisitos**: Clarifica y refina requisitos
-2. **Product Owner**: Formaliza especificaciones técnicas
-3. **Codificador**: Genera y corrige código Python/TypeScript
+2. **Product Owner**: Formaliza especificaciones técnicas en JSON estructurado
+3. **Codificador Corrector**: Genera y corrige código Python/TypeScript
 4. **Analizador SonarQube**: Verifica calidad del código (bugs, vulnerabilidades, code smells)
-5. **Probador/Depurador**: Ejecuta pruebas funcionales y valida código
-6. **Stakeholder**: Valida cumplimiento de visión de negocio
+5. **Generador de Unit Tests**: Genera tests unitarios profesionales con vitest/pytest
+6. **Ejecutor de Pruebas**: Ejecuta tests directamente con vitest/pytest y valida funcionalidad
+7. **Stakeholder**: Valida cumplimiento de visión de negociosionales (vitest/pytest)
+6. **Ejecutor de Pruebas**: Ejecuta tests unitarios y valida funcionalidad
+7. **Stakeholder**: Valida cumplimiento de visión de negocio
 
 ### Bucles de Corrección
 
@@ -173,7 +191,8 @@ El sistema implementa tres bucles de corrección:
 - **LangGraph**: Framework de grafos de agentes
 - **Google Gemini**: Modelo LLM
 - **Pydantic**: Validación de datos
-- **E2B Code Interpreter**: Sandbox de ejecución
+- **Vitest**: Testing framework para TypeScript/JavaScript
+- **Pytest**: Testing framework para Python
 - **SonarQube MCP**: Análisis estático de calidad de código
 - **Python-dotenv**: Gestión de entorno
 
@@ -186,7 +205,39 @@ Editar `src/config/settings.py` para ajustar:
 - `TEMPERATURE`: Temperatura del LLM (default: 0.1)
 - `MAX_OUTPUT_TOKENS`: Tokens máximos de salida (default: 4000)
 
-## ✨ Características
+### Ejecución de Tests Moderna (Refactorizado)
+
+El sistema ejecuta directamente tests unitarios generados usando frameworks estándar:
+
+**Características:**
+- ✅ **TypeScript**: Ejecución directa con `vitest` (sin E2B)
+- ✅ **Python**: Ejecución directa con `pytest` (sin E2B)
+- ✅ **Sin dependencias externas**: No requiere E2B Sandbox
+- ✅ **Debugging local**: Tests ejecutables manualmente en `output/`
+- ✅ **Performance mejorada**: ~3x más rápido que sandbox
+- ✅ **Reportes profesionales**: Salida estándar con estadísticas detalladas
+- ✅ **Estadísticas completas**: Total, pasados, fallidos para cada ejecución
+- ✅ **Output limpio**: Sin códigos ANSI en archivos guardados
+
+**Proceso:**
+1. `generador_unit_tests.py` genera tests con sintaxis moderna:
+   - TypeScript: `describe()`, `it()`, `test.each()`, `beforeEach()`, etc.
+   - Python: `pytest` con fixtures y assertions
+2. `ejecutor_pruebas.py` ejecuta tests directamente:
+   - Cambia al directorio `output/` para imports relativos
+   - Ejecuta `npx vitest run` o `pytest` según lenguaje
+   - Parsea resultados y extrae estadísticas
+3. Guarda reportes legibles en `4_probador_req{X}_debug{Y}_[PASSED|FAILED].txt`
+
+**Mejoras de calidad:**
+- Imports automáticos de funciones vitest/pytest necesarias
+- Validación de instalación de vitest/pytest
+- Mensajes de error específicos y accionables
+- Manejo robusto de errores (FileNotFoundError, OSError, TimeoutExpired)
+
+**Más información:** [`GUIA_NUEVO_EJECUTOR.md`](GUIA_NUEVO_EJECUTOR.md) | [`REFACTOR_EJECUTOR_PRUEBAS.md`](REFACTOR_EJECUTOR_PRUEBAS.md)
+
+**Más información:** [`GUIA_NUEVO_EJECUTOR.md`](GUIA_NUEVO_EJECUTOR.md) | [`REFACTOR_EJECUTOR_PRUEBAS.md`](REFACTOR_EJECUTOR_PRUEBAS.md)
 
 ### Análisis de Calidad con SonarQube
 

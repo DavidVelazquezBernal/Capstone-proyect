@@ -54,6 +54,60 @@ def extract_function_parameters(code: str) -> list:
     return []
 
 
+def is_class_code(code: str) -> bool:
+    """
+    Detecta si el código define una clase.
+    
+    Args:
+        code (str): El código Python.
+        
+    Returns:
+        bool: True si el código contiene una clase.
+    """
+    return bool(re.search(r'class\s+\w+', code))
+
+
+def extract_class_name(code: str) -> str:
+    """
+    Extrae el nombre de la clase del código Python.
+    
+    Args:
+        code (str): El código Python.
+        
+    Returns:
+        str: Nombre de la clase o None.
+    """
+    match = re.search(r'class\s+(\w+)', code)
+    return match.group(1) if match else None
+
+
+def is_class_code_ts(code: str) -> bool:
+    """
+    Detecta si el código TypeScript define una clase.
+    
+    Args:
+        code (str): El código TypeScript.
+        
+    Returns:
+        bool: True si el código contiene una clase.
+    """
+    return bool(re.search(r'(?:export\s+)?class\s+\w+', code))
+
+
+def extract_class_name_ts(code: str) -> str:
+    """
+    Extrae el nombre de la clase del código TypeScript.
+    
+    Args:
+        code (str): El código TypeScript.
+        
+    Returns:
+        str: Nombre de la clase o None.
+    """
+    match = re.search(r'(?:export\s+)?class\s+(\w+)', code)
+    return match.group(1) if match else None
+
+
 def extract_function_name_ts(code: str) -> str:
     """
     Extrae el nombre de la primera función definida en un bloque de código TypeScript.
@@ -116,11 +170,13 @@ def extract_function_parameters_ts(code: str) -> list:
 def CodeExecutionToolWithInterpreterPY(code: str, test_data: List[dict]) -> dict:
     """
     Ejecución segura de código Python contra datos de prueba usando E2B Sandbox.
+    Soporta tanto funciones individuales como clases con múltiples métodos.
 
     Args:
         code (str): El código Python generado que se va a ejecutar.
         test_data (List[dict]): Una lista de diccionarios, donde cada diccionario representa un caso de prueba.
-                                Contiene 'input' (argumentos para el código) y 'expected' (salida esperada).
+                                Contiene 'input' (argumentos para el código), 'expected' (salida esperada),
+                                y opcionalmente 'method' (para clases).
 
     Returns:
         dict: Un diccionario que contiene:
@@ -136,24 +192,46 @@ def CodeExecutionToolWithInterpreterPY(code: str, test_data: List[dict]) -> dict
 
     # Crear el sandbox
     sbx = Sandbox.create()
-    #time.sleep(2)  # Pausa inicial para la creación del sandbox
     exec_result = sbx.run_code(code)
 
-    function_name = extract_function_name(code)
-    if not function_name:
-        #sbx.close()
-        return {
-            "success": False,
-            "traceback": "Error: Could not find function name in the provided code.",
-            "results": []
-        }
+    # Detectar si es una clase o función
+    is_class = is_class_code(code)
     
-    # Extraer parámetros de la función para manejo de inputs tipo diccionario
-    function_params = extract_function_parameters(code)
-
+    if is_class:
+        # Código de clase
+        class_name = extract_class_name(code)
+        if not class_name:
+            return {
+                "success": False,
+                "traceback": "Error: Could not find class name in the provided code.",
+                "results": []
+            }
+        print(f"   📦 Detectada clase: {class_name}")
+        
+        # Instanciar la clase
+        instance_code = f"{class_name.lower()}_instance = {class_name}()"
+        exec_result = sbx.run_code(instance_code)
+        if exec_result.error:
+            return {
+                "success": False,
+                "traceback": f"Error al instanciar la clase: {exec_result.error}",
+                "results": []
+            }
+    else:
+        # Código de función
+        function_name = extract_function_name(code)
+        if not function_name:
+            return {
+                "success": False,
+                "traceback": "Error: Could not find function name in the provided code.",
+                "results": []
+            }
+        print(f"   🔧 Detectada función: {function_name}")
+    
     for idx, case in enumerate(test_data, start=1):
         inputs = case.get("input", [])
         expected = case.get("expected")
+        method_name = case.get("method")  # Para clases
 
         try:
             # Preparar los argumentos según el tipo de inputs
@@ -162,6 +240,7 @@ def CodeExecutionToolWithInterpreterPY(code: str, test_data: List[dict]) -> dict
                 args_str = ", ".join(repr(arg) for arg in inputs)
             elif isinstance(inputs, dict):
                 # Si es un diccionario, buscar propiedades que coincidan con parámetros de la función
+                function_params = extract_function_parameters(code)
                 matched_values = []
                 for param in function_params:
                     if param in inputs:
@@ -179,7 +258,13 @@ def CodeExecutionToolWithInterpreterPY(code: str, test_data: List[dict]) -> dict
                 # Valor único: usar repr() para mantener el tipo
                 args_str = repr(inputs)
             
-            function_call_str = f"print({function_name}({args_str}))"
+            # Construir la llamada según si es clase o función
+            if is_class and method_name:
+                # Llamada a método de clase
+                function_call_str = f"print({class_name.lower()}_instance.{method_name}({args_str}))"
+            else:
+                # Llamada a función
+                function_call_str = f"print({function_name}({args_str}))"
 
             #print(f"Sandbox test {idx}:  call: {function_call_str}  expected: {expected}")
             exec_result = sbx.run_code(function_call_str)
@@ -281,11 +366,13 @@ def CodeExecutionToolWithInterpreterPY(code: str, test_data: List[dict]) -> dict
 def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict:
     """
     Ejecución segura de código TypeScript contra datos de prueba usando E2B Sandbox.
+    Soporta tanto funciones individuales como clases con múltiples métodos.
 
     Args:
         code (str): El código TypeScript generado que se va a ejecutar.
         test_data (List[dict]): Una lista de diccionarios, donde cada diccionario representa un caso de prueba.
-                                Contiene 'input' (argumentos para el código) y 'expected' (salida esperada).
+                                Contiene 'input' (argumentos para el código), 'expected' (salida esperada),
+                                y opcionalmente 'method' (para clases).
 
     Returns:
         dict: Un diccionario que contiene:
@@ -302,30 +389,48 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
     # Crear el sandbox
     sbx = Sandbox.create()
     
-    function_name = extract_function_name_ts(code)
-    if not function_name:
-        return {
-            "success": False,
-            "traceback": "Error: Could not find function name in the provided TypeScript code.",
-            "results": []
-        }
+    # Detectar si es una clase o función
+    is_class = is_class_code_ts(code)
     
-    # Extraer parámetros de la función para manejo de inputs tipo diccionario
-    function_params = extract_function_parameters_ts(code)
-
+    if is_class:
+        # Código de clase
+        class_name = extract_class_name_ts(code)
+        if not class_name:
+            return {
+                "success": False,
+                "traceback": "Error: Could not find class name in the provided TypeScript code.",
+                "results": []
+            }
+        print(f"   📦 Detectada clase: {class_name}")
+    else:
+        # Código de función
+        function_name = extract_function_name_ts(code)
+        if not function_name:
+            return {
+                "success": False,
+                "traceback": "Error: Could not find function name in the provided TypeScript code.",
+                "results": []
+            }
+        print(f"   🔧 Detectada función: {function_name}")
+    
     # Escribir el código TypeScript en un archivo
     sbx.files.write("/tmp/code.ts", code)
     
     # Intentar instalar esbuild si no está disponible
-    # Esto solo se ejecutará una vez por sandbox
     try:
         sbx.commands.run("cd /tmp && npm list esbuild || npm install esbuild", timeout=30)
     except Exception as e:
         print(f"Warning: Could not verify/install esbuild: {e}")
     
+    # Si es una clase, crear código adicional para instanciarla
+    if is_class:
+        instance_code = f"\nconst instance = new {class_name}();\n"
+        sbx.files.write("/tmp/code.ts", code + instance_code)
+    
     for idx, case in enumerate(test_data, start=1):
         inputs = case.get("input", [])
         expected = case.get("expected")
+        method_name = case.get("method")  # Para clases
 
         try:
             # Preparar los argumentos para TypeScript
@@ -334,6 +439,7 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
                 args_str = ", ".join([repr(arg) if isinstance(arg, str) else str(arg) for arg in inputs])
             elif isinstance(inputs, dict):
                 # Si es un diccionario, buscar propiedades que coincidan con parámetros de la función
+                function_params = extract_function_parameters_ts(code)
                 matched_values = []
                 for param in function_params:
                     if param in inputs:
@@ -349,8 +455,15 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
             else:
                 args_str = repr(inputs) if isinstance(inputs, str) else str(inputs)
 
+            # Construir código de ejecución según si es clase o función
+            if is_class and method_name:
+                # Llamada a método de clase
+                execution_code = f"console.log(instance.{method_name}({args_str}));"
+            else:
+                # Llamada a función
+                execution_code = f"const {{ {function_name} }} = require('./code');\nconsole.log({function_name}({args_str}));"
+
             # Usar esbuild para transpilar TypeScript a JavaScript en memoria y ejecutar
-            # esbuild es más ligero y está comúnmente disponible en entornos Node.js
             transpile_and_run = f"""
                 const esbuild = require('esbuild');
                 const fs = require('fs');
@@ -368,8 +481,7 @@ def CodeExecutionToolWithInterpreterTS(code: str, test_data: List[dict]) -> dict
                 fs.writeFileSync('/tmp/code.js', result.code);
                 
                 // Importar y ejecutar
-                const {{ {function_name} }} = require('./code');
-                console.log({function_name}({args_str}));
+                {execution_code}
             """
             
             sbx.files.write("/tmp/run.js", transpile_and_run)

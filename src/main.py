@@ -15,9 +15,16 @@ def delete_output_folder():
     """
     Limpia el contenido del directorio output/ al inicio de cada ejecución.
     Elimina todos los archivos y subdirectorios pero mantiene la carpeta.
+    Preserva package.json y node_modules si existen para vitest/pytest.
     """
     if os.path.exists(settings.OUTPUT_DIR):
+        # Archivos a preservar
+        preserve_files = ['package.json', 'package-lock.json', 'node_modules']
+        
         for filename in os.listdir(settings.OUTPUT_DIR):
+            if filename in preserve_files:
+                continue  # No eliminar estos archivos
+                
             file_path = os.path.join(settings.OUTPUT_DIR, filename)
             try:
                 if os.path.isfile(file_path) or os.path.islink(file_path):
@@ -190,9 +197,9 @@ def main():
     # }
     
     prompt = {
-        "Implementa una clase Calculator con las operaciones básicas (+, -, *, /)  y manejo de división por cero"
+        "Implementa una clase Calculator en typescript con las operaciones básicas (+, -, *, /)  y manejo de división por cero"
     }
-    
+
     final_state = run_development_workflow(prompt, max_attempts=3)
     
     if final_state and final_state.get('validado'):

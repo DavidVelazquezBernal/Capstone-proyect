@@ -33,6 +33,11 @@ venv/
 ENV/
 env/
 
+# Node.js
+node_modules/
+package-lock.json
+*.tgz
+
 # IDE
 .vscode/
 .idea/

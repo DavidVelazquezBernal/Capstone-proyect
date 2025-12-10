@@ -51,7 +51,7 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     codigo_aceptable = es_codigo_aceptable(resultado_analisis)
     
     if codigo_aceptable:
-        print("   ✅ Código aprobado por SonarQube")
+        print("   ✅ Código \"revisado\" por SonarQube")
         state['sonarqube_passed'] = True
         state['sonarqube_issues'] = ""
         # Resetear contador cuando pasa
