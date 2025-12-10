@@ -166,7 +166,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
             else:
                 logger.error("Tests FAILED")
             
-            logger.info(f"➡️ Intento de depuración: {state['debug_attempt_count']}/{state['max_debug_attempts']}")
+            logger.info(f"Intento de depuración: {state['debug_attempt_count']}/{state['max_debug_attempts']}")
             
             # Guardar resultado fallido con contenido limpio
             clean_output = _limpiar_ansi(result['output'])
@@ -218,7 +218,7 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
     Returns:
         Dict con 'success', 'output', 'traceback'
     """
-    logger.info("▶️ Ejecutando vitest...")
+    logger.info("Ejecutando vitest...")
     
     # Cambiar al directorio output para que las importaciones relativas funcionen
     original_dir = os.getcwd()

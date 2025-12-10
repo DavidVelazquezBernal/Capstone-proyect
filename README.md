@@ -24,6 +24,7 @@ Capstone proyect v2/
 │   │   ├── __init__.py
 │   │   ├── code_executor.py         # Ejecución segura de código Python/TypeScript
 │   │   ├── sonarqube_mcp.py         # Integración con SonarQube MCP
+│   │   ├── azure_devops_integration.py  # 🔷 Cliente de Azure DevOps API
 │   │   └── file_utils.py            # Utilidades de archivos y detección de lenguaje
 │   │
 │   ├── agents/                      # Agentes del sistema
@@ -90,6 +91,14 @@ GEMINI_API_KEY=tu_clave_api_aqui
 SONARQUBE_URL=https://sonarcloud.io
 SONARQUBE_TOKEN=tu_token_aqui
 SONARQUBE_PROJECT_KEY=tu_proyecto_key
+
+# 🔷 Azure DevOps (opcional - para integración con ADO)
+AZURE_DEVOPS_ENABLED=false
+AZURE_DEVOPS_ORG=tu-organizacion
+AZURE_DEVOPS_PROJECT=tu-proyecto
+AZURE_DEVOPS_PAT=tu-personal-access-token
+AZURE_ITERATION_PATH=MiProyecto\\Sprint 1
+AZURE_AREA_PATH=MiProyecto\\Backend
 ```
 
 **Nota:** E2B ya no es requerido. El sistema usa vitest/pytest directamente.
@@ -97,6 +106,10 @@ SONARQUBE_PROJECT_KEY=tu_proyecto_key
 **Nota:** Las credenciales de SonarQube son **opcionales**. El sistema funciona con análisis estático básico sin ellas.
 
 Para configurar SonarQube, consulta: [`SONARQUBE_SETUP.md`](SONARQUBE_SETUP.md)
+
+**🔷 Azure DevOps Integration**: Para habilitar la creación automática de PBIs:
+- Consulta: [`AZURE_DEVOPS_QUICKSTART.md`](AZURE_DEVOPS_QUICKSTART.md) (5 minutos)
+- Documentación completa: [`AZURE_DEVOPS_INTEGRATION.md`](AZURE_DEVOPS_INTEGRATION.md)
 
 5. **Verificar configuración de SonarQube** (opcional)
 
@@ -160,13 +173,11 @@ START → Ingeniero Requisitos → Product Owner → Codificador → SonarQube A
 ### Agentes
 
 1. **Ingeniero de Requisitos**: Clarifica y refina requisitos
-2. **Product Owner**: Formaliza especificaciones técnicas en JSON estructurado
+2. **Product Owner**: Formaliza especificaciones técnicas en JSON estructurado + 🔷 crea PBIs en Azure DevOps (opcional)
 3. **Codificador Corrector**: Genera y corrige código Python/TypeScript
 4. **Analizador SonarQube**: Verifica calidad del código (bugs, vulnerabilidades, code smells)
 5. **Generador de Unit Tests**: Genera tests unitarios profesionales con vitest/pytest
 6. **Ejecutor de Pruebas**: Ejecuta tests directamente con vitest/pytest y valida funcionalidad
-7. **Stakeholder**: Valida cumplimiento de visión de negociosionales (vitest/pytest)
-6. **Ejecutor de Pruebas**: Ejecuta tests unitarios y valida funcionalidad
 7. **Stakeholder**: Valida cumplimiento de visión de negocio
 
 ### Bucles de Corrección
@@ -194,6 +205,7 @@ El sistema implementa tres bucles de corrección:
 - **Vitest**: Testing framework para TypeScript/JavaScript
 - **Pytest**: Testing framework para Python
 - **SonarQube MCP**: Análisis estático de calidad de código
+- **🔷 Azure DevOps REST API**: Integración con Azure DevOps (opcional)
 - **Python-dotenv**: Gestión de entorno
 
 ## 📝 Configuración
@@ -249,6 +261,27 @@ El sistema integra SonarQube mediante Model Context Protocol (MCP) para:
 - ✅ Validar estándares de código
 
 Los reportes de SonarQube se guardan en `output/` junto con instrucciones de corrección detalladas.
+
+### 🔷 Integración con Azure DevOps (NUEVO)
+
+El sistema ahora puede crear automáticamente **Product Backlog Items (PBIs)** en Azure DevOps durante la formalización de requisitos por el Product Owner.
+
+**Características:**
+- ✅ Creación automática de PBIs con descripción HTML enriquecida
+- ✅ Estimación inteligente de Story Points (1, 2, 3, 5, 8, 13)
+- ✅ Asignación automática a Iteration y Area Path
+- ✅ Tags descriptivos (AI-Generated, Multiagente, Lenguaje)
+- ✅ Criterios de aceptación detallados
+- ✅ Trazabilidad completa con URLs en requisitos formales
+- ✅ Modo degradado (funciona sin Azure DevOps si está deshabilitado)
+
+**Quick Start:**
+1. Ver guía rápida: [`AZURE_DEVOPS_QUICKSTART.md`](AZURE_DEVOPS_QUICKSTART.md) (5 minutos)
+2. Configurar `.env` con credenciales de Azure DevOps
+3. Ejecutar `python test_azure_devops_connection.py` para validar
+4. El flujo normal creará PBIs automáticamente
+
+**Documentación completa:** [`AZURE_DEVOPS_INTEGRATION.md`](AZURE_DEVOPS_INTEGRATION.md)
 
 ## 📄 Licencia
 

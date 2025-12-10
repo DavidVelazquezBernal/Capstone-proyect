@@ -60,3 +60,41 @@ class TestExecutionRequest(BaseModel):
     test_cases: list[TestCase] = Field(
         description="Lista de casos de prueba a ejecutar"
     )
+
+
+class AzureDevOpsMetadata(BaseModel):
+    """Metadatos de trazabilidad con Azure DevOps."""
+    
+    work_item_id: int | None = Field(
+        default=None,
+        description="ID del Work Item en Azure DevOps"
+    )
+    work_item_url: str | None = Field(
+        default=None,
+        description="URL directa al Work Item"
+    )
+    work_item_type: str | None = Field(
+        default="Product Backlog Item",
+        description="Tipo de work item (PBI, Task, Bug, etc.)"
+    )
+    area_path: str | None = Field(
+        default=None,
+        description="Ruta del área en Azure DevOps"
+    )
+    iteration_path: str | None = Field(
+        default=None,
+        description="Ruta de la iteración/sprint"
+    )
+    story_points: int | None = Field(
+        default=None,
+        description="Story points estimados"
+    )
+
+
+class FormalRequirementsWithAzure(FormalRequirements):
+    """Requisitos formales extendidos con metadatos de Azure DevOps."""
+    
+    azure_devops: AzureDevOpsMetadata | None = Field(
+        default=None,
+        description="Metadatos de integración con Azure DevOps"
+    )

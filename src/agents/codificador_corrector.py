@@ -21,7 +21,7 @@ def codificador_node(state: AgentState) -> AgentState:
     Genera código que satisface los requisitos formales o corrige errores.
     Puede corregir errores de ejecución (traceback) o issues de calidad (sonarqube_issues).
     """
-    log_agent_execution(logger, "💻 Codificador", "iniciado", {
+    log_agent_execution(logger, "Codificador", "iniciado", {
         "requisito_id": state['attempt_count'],
         "debug_attempt": state['debug_attempt_count'],
         "sonarqube_attempt": state['sonarqube_attempt_count']

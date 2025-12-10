@@ -4,10 +4,16 @@ Gestión de variables de entorno y parámetros del sistema.
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Cargar variables de entorno
-load_dotenv()
+# Obtener el directorio actual (config/) y subir a src/
+current_dir = Path(__file__).parent
+src_dir = current_dir.parent
+env_path = src_dir / ".env"
+
+# Cargar variables de entorno desde src/.env
+load_dotenv(dotenv_path=env_path)
 
 
 class Settings:
@@ -21,6 +27,14 @@ class Settings:
     SONARQUBE_URL: str = os.getenv("SONARQUBE_URL", "")
     SONARQUBE_TOKEN: str = os.getenv("SONARQUBE_TOKEN", "")
     SONARQUBE_PROJECT_KEY: str = os.getenv("SONARQUBE_PROJECT_KEY", "")
+    
+    # Configuración de Azure DevOps (opcional - para integración con ADO)
+    AZURE_DEVOPS_ENABLED: bool = os.getenv("AZURE_DEVOPS_ENABLED", "false").lower() == "true"
+    AZURE_DEVOPS_ORG: str = os.getenv("AZURE_DEVOPS_ORG", "")
+    AZURE_DEVOPS_PROJECT: str = os.getenv("AZURE_DEVOPS_PROJECT", "")
+    AZURE_DEVOPS_PAT: str = os.getenv("AZURE_DEVOPS_PAT", "")
+    AZURE_ITERATION_PATH: str = os.getenv("AZURE_ITERATION_PATH", "")  # ej: "MyProject\\Sprint 1"
+    AZURE_AREA_PATH: str = os.getenv("AZURE_AREA_PATH", "")  # ej: "MyProject\\Backend"
     
     # Configuración del modelo LLM
     MODEL_NAME: str = "gemini-2.5-flash"

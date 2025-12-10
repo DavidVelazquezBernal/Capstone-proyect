@@ -4,12 +4,14 @@ Responsable de formalizar requisitos en especificaciones técnicas ejecutables.
 """
 
 import time
+import json
 from models.state import AgentState
-from models.schemas import FormalRequirements
+from models.schemas import FormalRequirements, AzureDevOpsMetadata
 from config.prompts import Prompts
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto
+from tools.azure_devops_integration import AzureDevOpsClient, estimate_story_points
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
 
 # Configurar logger para este agente
@@ -49,7 +51,94 @@ def product_owner_node(state: AgentState) -> AgentState:
     try:
         # Validar y almacenar la salida JSON del LLM
         req_data = FormalRequirements.model_validate_json(respuesta_llm)
-        state['requisitos_formales'] = req_data.model_dump_json(indent=2)
+        
+        # === INICIO: Integración con Azure DevOps ===
+        azure_metadata = None
+        if settings.AZURE_DEVOPS_ENABLED:
+            logger.info("🔷 Integrando con Azure DevOps...")
+            
+            try:
+                azure_client = AzureDevOpsClient()
+                
+                # Probar conexión
+                if not azure_client.test_connection():
+                    logger.warning("⚠️ No se pudo conectar con Azure DevOps, continuando sin integración")
+                else:
+                    # Estimar story points
+                    story_points = estimate_story_points(req_data.model_dump())
+                    logger.info(f"📊 Story Points estimados: {story_points}")
+                    
+                    # Preparar descripción y criterios de aceptación
+                    description = f"""
+                    <h3>Objetivo Funcional</h3>
+                    <p>{req_data.objetivo_funcional}</p>
+                    
+                    <h3>Especificaciones Técnicas</h3>
+                    <ul>
+                        <li><strong>Lenguaje:</strong> {req_data.lenguaje_version}</li>
+                        <li><strong>Función:</strong> <code>{req_data.nombre_funcion}</code></li>
+                    </ul>
+                    
+                    <h3>Entradas Esperadas</h3>
+                    <p>{req_data.entradas_esperadas}</p>
+                    
+                    <h3>Salidas Esperadas</h3>
+                    <p>{req_data.salidas_esperadas}</p>
+                    
+                    <hr/>
+                    <p><em>🤖 Generado automáticamente por el sistema multiagente</em></p>
+                    """
+                    
+                    acceptance_criteria = f"""
+                    <h4>Criterios de Aceptación</h4>
+                    <ul>
+                        <li>✅ El código debe implementar: {req_data.objetivo_funcional}</li>
+                        <li>✅ Las entradas deben cumplir: {req_data.entradas_esperadas}</li>
+                        <li>✅ Las salidas deben cumplir: {req_data.salidas_esperadas}</li>
+                        <li>✅ Todos los tests unitarios deben pasar</li>
+                        <li>✅ El código debe pasar el análisis de SonarQube sin issues bloqueantes</li>
+                    </ul>
+                    """
+                    
+                    # Crear PBI en Azure DevOps
+                    pbi = azure_client.create_pbi(
+                        title=f"[AI-Generated] {req_data.objetivo_funcional[:80]}",
+                        description=description,
+                        acceptance_criteria=acceptance_criteria,
+                        story_points=story_points,
+                        tags=["AI-Generated", "Multiagente", req_data.lenguaje_version.split()[0]],
+                        priority=2  # Media por defecto
+                    )
+                    
+                    if pbi:
+                        # Crear metadatos de Azure DevOps
+                        azure_metadata = AzureDevOpsMetadata(
+                            work_item_id=pbi['id'],
+                            work_item_url=pbi['_links']['html']['href'],
+                            work_item_type="Product Backlog Item",
+                            area_path=settings.AZURE_AREA_PATH or None,
+                            iteration_path=settings.AZURE_ITERATION_PATH or None,
+                            story_points=story_points
+                        )
+                        
+                        logger.info(f"✅ PBI #{pbi['id']} creado en Azure DevOps")
+                        logger.info(f"🔗 {pbi['_links']['html']['href']}")
+                    else:
+                        logger.warning("⚠️ No se pudo crear el PBI en Azure DevOps")
+                        
+            except Exception as e:
+                logger.warning(f"⚠️ Error en integración Azure DevOps: {e}")
+                logger.debug(f"Stack trace: {e}", exc_info=True)
+        # === FIN: Integración con Azure DevOps ===
+        
+        # Construir requisitos formales con metadatos de Azure (si existen)
+        if azure_metadata:
+            # Agregar metadatos de Azure al JSON
+            req_dict = req_data.model_dump()
+            req_dict['azure_devops'] = azure_metadata.model_dump()
+            state['requisitos_formales'] = json.dumps(req_dict, indent=2)
+        else:
+            state['requisitos_formales'] = req_data.model_dump_json(indent=2)
         
         logger.info("✅ Requisitos formales generados y validados")
         logger.debug(f"Output JSON (primeros 200 chars): {state['requisitos_formales'][:200]}...")
