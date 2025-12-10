@@ -39,10 +39,10 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     debug_attempt = state['debug_attempt_count']
     
     if lenguaje.lower() == 'typescript':
-        codigo_filename = f"3_codificador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.ts"
+        codigo_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.ts"
         test_filename = f"unit_tests_req{attempt}_sq{sq_attempt}.test.ts"
     else:  # Python
-        codigo_filename = f"3_codificador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
+        codigo_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
         test_filename = f"test_unit_req{attempt}_sq{sq_attempt}.py"
     
     logger.debug(f"Archivo de código: {codigo_filename}")

@@ -182,7 +182,7 @@ bug = client.create_bug(
 
 ### Comportamiento del Agente Codificador
 
-**Ubicación:** `src/agents/codificador_corrector.py`
+**Ubicación:** `src/agents/desarrollador.py`
 
 El agente **Codificador** ahora crea automáticamente 2 Tasks en Azure DevOps cuando:
 
@@ -467,7 +467,7 @@ El Personal Access Token debe tener:
 
 - `src/models/state.py` - Estado con `azure_pbi_id`, `azure_implementation_task_id`, `azure_testing_task_id`
 - `src/agents/product_owner.py` - Creación y guardado del PBI
-- `src/agents/codificador_corrector.py` - Creación de Tasks y guardado de IDs
+- `src/agents/desarrollador.py` - Creación de Tasks y guardado de IDs
 - `src/agents/ejecutor_pruebas.py` - Adjunto de tests cuando pasan
 - `src/agents/stakeholder.py` - Adjunto de código final cuando valida
 - `src/tools/azure_devops_integration.py` - API cliente con `create_task()`, `create_bug()`, `attach_file()`

@@ -65,10 +65,10 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
     
     # Ruta del código generado
     if lenguaje.lower() == 'typescript':
-        code_filename = f"3_codificador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.ts"
+        code_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.ts"
         test_filename = f"unit_tests_req{attempt}_sq{sq_attempt}.test.ts"
     else:  # Python
-        code_filename = f"3_codificador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
+        code_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
         test_filename = f"test_unit_req{attempt}_sq{sq_attempt}.py"
     
     code_path = os.path.join(settings.OUTPUT_DIR, code_filename)

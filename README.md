@@ -31,7 +31,7 @@ Capstone proyect v2/
 │   │   ├── __init__.py
 │   │   ├── ingeniero_requisitos.py  # Agente 1: Clarificación
 │   │   ├── product_owner.py         # Agente 2: Formalización
-│   │   ├── codificador_corrector.py # Agente 3: Desarrollo y corrección
+│   │   ├── desarrollador.py # Agente 3: Desarrollo y corrección
 │   │   ├── analizador_sonarqube.py  # Agente 3.5: Análisis de calidad
 │   │   ├── generador_unit_tests.py  # Agente 3.6: Generación de tests
 │   │   ├── ejecutor_pruebas.py      # Agente 4: Ejecución de tests
@@ -57,17 +57,20 @@ Capstone proyect v2/
 1. **Clonar el repositorio**
 
 2. **Crear entorno virtual**
+
 ```bash
 python -m venv .venv
 .venv\Scripts\activate  # Windows
 ```
 
 3. **Instalar dependencias**
+
 ```bash
 pip install -r requirements.txt
 ```
 
 **Para testing (requerido):**
+
 ```bash
 # TypeScript - Instalar en directorio output/
 cd output
@@ -83,6 +86,7 @@ pip install pytest
 4. **Configurar variables de entorno**
 
 Crear archivo `.env` en la raíz del proyecto:
+
 ```env
 # APIs requeridas
 GEMINI_API_KEY=tu_clave_api_aqui
@@ -108,6 +112,7 @@ AZURE_AREA_PATH=MiProyecto\\Backend
 Para configurar SonarQube, consulta: [`SONARQUBE_SETUP.md`](SONARQUBE_SETUP.md)
 
 **🔷 Azure DevOps Integration**: Para habilitar la creación automática de PBIs:
+
 - Consulta: [`AZURE_DEVOPS_QUICKSTART.md`](AZURE_DEVOPS_QUICKSTART.md) (5 minutos)
 - Documentación completa: [`AZURE_DEVOPS_INTEGRATION.md`](AZURE_DEVOPS_INTEGRATION.md)
 
@@ -142,12 +147,13 @@ final_state_ts = run_development_workflow(prompt_ts, max_attempts=3)
 ### Salida del código generado
 
 El sistema detecta automáticamente el lenguaje del código generado:
+
 - **Python**: Guarda como `codigo_final.py` en el directorio `output/`
 - **TypeScript**: Guarda como `codigo_final.ts` en el directorio `output/`
 
 El código se limpia automáticamente de marcadores markdown (` ```python `, ` ```typescript `, ` ``` `).
 
-```
+````
 START → Ingeniero Requisitos → Product Owner → Codificador → SonarQube Analyzer
            ↑                                        ↑               ↓
            |                                        |          ¿Calidad OK?
@@ -290,3 +296,4 @@ MIT License
 ## 👥 Contribuciones
 
 Las contribuciones son bienvenidas. Por favor, abre un issue primero para discutir los cambios propuestos.
+````

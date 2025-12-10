@@ -68,7 +68,7 @@ def desarrollador_node(state: AgentState) -> AgentState:
     codigo_limpio = re.sub(patron_limpieza, '', state['codigo_generado']).strip()
     
     # Incluir intento de requisito, de debug y de sonarqube
-    nombre_archivo = f"3_codificador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
+    nombre_archivo = f"3_desarrollador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
     resultado = guardar_fichero_texto(
         nombre_archivo,
         codigo_limpio,

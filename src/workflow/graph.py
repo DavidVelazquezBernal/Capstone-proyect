@@ -6,7 +6,7 @@ Define el flujo de trabajo entre agentes y las transiciones condicionales.
 from langgraph.graph import StateGraph, END, START
 from models.state import AgentState
 from agents.product_owner import product_owner_node
-from agents.codificador_corrector import codificador_node
+from agents.desarrollador import desarrollador_node
 from agents.analizador_sonarqube import analizador_sonarqube_node
 from agents.generador_unit_tests import generador_unit_tests_node
 from agents.ejecutor_pruebas import ejecutor_pruebas_node
@@ -24,7 +24,7 @@ def create_workflow() -> StateGraph:
 
     # 1. Añadir Nodos (Agentes)
     workflow.add_node("ProductOwner", product_owner_node)
-    workflow.add_node("CodificadorCorrector", codificador_node)
+    workflow.add_node("Desarrollador", desarrollador_node)
     workflow.add_node("AnalizadorSonarQube", analizador_sonarqube_node)
     workflow.add_node("GeneradorUnitTests", generador_unit_tests_node)
     workflow.add_node("EjecutorPruebas", ejecutor_pruebas_node)
@@ -32,8 +32,8 @@ def create_workflow() -> StateGraph:
 
     # 2. Definir Transiciones Iniciales y Lineales
     workflow.add_edge(START, "ProductOwner")
-    workflow.add_edge("ProductOwner", "CodificadorCorrector")
-    workflow.add_edge("CodificadorCorrector", "AnalizadorSonarQube")
+    workflow.add_edge("ProductOwner", "Desarrollador")
+    workflow.add_edge("Desarrollador", "AnalizadorSonarQube")
 
     # 3. Transiciones Condicionales
 
@@ -47,7 +47,7 @@ def create_workflow() -> StateGraph:
                   else "QUALITY_FAILED")
         ),
         {
-            "QUALITY_FAILED": "CodificadorCorrector",
+            "QUALITY_FAILED": "Desarrollador",
             "QUALITY_PASSED": "GeneradorUnitTests",
             "QUALITY_LIMIT_EXCEEDED": END
         }
@@ -66,7 +66,7 @@ def create_workflow() -> StateGraph:
                   else "FAILED")
         ),
         {
-            "FAILED": "CodificadorCorrector",
+            "FAILED": "Desarrollador",
             "PASSED": "Stakeholder",
             "DEBUG_LIMIT_EXCEEDED": END
         }

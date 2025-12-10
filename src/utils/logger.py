@@ -55,7 +55,7 @@ class AgentFormatter(logging.Formatter):
     AGENT_EMOJIS = {
         'ingeniero_requisitos': '🙋‍♂️',
         'product_owner': '💼',
-        'codificador_corrector': '💻',
+        'desarrollador': '💻',
         'analizador_sonarqube': '🔍',
         'generador_unit_tests': '🧪',
         'ejecutor_pruebas': '⚡',

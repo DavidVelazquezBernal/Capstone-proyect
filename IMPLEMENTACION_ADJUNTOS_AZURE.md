@@ -71,7 +71,7 @@ azure_testing_task_id: int | None  # ID de Task de Testing
 "azure_testing_task_id": None,
 ```
 
-### 3. Guardado de IDs en `codificador_corrector.py`
+### 3. Guardado de IDs en `desarrollador.py`
 
 Cuando el Codificador crea las Tasks (primera ejecución), guarda los IDs:
 
@@ -223,7 +223,7 @@ python test_attach_files.py
 - [x] Método `attach_file()` implementado en `AzureDevOpsClient`
 - [x] Campos `azure_implementation_task_id` y `azure_testing_task_id` en `AgentState`
 - [x] Inicialización de nuevos campos en `main.py`
-- [x] Guardado de Task IDs en `codificador_corrector.py`
+- [x] Guardado de Task IDs en `desarrollador.py`
 - [x] Función `_adjuntar_tests_azure_devops()` en `ejecutor_pruebas.py`
 - [x] Llamada a adjunto en `ejecutor_pruebas.py` cuando tests pasan
 - [x] Función `_adjuntar_codigo_final_azure_devops()` en `stakeholder.py`
@@ -320,7 +320,7 @@ src/
 ├── models/
 │   └── state.py  ← azure_implementation_task_id, azure_testing_task_id
 ├── agents/
-│   ├── codificador_corrector.py  ← Guarda Task IDs
+│   ├── desarrollador.py  ← Guarda Task IDs
 │   ├── ejecutor_pruebas.py  ← Adjunta tests
 │   └── stakeholder.py  ← Adjunta código final
 └── main.py  ← Inicializa nuevos campos
