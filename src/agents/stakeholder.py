@@ -43,11 +43,12 @@ def stakeholder_node(state: AgentState) -> AgentState:
         return state
 
     contexto_llm = (
+        f"Intento: {state['attempt_count']}/{state['max_attempts']}\n"
         f"Código aprobado técnicamente: {state['codigo_generado']}\n"
         f"Requisitos Formales (JSON): {state['requisitos_formales']}"
     )
     
-    logger.info("🔍 Validando código con stakeholder...")
+    logger.info(f"🔍 Validando código con stakeholder (Intento {state['attempt_count']}/{state['max_attempts']})...")
     start_time = time.time()
     respuesta_llm = call_gemini(Prompts.STAKEHOLDER, contexto_llm)
     duration = time.time() - start_time

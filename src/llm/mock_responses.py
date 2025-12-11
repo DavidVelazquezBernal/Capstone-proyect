@@ -28,9 +28,58 @@ def get_mock_response(role_prompt: str, context: str) -> str:
         # Detectar si es una corrección de tests fallidos (traceback)
         es_correccion_tests = "traceback" in context_lower or "error de ejecución" in context_lower
         
+        # Detectar si son requisitos mejorados (segunda iteración completa después de Stakeholder)
+        son_requisitos_mejorados = (
+            "múltiples números" in context_lower or 
+            "número variable" in context_lower or 
+            "array" in context_lower or
+            "versátil" in context_lower
+        )
+        
         # Detectar lenguaje
         if "typescript" in context_lower:
-            if es_correccion_tests:
+            # Prioridad: Requisitos mejorados (segunda iteración completa)
+            if son_requisitos_mejorados and not es_correccion_tests and not es_correccion_sonarqube:
+                # Código con soporte para múltiples números (segunda iteración completa)
+                return (
+                    "/**\n"
+                    " * Suma un número variable de argumentos.\n"
+                    " * \n"
+                    " * @param numeros - Números a sumar\n"
+                    " * @returns La suma de todos los números\n"
+                    " * @throws Error si no se proporcionan argumentos o si alguno no es válido\n"
+                    " * \n"
+                    " * @example\n"
+                    " * sumar(2, 3) // 5\n"
+                    " * sumar(1, 2, 3, 4) // 10\n"
+                    " * sumar(0.1, 0.2) // 0.3\n"
+                    " */\n"
+                    "export function sumar(...numeros: number[]): number {\n"
+                    "    if (numeros.length === 0) {\n"
+                    "        throw new Error('Debe proporcionar al menos un número');\n"
+                    "    }\n"
+                    "    \n"
+                    "    // Validar cada número\n"
+                    "    for (const num of numeros) {\n"
+                    "        if (typeof num !== 'number') {\n"
+                    "            throw new Error('Todos los argumentos deben ser números');\n"
+                    "        }\n"
+                    "        if (Number.isNaN(num)) {\n"
+                    "            throw new Error('Los argumentos no pueden ser NaN');\n"
+                    "        }\n"
+                    "        if (!Number.isFinite(num)) {\n"
+                    "            throw new Error('Los argumentos deben ser números finitos');\n"
+                    "        }\n"
+                    "    }\n"
+                    "    \n"
+                    "    // Sumar todos los números\n"
+                    "    const resultado = numeros.reduce((acc, num) => acc + num, 0);\n"
+                    "    \n"
+                    "    // Redondear para evitar problemas de precisión\n"
+                    "    return Math.round(resultado * 1e10) / 1e10;\n"
+                    "}"
+                )
+            elif es_correccion_tests:
                 # Tercera versión: código corregido después de fallos en tests
                 return (
                     "/**\n"
@@ -108,7 +157,56 @@ def get_mock_response(role_prompt: str, context: str) -> str:
                     "}"
                 )
         else:
-            if es_correccion_tests:
+            # Prioridad: Requisitos mejorados (segunda iteración completa) - Python
+            if son_requisitos_mejorados and not es_correccion_tests and not es_correccion_sonarqube:
+                return (
+                    "from typing import Union\n"
+                    "import math\n"
+                    "\n"
+                    "def sumar(*numeros: float) -> float:\n"
+                    "    \"\"\"\n"
+                    "    Suma un número variable de argumentos.\n"
+                    "    \n"
+                    "    Args:\n"
+                    "        *numeros: Números a sumar (cantidad variable)\n"
+                    "        \n"
+                    "    Returns:\n"
+                    "        La suma de todos los números con precisión de 10 decimales\n"
+                    "        \n"
+                    "    Raises:\n"
+                    "        ValueError: Si no se proporcionan argumentos, alguno no es válido,\n"
+                    "                   o es NaN/Infinity\n"
+                    "        TypeError: Si alguno de los argumentos no es numérico\n"
+                    "    \n"
+                    "    Examples:\n"
+                    "        >>> sumar(2, 3)\n"
+                    "        5.0\n"
+                    "        >>> sumar(1, 2, 3, 4)\n"
+                    "        10.0\n"
+                    "        >>> sumar(0.1, 0.2)\n"
+                    "        0.3\n"
+                    "    \"\"\"\n"
+                    "    if len(numeros) == 0:\n"
+                    "        raise ValueError('Debe proporcionar al menos un número')\n"
+                    "    \n"
+                    "    # Validar cada número\n"
+                    "    for num in numeros:\n"
+                    "        if not isinstance(num, (int, float)):\n"
+                    "            raise TypeError(f'Todos los argumentos deben ser números, recibido: {type(num).__name__}')\n"
+                    "        \n"
+                    "        if math.isnan(num):\n"
+                    "            raise ValueError('Los argumentos no pueden ser NaN')\n"
+                    "        \n"
+                    "        if math.isinf(num):\n"
+                    "            raise ValueError('Los argumentos deben ser números finitos')\n"
+                    "    \n"
+                    "    # Sumar todos los números\n"
+                    "    resultado = sum(numeros)\n"
+                    "    \n"
+                    "    # Redondear para evitar problemas de precisión\n"
+                    "    return round(resultado, 10)\n"
+                )
+            elif es_correccion_tests:
                 # Tercera versión: código Python corregido después de tests
                 return (
                     "def sumar(a: float, b: float) -> float:\n"
@@ -189,6 +287,14 @@ def get_mock_response(role_prompt: str, context: str) -> str:
     
     # PRODUCT OWNER - Requisitos formales (ahora va DESPUÉS del Desarrollador)
     elif "product owner" in prompt_lower or "requirements manager" in prompt_lower:
+        # Detectar si es una reingeniería (segunda iteración)
+        # Debe tener feedback real del Stakeholder, no solo mencionar la palabra
+        es_reingenieria = (
+            ("feedback" in context_lower and "rechazado" in context_lower) or
+            ("validación final: rechazado" in context_lower) or
+            ("motivo:" in context_lower and "stakeholder" in context_lower)
+        )
+        
         # Detectar lenguaje del contexto
         if "typescript" in context_lower:
             lenguaje = "TypeScript 5.x"
@@ -196,18 +302,45 @@ def get_mock_response(role_prompt: str, context: str) -> str:
         else:
             lenguaje = "Python 3.12"
             nombre_funcion = "calcular"
-            
-        return (
-            "{\n"
-            f'  "objetivo_funcional": "Implementar una función {nombre_funcion} que realice operaciones aritméticas básicas",\n'
-            f'  "lenguaje_version": "{lenguaje}",\n'
-            f'  "nombre_funcion": "{nombre_funcion}",\n'
-            '  "entradas_esperadas": "Dos números (a, b) de tipo number/int",\n'
-            '  "salidas_esperadas": "Un número que representa el resultado de la operación",\n'
-            '  "casos_uso": ["Sumar dos números positivos", "Sumar números negativos", "Manejar decimales"],\n'
-            '  "restricciones_tecnicas": "La función debe manejar precisión de punto flotante correctamente"\n'
-            "}"
-        )
+        
+        if es_reingenieria:
+            # Segunda versión: Requisitos mejorados después de feedback del Stakeholder
+            return (
+                "{\n"
+                f'  "objetivo_funcional": "Implementar una función {nombre_funcion} versátil que soporte suma de múltiples números y arrays",\n'
+                f'  "lenguaje_version": "{lenguaje}",\n'
+                f'  "nombre_funcion": "{nombre_funcion}",\n'
+                '  "entradas_esperadas": "Número variable de argumentos (a, b, c, ...) o array de números",\n'
+                '  "salidas_esperadas": "Un número que representa la suma total de todos los argumentos",\n'
+                '  "casos_uso": [\n'
+                '    "Sumar dos números: sumar(2, 3) = 5",\n'
+                '    "Sumar múltiples números: sumar(1, 2, 3, 4) = 10",\n'
+                '    "Sumar array: sumar([1, 2, 3]) = 6",\n'
+                '    "Manejo de decimales con precisión",\n'
+                '    "Validación de tipos y valores especiales (NaN, Infinity)"\n'
+                '  ],\n'
+                '  "restricciones_tecnicas": [\n'
+                '    "Usar spread operator o rest parameters para argumentos variables",\n'
+                '    "Manejar precisión de punto flotante correctamente",\n'
+                '    "Validar cada argumento individual",\n'
+                '    "Soportar mínimo 1 argumento, máximo ilimitado"\n'
+                '  ],\n'
+                '  "documentacion": "Función debe estar completamente documentada con JSDoc/docstring incluyendo ejemplos de uso"\n'
+                "}"
+            )
+        else:
+            # Primera versión: Requisitos básicos
+            return (
+                "{\n"
+                f'  "objetivo_funcional": "Implementar una función {nombre_funcion} que realice operaciones aritméticas básicas",\n'
+                f'  "lenguaje_version": "{lenguaje}",\n'
+                f'  "nombre_funcion": "{nombre_funcion}",\n'
+                '  "entradas_esperadas": "Dos números (a, b) de tipo number/int",\n'
+                '  "salidas_esperadas": "Un número que representa el resultado de la operación",\n'
+                '  "casos_uso": ["Sumar dos números positivos", "Sumar números negativos", "Manejar decimales"],\n'
+                '  "restricciones_tecnicas": "La función debe manejar precisión de punto flotante correctamente"\n'
+                "}"
+            )
     
     # GENERADOR DE TESTS
     elif "test" in prompt_lower and ("generar" in prompt_lower or "unitarios" in prompt_lower):
@@ -279,7 +412,47 @@ def get_mock_response(role_prompt: str, context: str) -> str:
     
     # STAKEHOLDER - Validación
     elif "stakeholder" in prompt_lower or "validar" in prompt_lower:
-        return "VALIDADO: El código cumple con los requisitos funcionales especificados y la visión de negocio."
+        # Detectar si es la primera validación (attempt_count = 1)
+        # Buscar "intento" o "attempt_count" en el contexto
+        import re
+        
+        # Buscar indicadores de primera iteración
+        es_primera_iteracion = False
+        
+        # Buscar "Intento 1" o similar en el contexto
+        if re.search(r'intento[:\s]+1\b|attempt[:\s]+1\b', context_lower):
+            es_primera_iteracion = True
+        
+        # También buscar en el código si tiene el comentario que indica primera versión
+        if "intento 1" in context_lower or "iteración 1" in context_lower:
+            es_primera_iteracion = True
+        
+        if es_primera_iteracion:
+            # Primera vez: Rechazar para forzar reingeniería de requisitos
+            return (
+                "VALIDACIÓN FINAL: RECHAZADO\n\n"
+                "Motivo: El código técnicamente funciona, pero no cumple completamente con la visión de negocio. "
+                "La función implementada es demasiado básica y limitada. Se requiere una solución más versátil que:\n\n"
+                "1. Soporte para más de dos números (suma de cantidad variable de argumentos)\n"
+                "2. Manejo de arrays/listas de números\n"
+                "3. Documentación más detallada de casos de uso\n"
+                "4. Validaciones robustas para cada elemento\n\n"
+                "La implementación actual solo acepta exactamente 2 parámetros, lo cual no es suficientemente flexible "
+                "para las necesidades del negocio. Se necesita reingeniería de requisitos para incluir soporte de "
+                "parámetros variables usando spread operators (*args en Python, ...args en TypeScript)."
+            )
+        else:
+            # Segunda vez o posteriores: Validar
+            return (
+                "VALIDACIÓN FINAL: VALIDADO\n\n"
+                "El código cumple con los requisitos funcionales especificados y la visión de negocio. "
+                "La implementación ahora soporta:\n"
+                "- Número variable de argumentos\n"
+                "- Validaciones exhaustivas\n"
+                "- Documentación completa\n"
+                "- Manejo robusto de casos edge\n\n"
+                "Aprobado para producción."
+            )
     
     # RESPUESTA POR DEFECTO
     else:
