@@ -11,6 +11,7 @@ from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
 from tools.sonarqube_mcp import analizar_codigo_con_sonarqube, formatear_reporte_sonarqube, es_codigo_aceptable
+from tools.azure_devops_integration import AzureDevOpsClient
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
 
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
@@ -22,7 +23,7 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     Nodo del Analizador SonarQube.
     Analiza la calidad del código generado y determina si cumple los estándares.
     """
-    logger.info("")
+    print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
     logger.info("ANALIZADOR SONARQUBE - INICIO")
     logger.info("=" * 60)
@@ -31,6 +32,35 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
         "requisito_id": state['attempt_count'],
         "intento_sonarqube": state['sonarqube_attempt_count']
     })
+    
+    # === INICIO: Actualizar estado del Work Item de Implementación a "In Progress" ===
+    if (settings.AZURE_DEVOPS_ENABLED and 
+        state.get('azure_implementation_task_id') and 
+        state['sonarqube_attempt_count'] == 0):  # Solo en el primer análisis
+        
+        try:
+            azure_client = AzureDevOpsClient()
+            task_id = state['azure_implementation_task_id']
+            
+            logger.info(f"🔄 Actualizando estado de Task de Implementación #{task_id} a 'In Progress'...")
+            
+            # Actualizar estado a "In Progress"
+            result = azure_client.update_work_item(
+                work_item_id=task_id,
+                fields={
+                    "System.State": "In Progress"
+                }
+            )
+            
+            if result:
+                logger.info(f"✅ Task #{task_id} actualizada a 'In Progress'")
+            else:
+                logger.warning(f"⚠️ No se pudo actualizar el estado de la Task #{task_id}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Error al actualizar estado del work item: {e}")
+            logger.debug(f"Stack trace: {e}", exc_info=True)
+    # === FIN: Actualización de estado en Azure DevOps ===
     
     # Obtener información del código
     lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
@@ -62,11 +92,35 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     codigo_aceptable = es_codigo_aceptable(resultado_analisis)
     
     if codigo_aceptable:
-        logger.info("Código aprobado por SonarQube")
+        logger.info("✅ Código aprobado por SonarQube")
         state['sonarqube_passed'] = True
         state['sonarqube_issues'] = ""
         # Resetear contador cuando pasa
         state['sonarqube_attempt_count'] = 0
+        
+        # === INICIO: Agregar comentario de aprobación en Azure DevOps ===
+        if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
+            try:
+                azure_client = AzureDevOpsClient()
+                task_id = state['azure_implementation_task_id']
+                
+                # Agregar comentario de aprobación
+                comment = f"""✅ Análisis de SonarQube completado exitosamente
+
+El código ha pasado el análisis de calidad de SonarQube sin issues bloqueantes.
+
+📊 Reporte guardado: {nombre_reporte}
+🎯 Estado: Aprobado para continuar con testing"""
+                
+                success = azure_client.add_comment(task_id, comment)
+                
+                if success:
+                    logger.info(f"📝 Comentario de aprobación agregado a Task #{task_id}")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+                logger.debug(f"Stack trace: {e}", exc_info=True)
+        # === FIN: Comentario en Azure DevOps ===
         
         log_agent_execution(logger, "Analizador SonarQube", "completado", {
             "resultado": "aprobado",
@@ -102,6 +156,32 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
         )
         
         logger.info(f"➡️ Instrucciones de corrección generadas - Intento {state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}")
+        
+        # === INICIO: Agregar comentario de rechazo en Azure DevOps ===
+        if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
+            try:
+                azure_client = AzureDevOpsClient()
+                task_id = state['azure_implementation_task_id']
+                
+                # Agregar comentario con issues encontrados
+                comment = f"""⚠️ Issues de calidad detectados por SonarQube (Intento {state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']})
+
+El código requiere correcciones antes de continuar.
+
+📊 Reporte: {nombre_reporte}
+📝 Instrucciones: {nombre_instrucciones}
+
+El código será corregido automáticamente por el Desarrollador."""
+                
+                success = azure_client.add_comment(task_id, comment)
+                
+                if success:
+                    logger.info(f"📝 Comentario de issues agregado a Task #{task_id}")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+                logger.debug(f"Stack trace: {e}", exc_info=True)
+        # === FIN: Comentario en Azure DevOps ===
         
         log_agent_execution(logger, "Analizador SonarQube", "completado", {
             "resultado": "rechazado",

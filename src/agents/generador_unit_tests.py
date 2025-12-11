@@ -20,7 +20,7 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     Nodo del Generador de Unit Tests.
     Genera tests unitarios para el código generado según el lenguaje.
     """
-    logger.info("")
+    print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
     logger.info("GENERADOR UNIT TESTS - INICIO")
     logger.info("=" * 60)

@@ -12,6 +12,7 @@ from typing import Dict, Any
 from models.state import AgentState
 from config.settings import settings
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
+from tools.azure_devops_integration import AzureDevOpsClient
 from utils.logger import setup_logger, log_agent_execution, log_file_operation
 
 # Configurar logger para este agente
@@ -35,10 +36,39 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
     3. Ejecutar tests con el framework apropiado (vitest/pytest)
     4. Parsear resultados y actualizar estado
     """
-    logger.info("")
+    print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
     logger.info("EJECUTOR DE PRUEBAS - INICIO")
     logger.info("=" * 60)
+    
+    # === INICIO: Actualizar estado del Work Item de Testing a "In Progress" ===
+    if (settings.AZURE_DEVOPS_ENABLED and 
+        state.get('azure_testing_task_id') and 
+        state['debug_attempt_count'] == 0):  # Solo en la primera ejecución de tests
+        
+        try:
+            azure_client = AzureDevOpsClient()
+            task_id = state['azure_testing_task_id']
+            
+            logger.info(f"🔄 Actualizando estado de Task de Testing #{task_id} a 'In Progress'...")
+            
+            # Actualizar estado a "In Progress"
+            result = azure_client.update_work_item(
+                work_item_id=task_id,
+                fields={
+                    "System.State": "In Progress"
+                }
+            )
+            
+            if result:
+                logger.info(f"✅ Task #{task_id} actualizada a 'In Progress'")
+            else:
+                logger.warning(f"⚠️ No se pudo actualizar el estado de la Task #{task_id}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Error al actualizar estado del work item: {e}")
+            logger.debug(f"Stack trace: {e}", exc_info=True)
+    # === FIN: Actualización de estado en Azure DevOps ===
     
     # Detectar lenguaje
     lenguaje, extension, _ = detectar_lenguaje_y_extension(
@@ -155,6 +185,31 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
                     attempt,
                     sq_attempt
                 )
+                
+                # Agregar comentario de éxito
+                try:
+                    azure_client = AzureDevOpsClient()
+                    task_id = state['azure_testing_task_id']
+                    
+                    stats = result.get('tests_run', {})
+                    total = stats.get('total', 0) if isinstance(stats, dict) else 0
+                    
+                    comment = f"""✅ Tests unitarios ejecutados exitosamente
+
+Todos los tests han pasado correctamente.
+
+📊 Resultados:
+  • Total de tests: {total}
+  • Estado: PASSED ✅
+
+📁 Archivo guardado: {nombre_archivo}
+📎 Tests adjuntados al work item"""
+                    
+                    azure_client.add_comment(task_id, comment)
+                    logger.info(f"📝 Comentario de éxito agregado a Task #{task_id}")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
             # === FIN: Adjuntar tests a Azure DevOps ===
         else:
             state['debug_attempt_count'] += 1
@@ -195,6 +250,32 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
             )
             
             log_file_operation(logger, "guardar", f"{settings.OUTPUT_DIR}/{nombre_archivo}", success=True)
+            
+            # === AZURE DEVOPS: Agregar comentario de fallo ===
+            if settings.AZURE_DEVOPS_ENABLED and state.get('azure_testing_task_id'):
+                try:
+                    azure_client = AzureDevOpsClient()
+                    task_id = state['azure_testing_task_id']
+                    
+                    comment = f"""❌ Tests fallidos (Intento {state['debug_attempt_count']}/{state['max_debug_attempts']})
+
+Los tests no han pasado y requieren corrección del código.
+
+📊 Estadísticas:
+  • Total: {total}
+  • Pasados: {passed}
+  • Fallidos: {failed}
+
+📁 Reporte: {nombre_archivo}
+
+El código será corregido automáticamente por el Desarrollador."""
+                    
+                    azure_client.add_comment(task_id, comment)
+                    logger.info(f"📝 Comentario de fallo agregado a Task #{task_id}")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+            # === FIN: Comentario en Azure DevOps ===
         
         # Mostrar resumen
         _mostrar_resumen_ejecucion(result)
@@ -462,7 +543,7 @@ def _parsear_resultados_pytest(output: str) -> Dict[str, int]:
 
 def _mostrar_resumen_ejecucion(result: Dict[str, Any]) -> None:
     """Muestra un resumen visual de la ejecución de tests."""
-    logger.info("")
+    print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
     logger.info("📋 RESUMEN DE EJECUCIÓN DE TESTS")
     logger.info("-" * 60)
@@ -525,7 +606,7 @@ def _adjuntar_tests_azure_devops(
         pbi_id = state['azure_pbi_id']
         task_id = state['azure_testing_task_id']
         
-        logger.info("")
+        print()  # Línea en blanco para separación visual
         logger.info("=" * 60)
         logger.info("📎 ADJUNTANDO TESTS UNITARIOS A AZURE DEVOPS")
         logger.info("-" * 60)

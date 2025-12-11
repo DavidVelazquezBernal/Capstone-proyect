@@ -24,7 +24,7 @@ def product_owner_node(state: AgentState) -> AgentState:
     Procesa el input del usuario y/o feedback del stakeholder, genera especificación
     formal JSON validada, y crea PBI en Azure DevOps.
     """
-    logger.info("")
+    print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
     logger.info("PRODUCT OWNER - INICIO")
     logger.info("=" * 60)

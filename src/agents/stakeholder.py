@@ -10,6 +10,7 @@ from config.prompts import Prompts
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto
+from tools.azure_devops_integration import AzureDevOpsClient
 from utils.logger import setup_logger, log_agent_execution, log_llm_call
 
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
@@ -20,7 +21,7 @@ def stakeholder_node(state: AgentState) -> AgentState:
     Nodo del Stakeholder.
     Valida si el código cumple con la intención de negocio.
     """
-    logger.info("")
+    print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
     logger.info("🙋‍♂️ STAKEHOLDER - INICIO")
     logger.info("=" * 60)
@@ -69,6 +70,11 @@ def stakeholder_node(state: AgentState) -> AgentState:
         if state.get('azure_pbi_id') and state.get('azure_implementation_task_id'):
             _adjuntar_codigo_final_azure_devops(state)
         # === FIN: Adjuntar código final a Azure DevOps ===
+        
+        # === INICIO: Actualizar estados a "Done" en Azure DevOps ===
+        if settings.AZURE_DEVOPS_ENABLED:
+            _actualizar_work_items_a_done(state)
+        # === FIN: Actualizar estados a "Done" ===
         
         log_agent_execution(logger, "Stakeholder", "completado", {
             "resultado": "aprobado",
@@ -131,7 +137,7 @@ def _adjuntar_codigo_final_azure_devops(state: AgentState) -> None:
         pbi_id = state['azure_pbi_id']
         task_id = state['azure_implementation_task_id']
         
-        logger.info("")
+        print()  # Línea en blanco para separación visual
         logger.info("=" * 60)
         logger.info("📎 ADJUNTANDO CÓDIGO FINAL A AZURE DEVOPS")
         logger.info("-" * 60)
@@ -170,4 +176,108 @@ def _adjuntar_codigo_final_azure_devops(state: AgentState) -> None:
         
     except Exception as e:
         logger.warning(f"⚠️ No se pudo adjuntar código final a Azure DevOps: {e}")
+        logger.debug(f"Stack trace: {e}", exc_info=True)
+
+
+def _actualizar_work_items_a_done(state: AgentState) -> None:
+    """
+    Actualiza el estado de las Tasks (Implementación y Testing) y del PBI a "Done"
+    cuando el Stakeholder valida el proyecto.
+    
+    Args:
+        state: Estado compartido con los IDs de work items
+    """
+    try:
+        azure_client = AzureDevOpsClient()
+        
+        pbi_id = state.get('azure_pbi_id')
+        task_impl_id = state.get('azure_implementation_task_id')
+        task_test_id = state.get('azure_testing_task_id')
+        
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("🎯 ACTUALIZANDO WORK ITEMS A 'DONE'")
+        logger.info("-" * 60)
+        
+        # Actualizar Task de Implementación a "Done"
+        if task_impl_id:
+            logger.info(f"🔄 Actualizando Task de Implementación #{task_impl_id} a 'Done'...")
+            result_impl = azure_client.update_work_item(
+                work_item_id=task_impl_id,
+                fields={
+                    "System.State": "Done",
+                    "Microsoft.VSTS.Common.ClosedDate": None  # Azure DevOps establece la fecha automáticamente
+                }
+            )
+            
+            if result_impl:
+                logger.info(f"✅ Task de Implementación #{task_impl_id} marcada como 'Done'")
+                
+                # Agregar comentario final
+                azure_client.add_comment(
+                    task_impl_id,
+                    "✅ Implementación completada y validada por el Stakeholder. Código listo para producción."
+                )
+            else:
+                logger.warning(f"⚠️ No se pudo actualizar Task #{task_impl_id}")
+        
+        # Actualizar Task de Testing a "Done"
+        if task_test_id:
+            logger.info(f"🔄 Actualizando Task de Testing #{task_test_id} a 'Done'...")
+            result_test = azure_client.update_work_item(
+                work_item_id=task_test_id,
+                fields={
+                    "System.State": "Done",
+                    "Microsoft.VSTS.Common.ClosedDate": None
+                }
+            )
+            
+            if result_test:
+                logger.info(f"✅ Task de Testing #{task_test_id} marcada como 'Done'")
+                
+                # Agregar comentario final
+                azure_client.add_comment(
+                    task_test_id,
+                    "✅ Todos los tests pasaron exitosamente. Testing completado."
+                )
+            else:
+                logger.warning(f"⚠️ No se pudo actualizar Task #{task_test_id}")
+        
+        # Actualizar PBI a "Done"
+        if pbi_id:
+            logger.info(f"🔄 Actualizando PBI #{pbi_id} a 'Done'...")
+            result_pbi = azure_client.update_work_item(
+                work_item_id=pbi_id,
+                fields={
+                    "System.State": "Done",
+                    "Microsoft.VSTS.Common.ClosedDate": None
+                }
+            )
+            
+            if result_pbi:
+                logger.info(f"✅ PBI #{pbi_id} marcado como 'Done'")
+                
+                # Agregar comentario final con resumen
+                summary_comment = f"""🎉 Proyecto completado exitosamente
+
+El código ha sido:
+✅ Implementado y generado automáticamente
+✅ Aprobado por análisis de SonarQube
+✅ Validado con tests unitarios
+✅ Aprobado por el Stakeholder
+
+📊 Estado final: DONE
+🚀 Listo para producción"""
+                
+                azure_client.add_comment(pbi_id, summary_comment)
+                logger.info(f"📝 Comentario de cierre agregado al PBI #{pbi_id}")
+            else:
+                logger.warning(f"⚠️ No se pudo actualizar PBI #{pbi_id}")
+        
+        logger.info("-" * 60)
+        logger.info("🎉 Todos los work items actualizados a 'Done'")
+        logger.info("=" * 60)
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Error al actualizar estados de work items: {e}")
         logger.debug(f"Stack trace: {e}", exc_info=True)
