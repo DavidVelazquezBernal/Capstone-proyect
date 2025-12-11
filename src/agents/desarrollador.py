@@ -90,8 +90,6 @@ def desarrollador_node(state: AgentState) -> AgentState:
             # Usar servicio centralizado para crear Tasks
             impl_task_id, test_task_id = azure_service.create_implementation_tasks(
                 state=state,
-                codigo_generado=codigo_limpio,
-                nombre_archivo=nombre_archivo,
                 lenguaje=lenguaje
             )
             

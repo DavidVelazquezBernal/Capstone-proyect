@@ -35,6 +35,7 @@ class Settings:
     AZURE_DEVOPS_PAT: str = os.getenv("AZURE_DEVOPS_PAT", "")
     AZURE_ITERATION_PATH: str = os.getenv("AZURE_ITERATION_PATH", "")  # ej: "MyProject\\Sprint 1"
     AZURE_AREA_PATH: str = os.getenv("AZURE_AREA_PATH", "")  # ej: "MyProject\\Backend"
+    AZURE_ASSIGNED_TO: str = os.getenv("AZURE_ASSIGNED_TO", "")  # Usuario asignado por defecto (vacío = sin asignar)
     
     # Configuración del modelo LLM
     MODEL_NAME: str = "gemini-2.5-flash"

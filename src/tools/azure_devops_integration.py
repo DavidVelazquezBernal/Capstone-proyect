@@ -85,6 +85,7 @@ class AzureDevOpsClient:
         priority: Optional[int] = 2,
         nature: Optional[str] = None,
         cir: Optional[str] = "No",
+        assigned_to: Optional[str] = None,
         custom_fields: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
@@ -99,6 +100,7 @@ class AzureDevOpsClient:
             priority: Prioridad (1=Alta, 2=Media, 3=Baja, 4=Muy Baja)
             nature: Naturaleza del PBI (por defecto: "3. Technical Debt")
             cir: Campo CIR (por defecto: "No")
+            assigned_to: Usuario asignado (None = sin asignar, usar settings.AZURE_ASSIGNED_TO si está configurado)
             custom_fields: Campos personalizados adicionales
         
         Returns:
@@ -111,6 +113,10 @@ class AzureDevOpsClient:
         # Valores por defecto para campos requeridos del proyecto
         if nature is None:
             nature = "3. Technical Debt"
+        
+        # Si assigned_to no se especifica, usar el de configuración (si existe)
+        if assigned_to is None and hasattr(settings, 'AZURE_ASSIGNED_TO') and settings.AZURE_ASSIGNED_TO:
+            assigned_to = settings.AZURE_ASSIGNED_TO
         
         try:
             url = (
@@ -150,6 +156,14 @@ class AzureDevOpsClient:
                     "op": "add",
                     "path": "/fields/Microsoft.VSTS.Scheduling.StoryPoints",
                     "value": story_points
+                })
+            
+            # Agregar asignación
+            if assigned_to:
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.AssignedTo",
+                    "value": assigned_to
                 })
             
             # Agregar tags
@@ -470,7 +484,7 @@ class AzureDevOpsClient:
             title: Título de la tarea
             description: Descripción detallada
             parent_id: ID del PBI padre (opcional)
-            assigned_to: Email del asignado (opcional)
+            assigned_to: Usuario asignado (None = sin asignar, usar settings.AZURE_ASSIGNED_TO si está configurado)
             remaining_work: Horas de trabajo restante (entero positivo, preferiblemente de Fibonacci: 1, 2, 3, 5, 8, 13)
             tags: Lista de etiquetas (opcional)
         
@@ -480,6 +494,10 @@ class AzureDevOpsClient:
         if not self._validate_config():
             logger.error("❌ Configuración de Azure DevOps incompleta")
             return None
+        
+        # Si assigned_to no se especifica, usar el de configuración (si existe)
+        if assigned_to is None and hasattr(settings, 'AZURE_ASSIGNED_TO') and settings.AZURE_ASSIGNED_TO:
+            assigned_to = settings.AZURE_ASSIGNED_TO
         
         try:
             url = (
