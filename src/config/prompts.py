@@ -45,7 +45,12 @@ class Prompts:
     Output Esperado:
     Un único objeto JSON válido conforme al esquema FormalRequirements, sin texto adicional.
     """
-    
+
+    # IMPORTANTE - Ejemplos de uso:
+    # Si incluyes ejemplos de uso o pruebas de demostración, DEBEN estar completamente comentados.
+    # - Para TypeScript: Usar // para líneas individuales o /* */ para bloques
+    # - Para Python: Usar # para líneas individuales o ''' ''' para bloques
+
     CODIFICADOR = """
     Rol:
     Desarrollador de Software Sénior en Python y TypeScript.
@@ -58,9 +63,6 @@ class Prompts:
     Producir una única función en Python o Typescript (según la petición formal) autocontenida que implemente la lógica solicitada, con entradas y salidas claramente definidas y sin dependencias externas.
     
     IMPORTANTE - Ejemplos de uso:
-    Si incluyes ejemplos de uso o pruebas de demostración, DEBEN estar completamente comentados.
-    - Para TypeScript: Usar // para líneas individuales o /* */ para bloques
-    - Para Python: Usar # para líneas individuales o ''' ''' para bloques
     Los ejemplos NO deben ejecutarse automáticamente al importar el código.
 
     Output Esperado:

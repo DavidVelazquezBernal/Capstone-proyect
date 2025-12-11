@@ -32,6 +32,7 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str,
             - summary: Dict con resumen de issues por severidad
             - error: str (solo si success=False)
     """
+    temp_file = None
     try:
         # Guardar código temporalmente para análisis
         temp_file = os.path.join(settings.OUTPUT_DIR, f"temp_analysis_{nombre_archivo}")
@@ -44,12 +45,14 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str,
         # Generar resumen
         summary = _generar_resumen_issues(issues)
         
-        return {
+        resultado = {
             "success": True,
             "issues": issues,
             "summary": summary,
             "file_path": temp_file
         }
+        
+        return resultado
         
     except Exception as e:
         return {
@@ -58,6 +61,14 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str,
             "summary": {},
             "error": str(e)
         }
+    finally:
+        # Limpiar archivo temporal después del análisis
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+                logger.debug(f"🗑️ Archivo temporal eliminado: {temp_file}")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo eliminar archivo temporal {temp_file}: {e}")
 
 
 def _analizar_archivo_sonarqube(file_path: str) -> List[Dict[str, Any]]:
@@ -380,15 +391,32 @@ def _analisis_estatico_typescript(file_path: str) -> List[Dict[str, Any]]:
             # === BUGS ===
             
             # S1440: Comparación no estricta (MAJOR)
-            if ('==' in line and '===' not in line) or ('!=' in line and '!==' not in line):
-                if not line_stripped.startswith('//'):
+            # Detectar == o != que NO sean === o !==
+            if not line_stripped.startswith('//'):
+                import re
+                # Buscar == que NO esté rodeado de = (no sea === ni =>)
+                # Pattern: cualquier == que NO esté precedido por = ni seguido por = ni >
+                if re.search(r'(?<![=!])== (?![=>])', line) or re.search(r'(?<![=!])==(?![=>])', line):
                     issues.append({
                         "rule": "typescript:S1440",
                         "severity": "MAJOR",
                         "type": "BUG",
-                        "message": "Usar '===' y '!==' en lugar de '==' y '!=' para comparación estricta",
+                        "message": "Usar '===' en lugar de '==' para comparación estricta",
                         "line": i
                     })
+                
+                # Buscar != que NO esté seguido por = (no sea !==)
+                # El ! ya está ahí, solo verificar que != no sea !==
+                if re.search(r'!=\s', line) or (line.count('!=') and not re.search(r'!==', line)):
+                    # Verificar que realmente haya != y no !==
+                    if '!=' in line and '!==' not in line:
+                        issues.append({
+                            "rule": "typescript:S1440",
+                            "severity": "MAJOR",
+                            "type": "BUG",
+                            "message": "Usar '!==' en lugar de '!=' para comparación estricta",
+                            "line": i
+                        })
             
             # S2737: Catch block vacío (CRITICAL)
             if line_stripped == 'catch' or (line_stripped.startswith('catch') and '{}' in line):
@@ -712,6 +740,7 @@ def es_codigo_aceptable(resultado: Dict[str, Any]) -> bool:
     Criterios:
     - 0 issues BLOCKER
     - Máximo 2 issues CRITICAL
+    - 0 BUGs (de cualquier severidad)
     
     Args:
         resultado: Resultado del análisis de SonarQube
@@ -724,15 +753,23 @@ def es_codigo_aceptable(resultado: Dict[str, Any]) -> bool:
     
     summary = resultado.get("summary", {})
     by_severity = summary.get("by_severity", {})
+    by_type = summary.get("by_type", {})
     
     blocker_count = by_severity.get("BLOCKER", 0)
     critical_count = by_severity.get("CRITICAL", 0)
+    bug_count = by_type.get("BUG", 0)
     
     # Criterios de aceptación
+    # 1. No BLOCKERS permitidos
     if blocker_count > 0:
         return False
     
+    # 2. Máximo 2 CRITICAL
     if critical_count > 2:
+        return False
+    
+    # 3. No BUGS permitidos (de cualquier severidad)
+    if bug_count > 0:
         return False
     
     return True

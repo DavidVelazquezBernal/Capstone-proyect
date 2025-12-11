@@ -30,6 +30,7 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
 
     log_agent_execution(logger, "Analizador SonarQube", "iniciado", {
         "requisito_id": state['attempt_count'],
+        "validacion_numero": state['sonarqube_attempt_count'] + 1,
         "intento_sonarqube": state['sonarqube_attempt_count']
     })
     
@@ -62,9 +63,11 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     codigo_limpio = re.sub(patron_limpieza, '', state['codigo_generado']).strip()
     
     # Generar nombre de archivo para análisis
-    nombre_archivo = f"analisis_sonarqube_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
+    # Usar el contador actual para esta validación (antes de incrementar)
+    intento_actual = state['sonarqube_attempt_count']
+    nombre_archivo = f"analisis_sonarqube_req{state['attempt_count']}_sq{intento_actual}{extension}"
     
-    logger.info(f"🔍 Analizando código con SonarQube - Archivo: {nombre_archivo}")
+    logger.info(f"🔍 Analizando código con SonarQube - Validación #{intento_actual + 1} - Archivo: {nombre_archivo}")
     
     # Analizar código con SonarQube
     resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo)
@@ -73,8 +76,8 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     reporte_formateado = formatear_reporte_sonarqube(resultado_analisis)
     logger.debug(f"Reporte generado:\n{reporte_formateado[:500]}...")
     
-    # Guardar reporte
-    nombre_reporte = f"3.5_sonarqube_report_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}.txt"
+    # Guardar reporte SIEMPRE (tanto si pasa como si falla)
+    nombre_reporte = f"3.5_sonarqube_report_req{state['attempt_count']}_sq{intento_actual}.txt"
     guardar_fichero_texto(
         nombre_reporte,
         reporte_formateado,
@@ -84,8 +87,18 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
     # Determinar si el código pasa el análisis
     codigo_aceptable = es_codigo_aceptable(resultado_analisis)
     
+    # Obtener contadores para logging detallado
+    summary = resultado_analisis.get("summary", {})
+    by_severity = summary.get("by_severity", {})
+    by_type = summary.get("by_type", {})
+    
+    blocker_count = by_severity.get("BLOCKER", 0)
+    critical_count = by_severity.get("CRITICAL", 0)
+    bug_count = by_type.get("BUG", 0)
+    
     if codigo_aceptable:
         logger.info("✅ Código aprobado por SonarQube")
+        logger.info(f"   📊 Issues encontrados: {blocker_count} BLOCKER, {critical_count} CRITICAL, {bug_count} BUGS")
         state['sonarqube_passed'] = True
         state['sonarqube_issues'] = ""
         # Resetear contador cuando pasa
@@ -107,9 +120,18 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
             "reporte": nombre_reporte
         })
     else:
+        # Código no pasa los criterios de calidad
         logger.warning("❌ Código rechazado por SonarQube - requiere correcciones")
+        logger.warning(f"   📊 Razones de rechazo:")
+        
+        if blocker_count > 0:
+            logger.warning(f"      🔴 {blocker_count} BLOCKER (máximo permitido: 0)")
+        if critical_count > 2:
+            logger.warning(f"      🟠 {critical_count} CRITICAL (máximo permitido: 2)")
+        if bug_count > 0:
+            logger.warning(f"      🐛 {bug_count} BUGS (máximo permitido: 0)")
+        
         state['sonarqube_passed'] = False
-        state['sonarqube_attempt_count'] += 1
         
         # Generar instrucciones de corrección usando el LLM
         contexto_llm = (
@@ -127,15 +149,18 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
         
         state['sonarqube_issues'] = instrucciones_correccion
         
-        # Guardar instrucciones de corrección
-        nombre_instrucciones = f"3.5_sonarqube_instrucciones_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}.txt"
+        # Incrementar contador después de generar instrucciones
+        state['sonarqube_attempt_count'] += 1
+        
+        # Guardar instrucciones de corrección (con el contador ya incrementado para el siguiente intento)
+        nombre_instrucciones = f"3.5_sonarqube_instrucciones_req{state['attempt_count']}_sq{intento_actual}.txt"
         guardar_fichero_texto(
             nombre_instrucciones,
             instrucciones_correccion,
             directorio=settings.OUTPUT_DIR
         )
         
-        logger.info(f"➡️ Instrucciones de corrección generadas - Intento {state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}")
+        logger.info(f"➡️ Instrucciones de corrección generadas - Intento {intento_actual + 1}/{state['max_sonarqube_attempts']}")
         
         # === INICIO: Agregar comentario de rechazo en Azure DevOps ===
         if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
