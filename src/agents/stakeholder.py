@@ -83,6 +83,14 @@ def stakeholder_node(state: AgentState) -> AgentState:
                 logger.warning(f"⚠️ Error al actualizar estados: {e}")
         # === FIN: Actualizar estados a "Done" ===
         
+        # === INICIO: Generar y agregar Release Note al PBI ===
+        if settings.AZURE_DEVOPS_ENABLED and state.get('azure_pbi_id'):
+            try:
+                azure_service.generate_and_add_release_note(state)
+            except Exception as e:
+                logger.warning(f"⚠️ Error al generar Release Note: {e}")
+        # === FIN: Generar Release Note ===
+        
         log_agent_execution(logger, "Stakeholder", "completado", {
             "resultado": "aprobado",
             "intento": state['attempt_count']

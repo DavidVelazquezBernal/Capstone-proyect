@@ -20,6 +20,47 @@ def get_mock_response(role_prompt: str, context: str) -> str:
     prompt_lower = role_prompt.lower()
     context_lower = context.lower()
     
+    # GENERADOR DE RELEASE NOTES (debe ir PRIMERO para evitar conflictos)
+    if "release note" in prompt_lower or "release notes" in prompt_lower:
+        return """<h3>📋 Resumen</h3>
+<p>Implementación exitosa de una función de suma aritmética con validaciones exhaustivas y manejo robusto de errores.</p>
+
+<h3>✨ Funcionalidades Implementadas</h3>
+<ul>
+    <li>Función de suma para dos números con validación de tipos</li>
+    <li>Manejo de errores para entradas inválidas (NaN, Infinity, tipos no numéricos)</li>
+    <li>Corrección de problemas de precisión de punto flotante</li>
+    <li>Documentación completa con JSDoc/TypeDoc</li>
+</ul>
+
+<h3>🔧 Detalles Técnicos</h3>
+<ul>
+    <li><strong>Lenguaje:</strong> TypeScript 5.0</li>
+    <li><strong>Función Principal:</strong> <code>sumar(a: number, b: number): number</code></li>
+    <li><strong>Validaciones:</strong> Tipo, NaN, Infinity</li>
+    <li><strong>Precisión:</strong> Redondeo a 10 decimales</li>
+</ul>
+
+<h3>✅ Validaciones</h3>
+<ul>
+    <li>✅ Análisis de SonarQube: Aprobado sin issues bloqueantes</li>
+    <li>✅ Tests Unitarios: Todos los casos de prueba pasados</li>
+    <li>✅ Validación de Stakeholder: Aprobada</li>
+    <li>✅ Calidad de Código: Cumple con estándares de la industria</li>
+</ul>
+
+<h3>📊 Métricas del Desarrollo</h3>
+<ul>
+    <li><strong>Story Points:</strong> 2</li>
+    <li><strong>Iteraciones:</strong> 1</li>
+    <li><strong>Intentos de Debug:</strong> 1</li>
+    <li><strong>Análisis SonarQube:</strong> 1</li>
+    <li><strong>Estado:</strong> ✅ Completado y listo para producción</li>
+</ul>
+
+<hr/>
+<p><em>🤖 Release Note generado automáticamente por el sistema multiagente de desarrollo ágil</em></p>"""
+    
     # DESARROLLADOR - Código (debe ir PRIMERO porque su contexto también contiene "Requisitos")
     if "desarrollador" in prompt_lower or "codifica" in prompt_lower or "generar código" in prompt_lower:
         # Detectar si es una corrección de SonarQube

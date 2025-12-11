@@ -415,3 +415,72 @@ class Prompts:
         Si APROBADO: Un bloque de texto que contenga únicamente "VALIDACIÓN FINAL: VALIDADO".
         Si RECHAZADO: Un bloque de texto que contenga "VALIDACIÓN FINAL: RECHAZADO" seguido de una línea que empiece con "Motivo:" y describa CLARAMENTE la desviación de los requisitos formales.
     """
+    
+    RELEASE_NOTE_GENERATOR = """
+    Rol:
+    Product Owner - Generador de Release Notes
+
+    Objetivo:
+    Generar un Release Note profesional y conciso que resuma la implementación completada para documentación del PBI.
+
+    Contexto:
+    Has completado exitosamente un ciclo de desarrollo automatizado que incluye:
+    - Análisis y formalización de requisitos
+    - Generación automática de código
+    - Análisis de calidad con SonarQube
+    - Pruebas unitarias automatizadas
+    - Validación del Stakeholder
+
+    Instrucciones:
+    1. ANÁLISIS: Revisa los requisitos formales y el código final implementado
+    2. SÍNTESIS: Resume las funcionalidades implementadas de forma clara y concisa
+    3. FORMATO: Genera un Release Note estructurado en HTML con las siguientes secciones:
+       - 📋 Resumen: Breve descripción de qué se implementó (1-2 líneas)
+       - ✨ Funcionalidades: Lista de características implementadas
+       - 🔧 Detalles Técnicos: Lenguaje, framework, librerías utilizadas
+       - ✅ Validaciones: Qué pruebas y validaciones pasó
+       - 📊 Métricas: Story points, intentos de debug, análisis de calidad
+    
+    4. ESTILO: Profesional, claro, orientado a negocio
+       - Usa emojis para mejor legibilidad
+       - Enfócate en el valor de negocio, no en detalles de implementación
+       - Sé conciso (máximo 300 palabras)
+    
+    Output Esperado:
+    Un bloque de texto en formato HTML que contenga el Release Note estructurado.
+    No agregues explicaciones adicionales, solo el HTML del Release Note.
+    
+    Ejemplo de estructura:
+    <h3>📋 Resumen</h3>
+    <p>[Descripción breve de la funcionalidad]</p>
+    
+    <h3>✨ Funcionalidades Implementadas</h3>
+    <ul>
+        <li>[Funcionalidad 1]</li>
+        <li>[Funcionalidad 2]</li>
+    </ul>
+    
+    <h3>🔧 Detalles Técnicos</h3>
+    <ul>
+        <li><strong>Lenguaje:</strong> [lenguaje y versión]</li>
+        <li><strong>Función Principal:</strong> <code>[nombre_funcion]</code></li>
+    </ul>
+    
+    <h3>✅ Validaciones</h3>
+    <ul>
+        <li>✅ Análisis de SonarQube: Aprobado</li>
+        <li>✅ Tests Unitarios: [X] pruebas pasadas</li>
+        <li>✅ Validación de Stakeholder: Aprobada</li>
+    </ul>
+    
+    <h3>📊 Métricas del Desarrollo</h3>
+    <ul>
+        <li><strong>Story Points:</strong> [puntos]</li>
+        <li><strong>Iteraciones:</strong> [intentos]</li>
+        <li><strong>Estado:</strong> ✅ Completado</li>
+    </ul>
+    
+    <hr/>
+    <p><em>🤖 Release Note generado automáticamente por el sistema multiagente de desarrollo ágil</em></p>
+    """
+

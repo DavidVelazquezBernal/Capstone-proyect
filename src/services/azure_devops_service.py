@@ -759,6 +759,107 @@ El código ha sido:
             logger.warning(f"⚠️ Error al actualizar work items a Done: {e}")
             logger.debug(f"Stack trace: {e}", exc_info=True)
             return False
+    
+    def generate_and_add_release_note(self, state: AgentState) -> bool:
+        """
+        Genera un Release Note usando LLM y lo agrega como comentario al PBI.
+        
+        Args:
+            state: Estado compartido del workflow con toda la información del proyecto
+            
+        Returns:
+            True si se agregó exitosamente
+        """
+        if not self.is_enabled():
+            return False
+        
+        pbi_id = state.get('azure_pbi_id')
+        if not pbi_id:
+            return False
+        
+        try:
+            from llm.gemini_client import call_gemini
+            from config.prompts import Prompts
+            import json
+            import time
+            
+            logger.info("=" * 60)
+            logger.info("📝 GENERANDO RELEASE NOTE")
+            logger.info("-" * 60)
+            
+            # Preparar contexto para el LLM
+            requisitos = json.loads(state.get('requisitos_formales', '{}'))
+            
+            # Calcular métricas
+            story_points = requisitos.get('azure_devops', {}).get('story_points', 'N/A')
+            total_attempts = state.get('attempt_count', 1)
+            debug_attempts = state.get('debug_attempt_count', 0)
+            sonarqube_attempts = state.get('sonarqube_attempt_count', 0)
+            
+            contexto = f"""
+Requisitos Formales:
+{state.get('requisitos_formales', 'N/A')}
+
+Código Final Implementado:
+{state.get('codigo_generado', 'N/A')}
+
+Métricas del Proyecto:
+- Story Points: {story_points}
+- Iteraciones totales: {total_attempts}
+- Intentos de debug: {debug_attempts}
+- Intentos de SonarQube: {sonarqube_attempts}
+- Tests Unitarios: {len(state.get('tests_unitarios_generados', '').split('describe')) - 1 if state.get('tests_unitarios_generados') else 0} suites
+- Estado Final: VALIDADO por Stakeholder
+"""
+            
+            logger.info("🤖 Generando Release Note con LLM...")
+            start_time = time.time()
+            
+            # Llamar al LLM para generar el Release Note
+            release_note = call_gemini(Prompts.RELEASE_NOTE_GENERATOR, contexto)
+            
+            duration = time.time() - start_time
+            logger.info(f"⏱️  Release Note generado en {duration:.2f}s")
+            
+            # Estrategia 1: Actualizar el campo Custom.ReleaseNote del PBI
+            logger.info(f"📤 Actualizando campo ReleaseNote del PBI #{pbi_id}...")
+            
+            # Actualizar el PBI con el Release Note en el campo personalizado
+            try:
+                update_result = self.client.update_work_item(
+                    work_item_id=pbi_id,
+                    fields={"Custom.ReleaseNote": release_note}
+                )
+                if update_result:
+                    logger.info(f"✅ Release Note agregado al campo Custom.ReleaseNote del PBI #{pbi_id}")
+                    success_release_field = True
+                else:
+                    logger.warning(f"⚠️ No se pudo actualizar el campo Custom.ReleaseNote")
+                    success_release_field = False
+            except Exception as field_error:
+                logger.warning(f"⚠️ Error al actualizar Custom.ReleaseNote: {field_error}")
+                success_release_field = False
+            
+                # Considerar éxito solo si el campo personalizado fue actualizado
+                if success_release_field:
+                    logger.info("=" * 60)
+                    return True
+                else:
+                    logger.warning(f"⚠️ No se pudo agregar el Release Note al PBI #{pbi_id}")
+                    logger.warning("   Puede ser un problema de permisos en Azure DevOps")
+                    try:
+                        logger.info("💾 Guardando Release Note localmente como respaldo...")
+                        from tools.file_utils import guardar_fichero_texto
+                        filename = f"release_note_pbi_{pbi_id}.html"
+                        guardar_fichero_texto(filename, release_note, directorio=settings.OUTPUT_DIR)
+                        logger.info(f"✅ Release Note guardado en: output/{filename}")
+                    except Exception as save_error:
+                        logger.warning(f"⚠️ No se pudo guardar localmente: {save_error}")
+                        return False
+        except Exception as e:
+            logger.warning(f"⚠️ Error inesperado en el proceso de Release Note: {e}")
+            logger.debug(f"Stack trace: {e}", exc_info=True)
+            return False
 
 
 # ==================== INSTANCIA GLOBAL ====================

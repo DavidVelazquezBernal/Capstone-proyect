@@ -462,6 +462,7 @@ class AzureDevOpsClient:
                 return True
             else:
                 logger.error(f"❌ Error al agregar comentario: {response.status_code}")
+                logger.error(f"Respuesta del servidor: {response.text[:500]}")
                 return False
                 
         except Exception as e:
