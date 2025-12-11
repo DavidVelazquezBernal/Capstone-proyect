@@ -12,7 +12,7 @@ from typing import Dict, Any
 from models.state import AgentState
 from config.settings import settings
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
-from tools.azure_devops_integration import AzureDevOpsClient
+from services.azure_devops_service import azure_service
 from utils.logger import setup_logger, log_agent_execution, log_file_operation
 
 # Configurar logger para este agente
@@ -47,20 +47,13 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
         state['debug_attempt_count'] == 0):  # Solo en la primera ejecución de tests
         
         try:
-            azure_client = AzureDevOpsClient()
             task_id = state['azure_testing_task_id']
-            
             logger.info(f"🔄 Actualizando estado de Task de Testing #{task_id} a 'In Progress'...")
             
-            # Actualizar estado a "In Progress"
-            result = azure_client.update_work_item(
-                work_item_id=task_id,
-                fields={
-                    "System.State": "In Progress"
-                }
-            )
+            # Usar servicio centralizado
+            success = azure_service.update_testing_task_to_in_progress(task_id)
             
-            if result:
+            if success:
                 logger.info(f"✅ Task #{task_id} actualizada a 'In Progress'")
             else:
                 logger.warning(f"⚠️ No se pudo actualizar el estado de la Task #{task_id}")
@@ -179,37 +172,26 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
             
             # === AZURE DEVOPS: Adjuntar archivo de tests cuando pasen ===
             if state.get('azure_pbi_id') and state.get('azure_testing_task_id'):
-                _adjuntar_tests_azure_devops(
-                    state,
-                    test_path,
-                    attempt,
-                    sq_attempt
-                )
-                
-                # Agregar comentario de éxito
                 try:
-                    azure_client = AzureDevOpsClient()
-                    task_id = state['azure_testing_task_id']
-                    
                     stats = result.get('tests_run', {})
                     total = stats.get('total', 0) if isinstance(stats, dict) else 0
                     
-                    comment = f"""✅ Tests unitarios ejecutados exitosamente
-
-Todos los tests han pasado correctamente.
-
-📊 Resultados:
-  • Total de tests: {total}
-  • Estado: PASSED ✅
-
-📁 Archivo guardado: {nombre_archivo}
-📎 Tests adjuntados al work item"""
+                    # Usar servicio centralizado
+                    azure_service.attach_tests_to_work_items(
+                        state=state,
+                        test_file_path=test_path,
+                        attempt=attempt,
+                        sq_attempt=sq_attempt
+                    )
                     
-                    azure_client.add_comment(task_id, comment)
-                    logger.info(f"📝 Comentario de éxito agregado a Task #{task_id}")
+                    azure_service.add_test_success_comment(
+                        task_id=state['azure_testing_task_id'],
+                        total_tests=total,
+                        output_filename=nombre_archivo
+                    )
                     
                 except Exception as e:
-                    logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+                    logger.warning(f"⚠️ Error en operaciones de Azure DevOps: {e}")
             # === FIN: Adjuntar tests a Azure DevOps ===
         else:
             state['debug_attempt_count'] += 1
@@ -254,25 +236,16 @@ Todos los tests han pasado correctamente.
             # === AZURE DEVOPS: Agregar comentario de fallo ===
             if settings.AZURE_DEVOPS_ENABLED and state.get('azure_testing_task_id'):
                 try:
-                    azure_client = AzureDevOpsClient()
-                    task_id = state['azure_testing_task_id']
-                    
-                    comment = f"""❌ Tests fallidos (Intento {state['debug_attempt_count']}/{state['max_debug_attempts']})
-
-Los tests no han pasado y requieren corrección del código.
-
-📊 Estadísticas:
-  • Total: {total}
-  • Pasados: {passed}
-  • Fallidos: {failed}
-
-📁 Reporte: {nombre_archivo}
-
-El código será corregido automáticamente por el Desarrollador."""
-                    
-                    azure_client.add_comment(task_id, comment)
-                    logger.info(f"📝 Comentario de fallo agregado a Task #{task_id}")
-                    
+                    azure_service.add_test_failure_comment(
+                        task_id=state['azure_testing_task_id'],
+                        attempt=state['debug_attempt_count'],
+                        max_attempts=state['max_debug_attempts'],
+                        total=total,
+                        passed=passed,
+                        failed=failed,
+                        report_filename=nombre_archivo
+                    )
+                    logger.info(f"📝 Comentario de fallo agregado a Task #{state['azure_testing_task_id']}")
                 except Exception as e:
                     logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
             # === FIN: Comentario en Azure DevOps ===
@@ -342,6 +315,8 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
             ['npx', 'vitest', 'run', os.path.basename(test_path), '--reporter=verbose'],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',  # Reemplazar caracteres no decodificables
             timeout=60,  # 60 segundos de timeout
             shell=True  # Necesario en Windows para encontrar npx
         )
@@ -417,6 +392,8 @@ def _ejecutar_tests_python(test_path: str, state: AgentState) -> Dict[str, Any]:
             ['pytest', test_path, '-v', '--tb=short'],
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',  # Reemplazar caracteres no decodificables
             timeout=60  # 60 segundos de timeout
         )
         
@@ -575,74 +552,3 @@ def _mostrar_resumen_ejecucion(result: Dict[str, Any]) -> None:
     logger.info("=" * 60)
 
 
-def _adjuntar_tests_azure_devops(
-    state: AgentState,
-    test_file_path: str,
-    attempt: int,
-    sq_attempt: int
-) -> None:
-    """
-    Adjunta el archivo de tests unitarios al PBI y a la Task de Testing en Azure DevOps.
-    
-    Args:
-        state: Estado compartido con azure_pbi_id y azure_testing_task_id
-        test_file_path: Ruta completa del archivo de tests generado
-        attempt: Número de intento de requisitos
-        sq_attempt: Número de intento de SonarQube
-    """
-    try:
-        from tools.azure_devops_integration import AzureDevOpsClient
-        import os
-        
-        # Validar que el archivo existe
-        if not os.path.exists(test_file_path):
-            logger.warning(f"⚠️ Archivo de tests no encontrado: {test_file_path}")
-            return
-        
-        azure_client = AzureDevOpsClient()
-        
-        # Nombre descriptivo del archivo
-        file_name = os.path.basename(test_file_path)
-        pbi_id = state['azure_pbi_id']
-        task_id = state['azure_testing_task_id']
-        
-        print()  # Línea en blanco para separación visual
-        logger.info("=" * 60)
-        logger.info("📎 ADJUNTANDO TESTS UNITARIOS A AZURE DEVOPS")
-        logger.info("-" * 60)
-        logger.info(f"📄 Archivo: {file_name}")
-        logger.info(f"🎯 PBI: #{pbi_id}")
-        logger.info(f"🧪 Task Testing: #{task_id}")
-        
-        # Adjuntar al PBI
-        success_pbi = azure_client.attach_file(
-            work_item_id=pbi_id,
-            file_path=test_file_path,
-            comment=f"✅ Tests unitarios generados (req{attempt}_sq{sq_attempt}) - Todos los tests pasaron"
-        )
-        
-        if success_pbi:
-            logger.info(f"✅ Tests adjuntados al PBI #{pbi_id}")
-        else:
-            logger.warning(f"⚠️ No se pudo adjuntar al PBI #{pbi_id}")
-        
-        # Adjuntar a la Task de Testing
-        success_task = azure_client.attach_file(
-            work_item_id=task_id,
-            file_path=test_file_path,
-            comment=f"✅ Suite de tests unitarios completa - {os.path.getsize(test_file_path)} bytes"
-        )
-        
-        if success_task:
-            logger.info(f"✅ Tests adjuntados a Task #{task_id}")
-        else:
-            logger.warning(f"⚠️ No se pudo adjuntar a Task #{task_id}")
-        
-        if success_pbi and success_task:
-            logger.info("🎉 Tests unitarios adjuntados exitosamente a ambos work items")
-        
-        logger.info("=" * 60)
-        
-    except Exception as e:
-        logger.warning(f"⚠️ No se pudieron adjuntar tests a Azure DevOps: {e}")
-        logger.debug(f"Stack trace: {e}", exc_info=True)

@@ -57,7 +57,10 @@ def detectar_lenguaje_y_extension(requisitos_formales: str) -> tuple[str, str, s
     """
     lenguaje = "python"  # Por defecto
     extension = ".py"
-    patron_limpieza = r'```python|```'
+    # Patrón mejorado que elimina:
+    # - Bloques markdown: ```python, ```typescript, ```
+    # - Etiquetas de lenguaje sueltas al inicio: "python\n", "typescript\n"
+    patron_limpieza = r'```python|```|^python\s*\n|^py\s*\n'
     
     try:
         requisitos = json.loads(requisitos_formales or '{}')
@@ -69,7 +72,8 @@ def detectar_lenguaje_y_extension(requisitos_formales: str) -> tuple[str, str, s
         if 'typescript' in lenguaje_detectado or 'ts' in lenguaje_detectado:
             lenguaje = "typescript"
             extension = ".ts"
-            patron_limpieza = r'```typescript|```'
+            # Patrón para TypeScript que elimina etiquetas comunes
+            patron_limpieza = r'```typescript|```ts|```|^typescript\s*\n|^ts\s*\n'
         
         logger.debug(f"Lenguaje detectado: {lenguaje}, extensión: {extension}")
     except (json.JSONDecodeError, AttributeError) as e:

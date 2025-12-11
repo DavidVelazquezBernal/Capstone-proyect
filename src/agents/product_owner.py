@@ -11,7 +11,7 @@ from config.prompts import Prompts
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto
-from tools.azure_devops_integration import AzureDevOpsClient, estimate_story_points
+from services.azure_devops_service import azure_service
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
 
 # Configurar logger para este agente
@@ -67,108 +67,21 @@ Feedback del Stakeholder (si aplica): {state['feedback_stakeholder'] if state['f
         logger.info("✅ Requisitos formalizados y validados correctamente")
         logger.debug(f"JSON generado: {req_data.model_dump_json(indent=2)[:200]}...")
         
-        # === INICIO: Integración con Azure DevOps ===
+        # === INICIO: Integración con Azure DevOps (usando servicio centralizado) ===
         azure_metadata = None
         if settings.AZURE_DEVOPS_ENABLED:
             logger.info("🔷 Integrando con Azure DevOps...")
             
             try:
-                azure_client = AzureDevOpsClient()
+                # Usar servicio centralizado para crear PBI
+                azure_metadata = azure_service.create_pbi_from_requirements(req_data.model_dump())
                 
-                # Probar conexión
-                if not azure_client.test_connection():
-                    logger.warning("⚠️ No se pudo conectar con Azure DevOps, continuando sin integración")
+                if azure_metadata:
+                    # Guardar el PBI ID en el estado para futuros work items
+                    state['azure_pbi_id'] = azure_metadata.work_item_id
+                    logger.info(f"💾 PBI ID #{azure_metadata.work_item_id} guardado para asociar work items posteriores")
                 else:
-                    # Estimar story points
-                    story_points = estimate_story_points(req_data.model_dump())
-                    logger.info(f"📊 Story Points estimados: {story_points}")
-                    
-                    # Preparar descripción y criterios de aceptación en HTML
-                    description = f"""
-                    <h3>Objetivo Funcional</h3>
-                    <p>{req_data.objetivo_funcional}</p>
-                    
-                    <h3>Especificaciones Técnicas</h3>
-                    <ul>
-                        <li><strong>Lenguaje:</strong> {req_data.lenguaje_version}</li>
-                        <li><strong>Función:</strong> <code>{req_data.nombre_funcion}</code></li>
-                    </ul>
-                    
-                    <h3>Entradas Esperadas</h3>
-                    <p>{req_data.entradas_esperadas}</p>
-                    
-                    <h3>Salidas Esperadas</h3>
-                    <p>{req_data.salidas_esperadas}</p>
-                    
-                    <hr/>
-                    <p><em>🤖 Generado automáticamente por el sistema multiagente</em></p>
-                    """
-                    
-                    acceptance_criteria = f"""
-                    <h4>Criterios de Aceptación</h4>
-                    <ul>
-                        <li>✅ El código debe implementar: {req_data.objetivo_funcional}</li>
-                        <li>✅ Las entradas deben cumplir: {req_data.entradas_esperadas}</li>
-                        <li>✅ Las salidas deben cumplir: {req_data.salidas_esperadas}</li>
-                        <li>✅ Todos los tests unitarios deben pasar</li>
-                        <li>✅ El código debe pasar el análisis de SonarQube sin issues bloqueantes</li>
-                    </ul>
-                    """
-                    
-                    # === VERIFICAR SI YA EXISTE UN PBI SIMILAR ===
-                    pbi_title = f"[AI-Generated] {req_data.objetivo_funcional[:80]}"
-                    logger.info(f"🔍 Verificando si existe PBI con título similar...")
-                    
-                    existing_pbis = azure_client.search_work_items(
-                        title_contains=req_data.objetivo_funcional[:50],
-                        work_item_type="Product Backlog Item",
-                        tags=["AI-Generated"],
-                        max_results=5
-                    )
-                    
-                    pbi = None
-                    if existing_pbis:
-                        # Verificar si alguno tiene título muy similar (mismo objetivo funcional)
-                        for existing_pbi in existing_pbis:
-                            existing_title = existing_pbi['fields'].get('System.Title', '')
-                            if req_data.objetivo_funcional[:50] in existing_title:
-                                logger.warning(f"⚠️ Ya existe un PBI similar: #{existing_pbi['id']} - {existing_title}")
-                                logger.info(f"🔗 {existing_pbi['_links']['html']['href']}")
-                                logger.info(f"♻️ Reutilizando PBI existente en lugar de crear duplicado")
-                                pbi = existing_pbi
-                                break
-                    
-                    # Si no existe, crear uno nuevo
-                    if not pbi:
-                        logger.info("✨ No se encontró PBI existente, creando nuevo...")
-                        pbi = azure_client.create_pbi(
-                            title=pbi_title,
-                            description=description,
-                            acceptance_criteria=acceptance_criteria,
-                            story_points=story_points,
-                            tags=["AI-Generated", "Multiagente", req_data.lenguaje_version.split()[0]],
-                            priority=2  # Media por defecto
-                        )
-                    
-                    if pbi:
-                        # Crear metadatos de Azure DevOps
-                        azure_metadata = AzureDevOpsMetadata(
-                            work_item_id=pbi['id'],
-                            work_item_url=pbi['_links']['html']['href'],
-                            work_item_type="Product Backlog Item",
-                            area_path=settings.AZURE_AREA_PATH or None,
-                            iteration_path=settings.AZURE_ITERATION_PATH or None,
-                            story_points=story_points
-                        )
-                        
-                        # Guardar el PBI ID en el estado para futuros work items
-                        state['azure_pbi_id'] = pbi['id']
-                        
-                        logger.info(f"✅ PBI #{pbi['id']} creado en Azure DevOps")
-                        logger.info(f"🔗 {pbi['_links']['html']['href']}")
-                        logger.info(f"💾 PBI ID guardado para asociar work items posteriores")
-                    else:
-                        logger.warning("⚠️ No se pudo crear el PBI en Azure DevOps")
+                    logger.warning("⚠️ No se pudo crear el PBI en Azure DevOps")
                         
             except Exception as e:
                 logger.warning(f"⚠️ Error en integración Azure DevOps: {e}")

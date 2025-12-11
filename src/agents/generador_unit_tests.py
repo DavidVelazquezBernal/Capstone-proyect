@@ -74,6 +74,9 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     # Limpiar bloques de código markdown (```typescript, ```python, etc.)
     tests_generados = re.sub(r'^```(?:typescript|python|ts|py)\s*\n?', '', tests_generados, flags=re.MULTILINE)
     tests_generados = re.sub(r'\n?```\s*$', '', tests_generados)
+    
+    # Limpiar etiquetas de lenguaje sueltas al inicio (typescript, python, ts, py)
+    tests_generados = re.sub(r'^(?:typescript|python|ts|py)\s*\n', '', tests_generados, flags=re.MULTILINE)
     tests_generados = tests_generados.strip()
     
     # Guardar tests generados
