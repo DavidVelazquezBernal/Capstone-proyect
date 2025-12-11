@@ -295,7 +295,7 @@ class Prompts:
     CRÍTICO: Selecciona la herramienta correcta según el lenguaje del código para evitar errores de ejecución.
     """
     
-    ANALIZADOR_SONARQUBE = """
+    SONARQUBE = """
     Rol:
     Analista de Calidad de Código experto en SonarQube.
 

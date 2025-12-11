@@ -9,7 +9,7 @@ from config.settings import settings
 from utils.logger import setup_logger
 from agents.product_owner import product_owner_node
 from agents.desarrollador import desarrollador_node
-from agents.analizador_sonarqube import analizador_sonarqube_node
+from agents.sonarqube import sonarqube_node
 from agents.generador_unit_tests import generador_unit_tests_node
 from agents.ejecutor_pruebas import ejecutor_pruebas_node
 from agents.stakeholder import stakeholder_node
@@ -29,7 +29,7 @@ def create_workflow() -> StateGraph:
     # 1. Añadir Nodos (Agentes)
     workflow.add_node("ProductOwner", product_owner_node)
     workflow.add_node("Desarrollador", desarrollador_node)
-    workflow.add_node("AnalizadorSonarQube", analizador_sonarqube_node)
+    workflow.add_node("SonarQube", sonarqube_node)
     workflow.add_node("GeneradorUnitTests", generador_unit_tests_node)
     workflow.add_node("EjecutorPruebas", ejecutor_pruebas_node)
     workflow.add_node("Stakeholder", stakeholder_node)
@@ -37,14 +37,14 @@ def create_workflow() -> StateGraph:
     # 2. Definir Transiciones Iniciales y Lineales
     workflow.add_edge(START, "ProductOwner")
     workflow.add_edge("ProductOwner", "Desarrollador")
-    workflow.add_edge("Desarrollador", "AnalizadorSonarQube")
+    workflow.add_edge("Desarrollador", "SonarQube")
 
     # 3. Transiciones Condicionales
 
     # A. Bucle de Calidad de Código (SonarQube: Corrección de Issues de Calidad)
     # Incluye control de límite de intentos
     workflow.add_conditional_edges(
-        "AnalizadorSonarQube",
+        "SonarQube",
         lambda x: (
             "QUALITY_PASSED" if x['sonarqube_passed']
             else ("QUALITY_LIMIT_EXCEEDED" if x['sonarqube_attempt_count'] >= x['max_sonarqube_attempts']

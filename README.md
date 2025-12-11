@@ -32,7 +32,7 @@ Capstone proyect v2/
 │   │   ├── ingeniero_requisitos.py  # Agente 1: Clarificación
 │   │   ├── product_owner.py         # Agente 2: Formalización
 │   │   ├── desarrollador.py # Agente 3: Desarrollo y corrección
-│   │   ├── analizador_sonarqube.py  # Agente 3.5: Análisis de calidad
+│   │   ├── sonarqube.py  # Agente 3.5: Análisis de calidad
 │   │   ├── generador_unit_tests.py  # Agente 3.6: Generación de tests
 │   │   ├── ejecutor_pruebas.py      # Agente 4: Ejecución de tests
 │   │   └── stakeholder.py           # Agente 5: Validación

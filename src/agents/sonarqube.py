@@ -18,17 +18,17 @@ logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
 
-def analizador_sonarqube_node(state: AgentState) -> AgentState:
+def sonarqube_node(state: AgentState) -> AgentState:
     """
-    Nodo del Analizador SonarQube.
+    Nodo de SonarQube.
     Analiza la calidad del código generado y determina si cumple los estándares.
     """
     print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
-    logger.info("ANALIZADOR SONARQUBE - INICIO")
+    logger.info("SONARQUBE - INICIO")
     logger.info("=" * 60)
 
-    log_agent_execution(logger, "Analizador SonarQube", "iniciado", {
+    log_agent_execution(logger, "SonarQube", "iniciado", {
         "requisito_id": state['attempt_count'],
         "validacion_numero": state['sonarqube_attempt_count'] + 1,
         "intento_sonarqube": state['sonarqube_attempt_count']
@@ -115,7 +115,7 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
                 logger.debug(f"Stack trace: {e}", exc_info=True)
         # === FIN: Comentario en Azure DevOps ===
         
-        log_agent_execution(logger, "Analizador SonarQube", "completado", {
+        log_agent_execution(logger, "SonarQube", "completado", {
             "resultado": "aprobado",
             "reporte": nombre_reporte
         })
@@ -142,7 +142,7 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
         
         logger.info("🤖 Generando instrucciones de corrección con LLM...")
         start_time = time.time()
-        instrucciones_correccion = call_gemini(Prompts.ANALIZADOR_SONARQUBE, contexto_llm)
+        instrucciones_correccion = call_gemini(Prompts.SONARQUBE, contexto_llm)
         duration = time.time() - start_time
         
         log_llm_call(logger, "analisis_sonarqube", duration=duration)
@@ -179,7 +179,7 @@ def analizador_sonarqube_node(state: AgentState) -> AgentState:
                 logger.debug(f"Stack trace: {e}", exc_info=True)
         # === FIN: Comentario en Azure DevOps ===
         
-        log_agent_execution(logger, "Analizador SonarQube", "completado", {
+        log_agent_execution(logger, "SonarQube", "completado", {
             "resultado": "rechazado",
             "intento": f"{state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}",
             "reporte": nombre_reporte,
