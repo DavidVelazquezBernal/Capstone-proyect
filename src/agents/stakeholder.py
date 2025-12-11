@@ -23,16 +23,16 @@ def stakeholder_node(state: AgentState) -> AgentState:
     """
     print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
-    logger.info("🙋‍♂️ STAKEHOLDER - INICIO")
+    logger.info("STAKEHOLDER - INICIO")
     logger.info("=" * 60)
 
-    log_agent_execution(logger, "✅ Stakeholder", "iniciado", {
+    log_agent_execution(logger, "Stakeholder", "iniciado", {
         "intento": state['attempt_count'],
         "max_intentos": state['max_attempts']
     })
 
-    # Comprobar si se excedió el límite de intentos
-    if state['attempt_count'] >= state['max_attempts']:
+    # Comprobar si se excedió el límite de intentos (después de la última iteración)
+    if state['attempt_count'] > state['max_attempts']:
         state['validado'] = False
         logger.error(f"❌ LÍMITE DE INTENTOS EXCEDIDO ({state['max_attempts']}). PROYECTO FALLIDO.")
         
@@ -57,7 +57,7 @@ def stakeholder_node(state: AgentState) -> AgentState:
     # Lógica de transición de validación
     if "VALIDADO" in respuesta_llm:
         state['validado'] = True
-        logger.info("✅ Resultado: VALIDADO. Proyecto Terminado.")
+        logger.info("Resultado: VALIDADO. Proyecto Terminado.")
         
         # Guardar validación exitosa
         guardar_fichero_texto(

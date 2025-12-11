@@ -12,6 +12,9 @@ import re
 import json
 from typing import Dict, List, Any, Optional
 from config.settings import settings
+from utils.logger import setup_logger
+
+logger = setup_logger(__name__, level=settings.get_log_level())
 
 
 def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str, Any]:
@@ -82,7 +85,7 @@ def _analizar_archivo_sonarqube(file_path: str) -> List[Dict[str, Any]]:
     # en el contexto del agente de Copilot, no en ejecución Python directa.
     # Por seguridad, mantenemos el análisis estático como método principal.
     
-    print(f"   📊 Analizando con SonarLint (análisis estático básico)...")
+    logger.info("📊 Analizando con SonarLint (análisis estático básico)...")
     
     try:
         # Detectar lenguaje según extensión del archivo
@@ -95,7 +98,7 @@ def _analizar_archivo_sonarqube(file_path: str) -> List[Dict[str, Any]]:
             issues = _analisis_estatico_python(file_path)
         
     except Exception as e:
-        print(f"⚠️ Error al analizar con SonarQube: {e}")
+        logger.error(f"⚠️ Error al analizar con SonarQube: {e}")
         issues.append({
             "rule": "ANALYSIS_ERROR",
             "severity": "INFO",
@@ -318,7 +321,7 @@ def _analisis_estatico_python(file_path: str) -> List[Dict[str, Any]]:
                 })
     
     except Exception as e:
-        print(f"⚠️ Error en análisis Python: {e}")
+        logger.error(f"⚠️ Error en análisis Python: {e}")
     
     return issues
 
@@ -556,7 +559,7 @@ def _analisis_estatico_typescript(file_path: str) -> List[Dict[str, Any]]:
                 })
     
     except Exception as e:
-        print(f"⚠️ Error en análisis TypeScript: {e}")
+        logger.error(f"⚠️ Error en análisis TypeScript: {e}")
     
     return issues
 

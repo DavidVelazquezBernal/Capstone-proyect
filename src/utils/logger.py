@@ -50,7 +50,17 @@ class ColoredFormatter(logging.Formatter):
 
 
 class AgentFormatter(logging.Formatter):
-    """Formatter especializado para logs de agentes con emojis"""
+    """Formatter especializado para logs de agentes con emojis y colores"""
+    
+    # Códigos ANSI para colores
+    COLORS = {
+        'DEBUG': '\033[36m',      # Cyan
+        'INFO': '\033[32m',       # Verde
+        'WARNING': '\033[33m',    # Amarillo
+        'ERROR': '\033[31m',      # Rojo
+        'CRITICAL': '\033[35m',   # Magenta
+        'RESET': '\033[0m'
+    }
     
     AGENT_EMOJIS = {
         'product_owner': '💼',
@@ -64,6 +74,11 @@ class AgentFormatter(logging.Formatter):
     }
     
     def format(self, record):
+        # Añadir color al nivel de log si es un terminal interactivo
+        if sys.stdout.isatty():
+            color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
+            record.levelname = f"{color}{record.levelname}{self.COLORS['RESET']}"
+        
         # Detectar el módulo del agente
         module_name = record.name.split('.')[-1]
         emoji = self.AGENT_EMOJIS.get(module_name, '📝')

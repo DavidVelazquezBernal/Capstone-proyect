@@ -143,7 +143,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
                 total = stats.get('total', 0)
                 passed = stats.get('passed', 0)
                 failed = stats.get('failed', 0)
-                logger.info(f"✅ Tests PASSED - Total: {total}, Pasados: {passed}, Fallidos: {failed}")
+                logger.info(f"Tests PASSED - Total: {total}, Pasados: {passed}, Fallidos: {failed}")
                 
                 log_agent_execution(
                     logger,
@@ -152,7 +152,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
                     {"total": total, "passed": passed, "failed": failed}
                 )
             else:
-                logger.info("✅ Tests PASSED")
+                logger.info("Tests PASSED")
             
             # Guardar resultado exitoso con estadísticas legibles
             clean_output = _limpiar_ansi(result['output'])
@@ -265,7 +265,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
             directorio=settings.OUTPUT_DIR
         )
     
-    logger.info("🧪 EJECUTOR DE PRUEBAS - FIN")
+    logger.info("EJECUTOR DE PRUEBAS - FIN")
     logger.info("=" * 60)
     
     return state
@@ -522,7 +522,7 @@ def _mostrar_resumen_ejecucion(result: Dict[str, Any]) -> None:
     """Muestra un resumen visual de la ejecución de tests."""
     print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
-    logger.info("📋 RESUMEN DE EJECUCIÓN DE TESTS")
+    logger.info("RESUMEN DE EJECUCIÓN DE TESTS")
     logger.info("-" * 60)
     logger.info(f"Estado: {'✅ PASSED' if result['success'] else '❌ FAILED'}")
     

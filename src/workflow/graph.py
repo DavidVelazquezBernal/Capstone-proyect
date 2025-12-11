@@ -5,12 +5,16 @@ Define el flujo de trabajo entre agentes y las transiciones condicionales.
 
 from langgraph.graph import StateGraph, END, START
 from models.state import AgentState
+from config.settings import settings
+from utils.logger import setup_logger
 from agents.product_owner import product_owner_node
 from agents.desarrollador import desarrollador_node
 from agents.analizador_sonarqube import analizador_sonarqube_node
 from agents.generador_unit_tests import generador_unit_tests_node
 from agents.ejecutor_pruebas import ejecutor_pruebas_node
 from agents.stakeholder import stakeholder_node
+
+logger = setup_logger(__name__, level=settings.get_log_level())
 
 
 def create_workflow() -> StateGraph:
@@ -115,9 +119,9 @@ def visualize_graph(app):
         with open(output_path, "wb") as f:
             f.write(png_data)
         
-        print(f"✅ Grafo guardado en: {output_path}")
-        print(f"   Abre el archivo para visualizar el flujo de trabajo.")
+        logger.info(f"✅ Grafo guardado en: {output_path}")
+        logger.info(f"   Abre el archivo para visualizar el flujo de trabajo.")
     except Exception as e:
-        print(f"⚠️ No se pudo guardar el grafo como imagen: {e}")
+        logger.warning(f"⚠️ No se pudo guardar el grafo como imagen: {e}")
     # except Exception as e:
     #     print(f"⚠️ No se pudo visualizar el grafo: {e}")

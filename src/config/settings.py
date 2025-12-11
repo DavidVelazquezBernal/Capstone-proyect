@@ -41,6 +41,9 @@ class Settings:
     TEMPERATURE: float = 0.1
     MAX_OUTPUT_TOKENS: int = 4000
     
+    # Modo Testing/Mock (evita llamadas reales al LLM)
+    LLM_MOCK_MODE: bool = os.getenv("LLM_MOCK_MODE", "false").lower() == "true"
+    
     # Configuración de reintentos para errores 503
     MAX_API_RETRIES: int = 3  # Número de reintentos si el servicio está sobrecargado
     RETRY_BASE_DELAY: int = 2  # Segundos base para backoff exponencial (2, 4, 8...)
@@ -65,6 +68,11 @@ class Settings:
     @classmethod
     def validate(cls) -> bool:
         """Valida que las configuraciones críticas estén presentes"""
+        # En modo mock, no se requiere API key
+        if cls.LLM_MOCK_MODE:
+            print("🧪 INFO: LLM_MOCK_MODE activado - usando respuestas mockeadas")
+            return True
+            
         if not cls.GEMINI_API_KEY:
             print("⚠️ WARNING: GEMINI_API_KEY no está configurada")
             return False
