@@ -20,6 +20,7 @@ def stakeholder_node(state: AgentState) -> AgentState:
     Nodo del Stakeholder.
     Valida si el código cumple con la intención de negocio.
     """
+    logger.info("")
     logger.info("=" * 60)
     logger.info("🙋‍♂️ STAKEHOLDER - INICIO")
     logger.info("=" * 60)
@@ -130,6 +131,7 @@ def _adjuntar_codigo_final_azure_devops(state: AgentState) -> None:
         pbi_id = state['azure_pbi_id']
         task_id = state['azure_implementation_task_id']
         
+        logger.info("")
         logger.info("=" * 60)
         logger.info("📎 ADJUNTANDO CÓDIGO FINAL A AZURE DEVOPS")
         logger.info("-" * 60)

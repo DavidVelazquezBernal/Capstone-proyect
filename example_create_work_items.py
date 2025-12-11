@@ -66,7 +66,7 @@ def example_create_related_work_items():
         </ul>
         """,
         parent_id=parent_pbi_id,
-        remaining_work=4.0,  # 4 horas estimadas
+        remaining_work=5,  # Fibonacci: 5 horas estimadas
         tags=["AI-Generated", "Implementation", "TypeScript"]
     )
     
@@ -94,7 +94,7 @@ def example_create_related_work_items():
         </ul>
         """,
         parent_id=parent_pbi_id,
-        remaining_work=2.0,  # 2 horas estimadas
+        remaining_work=3,  # Fibonacci: 3 horas estimadas
         tags=["AI-Generated", "Testing", "Unit-Tests"]
     )
     

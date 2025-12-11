@@ -24,8 +24,9 @@ def product_owner_node(state: AgentState) -> AgentState:
     Procesa el input del usuario y/o feedback del stakeholder, genera especificación
     formal JSON validada, y crea PBI en Azure DevOps.
     """
+    logger.info("")
     logger.info("=" * 60)
-    logger.info("📋 PRODUCT OWNER - INICIO")
+    logger.info("PRODUCT OWNER - INICIO")
     logger.info("=" * 60)
     
     # Log del contexto de entrada
@@ -114,15 +115,40 @@ Feedback del Stakeholder (si aplica): {state['feedback_stakeholder'] if state['f
                     </ul>
                     """
                     
-                    # Crear PBI en Azure DevOps
-                    pbi = azure_client.create_pbi(
-                        title=f"[AI-Generated] {req_data.objetivo_funcional[:80]}",
-                        description=description,
-                        acceptance_criteria=acceptance_criteria,
-                        story_points=story_points,
-                        tags=["AI-Generated", "Multiagente", req_data.lenguaje_version.split()[0]],
-                        priority=2  # Media por defecto
+                    # === VERIFICAR SI YA EXISTE UN PBI SIMILAR ===
+                    pbi_title = f"[AI-Generated] {req_data.objetivo_funcional[:80]}"
+                    logger.info(f"🔍 Verificando si existe PBI con título similar...")
+                    
+                    existing_pbis = azure_client.search_work_items(
+                        title_contains=req_data.objetivo_funcional[:50],
+                        work_item_type="Product Backlog Item",
+                        tags=["AI-Generated"],
+                        max_results=5
                     )
+                    
+                    pbi = None
+                    if existing_pbis:
+                        # Verificar si alguno tiene título muy similar (mismo objetivo funcional)
+                        for existing_pbi in existing_pbis:
+                            existing_title = existing_pbi['fields'].get('System.Title', '')
+                            if req_data.objetivo_funcional[:50] in existing_title:
+                                logger.warning(f"⚠️ Ya existe un PBI similar: #{existing_pbi['id']} - {existing_title}")
+                                logger.info(f"🔗 {existing_pbi['_links']['html']['href']}")
+                                logger.info(f"♻️ Reutilizando PBI existente en lugar de crear duplicado")
+                                pbi = existing_pbi
+                                break
+                    
+                    # Si no existe, crear uno nuevo
+                    if not pbi:
+                        logger.info("✨ No se encontró PBI existente, creando nuevo...")
+                        pbi = azure_client.create_pbi(
+                            title=pbi_title,
+                            description=description,
+                            acceptance_criteria=acceptance_criteria,
+                            story_points=story_points,
+                            tags=["AI-Generated", "Multiagente", req_data.lenguaje_version.split()[0]],
+                            priority=2  # Media por defecto
+                        )
                     
                     if pbi:
                         # Crear metadatos de Azure DevOps
@@ -191,7 +217,7 @@ Feedback del Stakeholder (si aplica): {state['feedback_stakeholder'] if state['f
         )
         logger.error("Fallo de parsing en Requirements Manager")
 
-    logger.info("📋 REQUIREMENTS MANAGER - FIN")
+    logger.info("REQUIREMENTS MANAGER - FIN")
     logger.info("=" * 60)
     
     return state

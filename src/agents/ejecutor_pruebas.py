@@ -35,8 +35,9 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
     3. Ejecutar tests con el framework apropiado (vitest/pytest)
     4. Parsear resultados y actualizar estado
     """
+    logger.info("")
     logger.info("=" * 60)
-    logger.info("🧪 EJECUTOR DE PRUEBAS - INICIO")
+    logger.info("EJECUTOR DE PRUEBAS - INICIO")
     logger.info("=" * 60)
     
     # Detectar lenguaje
@@ -461,6 +462,7 @@ def _parsear_resultados_pytest(output: str) -> Dict[str, int]:
 
 def _mostrar_resumen_ejecucion(result: Dict[str, Any]) -> None:
     """Muestra un resumen visual de la ejecución de tests."""
+    logger.info("")
     logger.info("=" * 60)
     logger.info("📋 RESUMEN DE EJECUCIÓN DE TESTS")
     logger.info("-" * 60)
@@ -523,6 +525,7 @@ def _adjuntar_tests_azure_devops(
         pbi_id = state['azure_pbi_id']
         task_id = state['azure_testing_task_id']
         
+        logger.info("")
         logger.info("=" * 60)
         logger.info("📎 ADJUNTANDO TESTS UNITARIOS A AZURE DEVOPS")
         logger.info("-" * 60)

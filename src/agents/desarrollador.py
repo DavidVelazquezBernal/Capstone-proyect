@@ -12,7 +12,7 @@ from config.prompts import Prompts
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
-from tools.azure_devops_integration import AzureDevOpsClient
+from tools.azure_devops_integration import AzureDevOpsClient, estimate_effort_hours
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
 
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
@@ -24,6 +24,7 @@ def desarrollador_node(state: AgentState) -> AgentState:
     Genera código que satisface los requisitos formales o corrige errores.
     Puede corregir errores de ejecución (traceback) o issues de calidad (sonarqube_issues).
     """
+    logger.info("")
     logger.info("=" * 60)
     logger.info("💻 DESARROLLADOR - INICIO")
     logger.info("=" * 60)
@@ -87,115 +88,148 @@ def desarrollador_node(state: AgentState) -> AgentState:
         
         try:
             azure_client = AzureDevOpsClient()
+            pbi_id = state['azure_pbi_id']
             
-            # Parsear requisitos formales para obtener detalles
-            try:
-                requisitos = json.loads(state['requisitos_formales'])
-                objetivo = requisitos.get('objetivo_funcional', 'Implementar funcionalidad')
-                nombre_funcion = requisitos.get('nombre_funcion', 'función')
-                lenguaje_req = requisitos.get('lenguaje_version', lenguaje)
-            except:
-                objetivo = "Implementar funcionalidad según requisitos"
-                nombre_funcion = "función/clase"
-                lenguaje_req = lenguaje
+            # === VERIFICAR SI YA EXISTEN TASKS PARA ESTE PBI ===
+            logger.info(f"🔍 Verificando tasks existentes para el PBI #{pbi_id}...")
+            existing_children = azure_client.get_child_work_items(pbi_id)
             
-            # TASK 1: Implementación de código
-            task_implementation = azure_client.create_task(
-                title=f"[AI-Generated] Implementar {nombre_funcion}",
-                description=f"""
-                <h3>Objetivo</h3>
-                <p>{objetivo}</p>
-                
-                <h3>Especificaciones Técnicas</h3>
-                <ul>
-                    <li><strong>Lenguaje:</strong> {lenguaje_req}</li>
-                    <li><strong>Función/Clase:</strong> <code>{nombre_funcion}</code></li>
-                    <li><strong>Archivo generado:</strong> <code>{nombre_archivo}</code></li>
-                </ul>
-                
-                <h3>Tareas</h3>
-                <ul>
-                    <li>✅ Código generado automáticamente por IA</li>
-                    <li>⏳ Revisar implementación</li>
-                    <li>⏳ Validar lógica de negocio</li>
-                    <li>⏳ Verificar manejo de errores</li>
-                </ul>
-                
-                <h3>Entregables</h3>
-                <ul>
-                    <li>Código fuente implementado y revisado</li>
-                    <li>Documentación inline (comentarios)</li>
-                </ul>
-                
-                <hr/>
-                <p><em>🤖 Task creada automáticamente por el sistema multiagente</em></p>
-                """,
-                parent_id=state['azure_pbi_id'],
-                remaining_work=2.0,  # 2 horas estimadas para revisión
-                tags=["AI-Generated", "Implementation", lenguaje, "Auto-Created"]
-            )
+            # Filtrar por tipo Task y tag AI-Generated
+            existing_tasks = [
+                child for child in existing_children 
+                if child['fields'].get('System.WorkItemType') == 'Task' and
+                   'AI-Generated' in child['fields'].get('System.Tags', '')
+            ]
             
-            if task_implementation:
-                logger.info(f"✅ Task de Implementación creada: #{task_implementation['id']}")
-                logger.info(f"   📋 {task_implementation['fields']['System.Title']}")
-                # Guardar ID en el estado
-                state['azure_implementation_task_id'] = task_implementation['id']
-            
-            # TASK 2: Generación de Unit Tests
-            task_testing = azure_client.create_task(
-                title=f"[AI-Generated] Crear unit tests para {nombre_funcion}",
-                description=f"""
-                <h3>Objetivo</h3>
-                <p>Crear suite completa de unit tests para validar la implementación de {nombre_funcion}</p>
+            if existing_tasks:
+                logger.warning(f"⚠️ Ya existen {len(existing_tasks)} Task(s) AI-Generated asociadas al PBI #{pbi_id}")
+                for task in existing_tasks:
+                    task_title = task['fields'].get('System.Title', 'Sin título')
+                    logger.info(f"   📋 Task #{task['id']}: {task_title}")
                 
-                <h3>Especificaciones de Testing</h3>
-                <ul>
-                    <li><strong>Framework:</strong> {"vitest" if lenguaje.lower() == "typescript" else "pytest"}</li>
-                    <li><strong>Cobertura objetivo:</strong> &gt;80%</li>
-                    <li><strong>Código a testear:</strong> <code>{nombre_archivo}</code></li>
-                </ul>
+                logger.info(f"♻️ Reutilizando Tasks existentes en lugar de crear duplicados")
                 
-                <h3>Casos de Prueba Requeridos</h3>
-                <ul>
-                    <li>⏳ Tests para flujo normal (happy path)</li>
-                    <li>⏳ Tests para casos límite (edge cases)</li>
-                    <li>⏳ Tests para manejo de errores</li>
-                    <li>⏳ Tests para validación de entrada</li>
-                    <li>⏳ Tests para validación de salida</li>
-                </ul>
+                # Guardar IDs de tasks existentes en el estado
+                for task in existing_tasks:
+                    task_title = task['fields'].get('System.Title', '')
+                    if 'Implementar' in task_title or 'Implementation' in task_title:
+                        state['azure_implementation_task_id'] = task['id']
+                        logger.info(f"   ✅ Task de Implementación reutilizada: #{task['id']}")
+                    elif 'test' in task_title.lower():
+                        state['azure_testing_task_id'] = task['id']
+                        logger.info(f"   ✅ Task de Testing reutilizada: #{task['id']}")
+            else:
+                # No existen tasks, crear nuevas
+                logger.info("✨ No se encontraron Tasks existentes, creando nuevas...")
                 
-                <h3>Criterios de Aceptación</h3>
-                <ul>
-                    <li>Todos los tests deben pasar (green)</li>
-                    <li>Cobertura de código &gt;80%</li>
-                    <li>No hay warnings o deprecations</li>
-                    <li>Tests ejecutables con un solo comando</li>
-                </ul>
+                # Parsear requisitos formales para obtener detalles
+                try:
+                    requisitos = json.loads(state['requisitos_formales'])
+                    objetivo = requisitos.get('objetivo_funcional', 'Implementar funcionalidad')
+                    nombre_funcion = requisitos.get('nombre_funcion', 'función')
+                    lenguaje_req = requisitos.get('lenguaje_version', lenguaje)
+                except:
+                    objetivo = "Implementar funcionalidad según requisitos"
+                    nombre_funcion = "función/clase"
+                    lenguaje_req = lenguaje
                 
-                <h3>Entregables</h3>
-                <ul>
-                    <li>Archivo de tests unitarios</li>
-                    <li>Reporte de cobertura</li>
-                    <li>Documentación de ejecución</li>
-                </ul>
+                # TASK 1: Implementación de código
+                task_implementation = azure_client.create_task(
+                    title=f"[AI-Generated] Implementar {nombre_funcion}",
+                    description=f"""
+                    <h3>Objetivo</h3>
+                    <p>{objetivo}</p>
+                    
+                    <h3>Especificaciones Técnicas</h3>
+                    <ul>
+                        <li><strong>Lenguaje:</strong> {lenguaje_req}</li>
+                        <li><strong>Función/Clase:</strong> <code>{nombre_funcion}</code></li>
+                        <li><strong>Archivo generado:</strong> <code>{nombre_archivo}</code></li>
+                    </ul>
+                    
+                    <h3>Tareas</h3>
+                    <ul>
+                        <li>✅ Código generado automáticamente por IA</li>
+                        <li>⏳ Revisar implementación</li>
+                        <li>⏳ Validar lógica de negocio</li>
+                        <li>⏳ Verificar manejo de errores</li>
+                    </ul>
+                    
+                    <h3>Entregables</h3>
+                    <ul>
+                        <li>Código fuente implementado y revisado</li>
+                        <li>Documentación inline (comentarios)</li>
+                    </ul>
+                    
+                    <hr/>
+                    <p><em>🤖 Task creada automáticamente por el sistema multiagente</em></p>
+                    """,
+                    parent_id=pbi_id,
+                    remaining_work=estimate_effort_hours("implementation"),
+                    tags=["AI-Generated", "Implementation", lenguaje, "Auto-Created"]
+                )
                 
-                <hr/>
-                <p><em>🤖 Task creada automáticamente por el sistema multiagente</em></p>
-                <p><em>📊 Los tests serán generados automáticamente en el siguiente paso del workflow</em></p>
-                """,
-                parent_id=state['azure_pbi_id'],
-                remaining_work=1.5,  # 1.5 horas estimadas
-                tags=["AI-Generated", "Testing", "Unit-Tests", lenguaje, "Auto-Created"]
-            )
-            
-            if task_testing:
-                logger.info(f"✅ Task de Testing creada: #{task_testing['id']}")
-                logger.info(f"   🧪 {task_testing['fields']['System.Title']}")
-                # Guardar ID en el estado
-                state['azure_testing_task_id'] = task_testing['id']
-            
-            if task_implementation and task_testing:
-                logger.info(f"🎯 2 Tasks creadas y asociadas al PBI #{state['azure_pbi_id']}")
+                if task_implementation:
+                    logger.info(f"✅ Task de Implementación creada: #{task_implementation['id']}")
+                    logger.info(f"   📋 {task_implementation['fields']['System.Title']}")
+                    # Guardar ID en el estado
+                    state['azure_implementation_task_id'] = task_implementation['id']
+                
+                # TASK 2: Generación de Unit Tests
+                task_testing = azure_client.create_task(
+                    title=f"[AI-Generated] Crear unit tests para {nombre_funcion}",
+                    description=f"""
+                    <h3>Objetivo</h3>
+                    <p>Crear suite completa de unit tests para validar la implementación de {nombre_funcion}</p>
+                    
+                    <h3>Especificaciones de Testing</h3>
+                    <ul>
+                        <li><strong>Framework:</strong> {"vitest" if lenguaje.lower() == "typescript" else "pytest"}</li>
+                        <li><strong>Cobertura objetivo:</strong> &gt;80%</li>
+                        <li><strong>Código a testear:</strong> <code>{nombre_archivo}</code></li>
+                    </ul>
+                    
+                    <h3>Casos de Prueba Requeridos</h3>
+                    <ul>
+                        <li>⏳ Tests para flujo normal (happy path)</li>
+                        <li>⏳ Tests para casos límite (edge cases)</li>
+                        <li>⏳ Tests para manejo de errores</li>
+                        <li>⏳ Tests para validación de entrada</li>
+                        <li>⏳ Tests para validación de salida</li>
+                    </ul>
+                    
+                    <h3>Criterios de Aceptación</h3>
+                    <ul>
+                        <li>Todos los tests deben pasar (green)</li>
+                        <li>Cobertura de código &gt;80%</li>
+                        <li>No hay warnings o deprecations</li>
+                        <li>Tests ejecutables con un solo comando</li>
+                    </ul>
+                    
+                    <h3>Entregables</h3>
+                    <ul>
+                        <li>Archivo de tests unitarios</li>
+                        <li>Reporte de cobertura</li>
+                        <li>Documentación de ejecución</li>
+                    </ul>
+                    
+                    <hr/>
+                    <p><em>🤖 Task creada automáticamente por el sistema multiagente</em></p>
+                    <p><em>📊 Los tests serán generados automáticamente en el siguiente paso del workflow</em></p>
+                    """,
+                    parent_id=pbi_id,
+                    remaining_work=estimate_effort_hours("testing"),
+                    tags=["AI-Generated", "Testing", "Unit-Tests", lenguaje, "Auto-Created"]
+                )
+                
+                if task_testing:
+                    logger.info(f"✅ Task de Testing creada: #{task_testing['id']}")
+                    logger.info(f"   🧪 {task_testing['fields']['System.Title']}")
+                    # Guardar ID en el estado
+                    state['azure_testing_task_id'] = task_testing['id']
+                
+                if task_implementation and task_testing:
+                    logger.info(f"🎯 2 Tasks creadas y asociadas al PBI #{pbi_id}")
             
         except Exception as e:
             logger.warning(f"⚠️ No se pudieron crear Tasks en Azure DevOps: {e}")

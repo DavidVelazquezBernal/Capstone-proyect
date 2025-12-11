@@ -66,7 +66,7 @@ def main():
         title="[TEST] Implementar función de prueba",
         description="<p>Tarea de prueba para adjuntar código</p>",
         parent_id=pbi_id,
-        remaining_work=1.0,
+        remaining_work=5,  # Fibonacci: 5 horas
         tags=["Test", "Implementation"]
     )
     
@@ -82,7 +82,7 @@ def main():
         title="[TEST] Crear tests unitarios de prueba",
         description="<p>Tarea de prueba para adjuntar tests</p>",
         parent_id=pbi_id,
-        remaining_work=1.0,
+        remaining_work=3,  # Fibonacci: 3 horas
         tags=["Test", "Testing"]
     )
     

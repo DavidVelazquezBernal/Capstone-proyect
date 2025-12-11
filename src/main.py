@@ -82,6 +82,7 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         "azure_testing_task_id": None
     }
 
+    logger.info("")
     logger.info("=" * 55)
     logger.info("INICIO DEL FLUJO MULTIAGENTE DE DESARROLLO (LANGGRAPH)")
     logger.info("=" * 55)
@@ -112,6 +113,7 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
     # El estado final es el estado acumulado después de que el stream ha terminado
     final_state = current_final_state
 
+    logger.info("")
     logger.info("=" * 55)
     logger.info("ESTADO FINAL DEL PROYECTO")
     logger.info("=" * 55)

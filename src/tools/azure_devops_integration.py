@@ -288,6 +288,136 @@ class AzureDevOpsClient:
             logger.error(f"❌ Excepción al obtener Work Item: {e}")
             return None
     
+    def search_work_items(
+        self,
+        title_contains: str,
+        work_item_type: str = "Product Backlog Item",
+        tags: Optional[List[str]] = None,
+        max_results: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca work items por título y tipo, opcionalmente filtrando por tags.
+        
+        Args:
+            title_contains: Texto que debe contener el título
+            work_item_type: Tipo de work item ("Product Backlog Item", "Task", "Bug")
+            tags: Lista de tags para filtrar (opcional)
+            max_results: Número máximo de resultados
+        
+        Returns:
+            Lista de work items encontrados
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return []
+        
+        try:
+            # Construir query WIQL (Work Item Query Language)
+            wiql_query = f"""
+            SELECT [System.Id], [System.Title], [System.State], [System.Tags], [System.CreatedDate]
+            FROM WorkItems
+            WHERE [System.TeamProject] = '{self.project}'
+            AND [System.WorkItemType] = '{work_item_type}'
+            AND [System.Title] CONTAINS '{title_contains}'
+            """
+            
+            # Agregar filtro por tags si se especifica
+            if tags:
+                tags_filter = " OR ".join([f"[System.Tags] CONTAINS '{tag}'" for tag in tags])
+                wiql_query += f" AND ({tags_filter})"
+            
+            wiql_query += f" ORDER BY [System.CreatedDate] DESC"
+            
+            url = f"{self.base_url}/{self.project}/_apis/wit/wiql?api-version={self.api_version}"
+            
+            body = {"query": wiql_query}
+            response = requests.post(url, json=body, headers=self._get_headers(), timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"❌ Error en búsqueda WIQL: {response.status_code}")
+                return []
+            
+            result = response.json()
+            work_item_refs = result.get('workItems', [])
+            
+            if not work_item_refs:
+                logger.debug(f"🔍 No se encontraron work items con título '{title_contains}'")
+                return []
+            
+            # Limitar resultados
+            work_item_refs = work_item_refs[:max_results]
+            
+            # Obtener detalles de cada work item
+            work_items = []
+            for ref in work_item_refs:
+                work_item = self.get_work_item(ref['id'])
+                if work_item:
+                    work_items.append(work_item)
+            
+            logger.info(f"🔍 Encontrados {len(work_items)} work items con título '{title_contains}'")
+            return work_items
+            
+        except Exception as e:
+            logger.error(f"❌ Excepción al buscar work items: {e}")
+            return []
+    
+    def get_child_work_items(self, parent_id: int) -> List[Dict[str, Any]]:
+        """
+        Obtiene todos los work items hijos de un parent (Tasks de un PBI).
+        
+        Args:
+            parent_id: ID del work item padre
+        
+        Returns:
+            Lista de work items hijos
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return []
+        
+        try:
+            # Obtener el work item padre con sus relaciones
+            url = (
+                f"{self.base_url}/{self.project}/_apis/wit/workitems/"
+                f"{parent_id}?$expand=relations&api-version={self.api_version}"
+            )
+            
+            response = requests.get(url, headers=self._get_headers(), timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"❌ Error al obtener work item padre: {response.status_code}")
+                return []
+            
+            parent = response.json()
+            relations = parent.get('relations', [])
+            
+            # Filtrar solo relaciones de tipo hijo (Child)
+            child_ids = []
+            for relation in relations:
+                if relation.get('rel') == 'System.LinkTypes.Hierarchy-Forward':
+                    # Extraer ID de la URL
+                    child_url = relation['url']
+                    child_id = int(child_url.split('/')[-1])
+                    child_ids.append(child_id)
+            
+            if not child_ids:
+                logger.debug(f"🔍 No se encontraron work items hijos para el PBI #{parent_id}")
+                return []
+            
+            # Obtener detalles de cada hijo
+            children = []
+            for child_id in child_ids:
+                child = self.get_work_item(child_id)
+                if child:
+                    children.append(child)
+            
+            logger.info(f"🔍 Encontrados {len(children)} work items hijos del PBI #{parent_id}")
+            return children
+            
+        except Exception as e:
+            logger.error(f"❌ Excepción al obtener work items hijos: {e}")
+            return []
+    
     def add_comment(self, work_item_id: int, comment: str) -> bool:
         """
         Agrega un comentario a un Work Item.
@@ -330,7 +460,7 @@ class AzureDevOpsClient:
         description: str,
         parent_id: Optional[int] = None,
         assigned_to: Optional[str] = None,
-        remaining_work: Optional[float] = None,
+        remaining_work: Optional[int] = None,
         tags: Optional[List[str]] = None
     ) -> Optional[Dict[str, Any]]:
         """
@@ -341,7 +471,7 @@ class AzureDevOpsClient:
             description: Descripción detallada
             parent_id: ID del PBI padre (opcional)
             assigned_to: Email del asignado (opcional)
-            remaining_work: Horas de trabajo restante (opcional)
+            remaining_work: Horas de trabajo restante (entero positivo, preferiblemente de Fibonacci: 1, 2, 3, 5, 8, 13)
             tags: Lista de etiquetas (opcional)
         
         Returns:
@@ -654,12 +784,13 @@ class AzureDevOpsClient:
 def estimate_story_points(requisitos: Dict[str, Any]) -> int:
     """
     Estima story points basado en la complejidad de los requisitos.
+    Usa valores de la serie de Fibonacci: 1, 2, 3, 5, 8, 13, 21
     
     Args:
         requisitos: Diccionario con requisitos formales
     
     Returns:
-        int: Story points estimados (1, 2, 3, 5, 8, 13)
+        int: Story points estimados (valores de Fibonacci)
     """
     # Heurística simple: basado en longitud de descripción y complejidad
     objetivo = requisitos.get('objetivo_funcional', '')
@@ -668,7 +799,7 @@ def estimate_story_points(requisitos: Dict[str, Any]) -> int:
     
     total_length = len(objetivo) + len(entradas) + len(salidas)
     
-    # Escala de Fibonacci
+    # Escala de Fibonacci (valores enteros positivos)
     if total_length < 100:
         return 1
     elif total_length < 200:
@@ -679,5 +810,33 @@ def estimate_story_points(requisitos: Dict[str, Any]) -> int:
         return 5
     elif total_length < 700:
         return 8
-    else:
+    elif total_length < 1000:
         return 13
+    else:
+        return 21
+
+
+def estimate_effort_hours(task_type: str = "implementation") -> int:
+    """
+    Estima horas de esfuerzo para una tarea usando valores de Fibonacci.
+    Usa valores de la serie de Fibonacci: 1, 2, 3, 5, 8, 13
+    
+    Args:
+        task_type: Tipo de tarea ("implementation", "testing", "review", "bugfix")
+    
+    Returns:
+        int: Horas estimadas (valores enteros positivos de Fibonacci)
+    """
+    # Estimaciones estándar basadas en tipo de tarea
+    effort_map = {
+        "implementation": 5,    # Implementación estándar
+        "testing": 3,           # Creación de tests
+        "review": 2,            # Revisión de código
+        "bugfix": 2,            # Corrección de bugs
+        "research": 8,          # Investigación/spike
+        "refactor": 5,          # Refactorización
+        "documentation": 2      # Documentación
+    }
+    
+    # Retornar valor de Fibonacci según el tipo, por defecto 3
+    return effort_map.get(task_type.lower(), 3)
