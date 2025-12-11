@@ -22,13 +22,16 @@ def get_mock_response(role_prompt: str, context: str) -> str:
     
     # DESARROLLADOR - Código (debe ir PRIMERO porque su contexto también contiene "Requisitos")
     if "desarrollador" in prompt_lower or "codifica" in prompt_lower or "generar código" in prompt_lower:
-        # Detectar si es una corrección de SonarQube (segunda ejecución)
+        # Detectar si es una corrección de SonarQube
         es_correccion_sonarqube = "sonarqube" in context_lower or "instrucciones de corrección de calidad" in context_lower
+        
+        # Detectar si es una corrección de tests fallidos (traceback)
+        es_correccion_tests = "traceback" in context_lower or "error de ejecución" in context_lower
         
         # Detectar lenguaje
         if "typescript" in context_lower:
-            if es_correccion_sonarqube:
-                # Segunda versión: código corregido sin bugs
+            if es_correccion_tests:
+                # Tercera versión: código corregido después de fallos en tests
                 return (
                     "/**\n"
                     " * Suma dos números con validación de tipos y manejo de precisión.\n"
@@ -52,27 +55,61 @@ def get_mock_response(role_prompt: str, context: str) -> str:
                     "        throw new Error('Los argumentos deben ser números finitos');\n"
                     "    }\n"
                     "    \n"
-                    "    // Suma con manejo de precisión de punto flotante\n"
+                    "    // BUG CORREGIDO: Ahora suma correctamente (antes restaba)\n"
                     "    const resultado = a + b;\n"
                     "    \n"
                     "    // Redondear para evitar problemas de precisión\n"
                     "    return Math.round(resultado * 1e10) / 1e10;\n"
                     "}"
                 )
+            elif es_correccion_sonarqube:
+                # Segunda versión: código corregido de SonarQube pero con BUG LÓGICO
+                # Pasa SonarQube (sin issues de calidad) pero falla en tests (lógica incorrecta)
+                return (
+                    "/**\n"
+                    " * Suma dos números con validación de tipos y manejo de precisión.\n"
+                    " * @param a - Primer número\n"
+                    " * @param b - Segundo número\n"
+                    " * @returns La suma de a y b\n"
+                    " * @throws Error si alguno de los argumentos no es un número\n"
+                    " */\n"
+                    "export function sumar(a: number, b: number): number {\n"
+                    "    // Validación de tipos\n"
+                    "    if (typeof a !== 'number' || typeof b !== 'number') {\n"
+                    "        throw new Error('Ambos argumentos deben ser números');\n"
+                    "    }\n"
+                    "    \n"
+                    "    // Validación de NaN e Infinity\n"
+                    "    if (Number.isNaN(a) || Number.isNaN(b)) {\n"
+                    "        throw new Error('Los argumentos no pueden ser NaN');\n"
+                    "    }\n"
+                    "    \n"
+                    "    if (!Number.isFinite(a) || !Number.isFinite(b)) {\n"
+                    "        throw new Error('Los argumentos deben ser números finitos');\n"
+                    "    }\n"
+                    "    \n"
+                    "    // BUG LÓGICO: Resta en lugar de sumar (pasará SonarQube pero fallará tests)\n"
+                    "    const resultado = a - b;\n"
+                    "    \n"
+                    "    // Redondear para evitar problemas de precisión\n"
+                    "    return Math.round(resultado * 1e10) / 1e10;\n"
+                    "}"
+                )
             else:
-                # Primera versión: código con bug intencional (usa != en lugar de !==)
+                # Primera versión: código con bug de comparación Y bug lógico
+                # Tiene 2 bugs: usa != (detectado por SonarQube) y resta en lugar de sumar (detectado por tests)
                 return (
                     "export function sumar(a: number, b: number): number {\n"
                     "    if (typeof a != 'number' || typeof b != 'number') {\n"
                     "        throw new Error('Ambos argumentos deben ser números');\n"
                     "    }\n"
-                    "    // Redondear para evitar problemas de precisión de punto flotante\n"
-                    "    return Math.round((a + b) * 1e10) / 1e10;\n"
+                    "    // BUG: Resta en lugar de sumar\n"
+                    "    return Math.round((a - b) * 1e10) / 1e10;\n"
                     "}"
                 )
         else:
-            if es_correccion_sonarqube:
-                # Segunda versión: código Python corregido sin bugs
+            if es_correccion_tests:
+                # Tercera versión: código Python corregido después de tests
                 return (
                     "def sumar(a: float, b: float) -> float:\n"
                     "    \"\"\"\n"
@@ -102,16 +139,52 @@ def get_mock_response(role_prompt: str, context: str) -> str:
                     "    if math.isinf(a) or math.isinf(b):\n"
                     "        raise ValueError('Los argumentos no pueden ser infinito')\n"
                     "    \n"
+                    "    # BUG CORREGIDO: Ahora suma correctamente\n"
                     "    return round(a + b, 10)"
                 )
+            elif es_correccion_sonarqube:
+                # Segunda versión: código Python corregido de SonarQube pero con BUG LÓGICO
+                return (
+                    "def sumar(a: float, b: float) -> float:\n"
+                    "    \"\"\"\n"
+                    "    Suma dos números con validación exhaustiva y precisión de punto flotante.\n"
+                    "    \n"
+                    "    Args:\n"
+                    "        a: Primer número\n"
+                    "        b: Segundo número\n"
+                    "        \n"
+                    "    Returns:\n"
+                    "        La suma de a y b con precisión de 10 decimales\n"
+                    "        \n"
+                    "    Raises:\n"
+                    "        TypeError: Si alguno de los argumentos no es numérico\n"
+                    "        ValueError: Si alguno de los argumentos es NaN o Infinity\n"
+                    "    \"\"\"\n"
+                    "    import math\n"
+                    "    \n"
+                    "    # Validación de tipos\n"
+                    "    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):\n"
+                    "        raise TypeError('Ambos argumentos deben ser números')\n"
+                    "    \n"
+                    "    # Validación de valores especiales\n"
+                    "    if math.isnan(a) or math.isnan(b):\n"
+                    "        raise ValueError('Los argumentos no pueden ser NaN')\n"
+                    "    \n"
+                    "    if math.isinf(a) or math.isinf(b):\n"
+                    "        raise ValueError('Los argumentos no pueden ser infinito')\n"
+                    "    \n"
+                    "    # BUG LÓGICO: Resta en lugar de sumar\n"
+                    "    return round(a - b, 10)"
+                )
             else:
-                # Primera versión: código Python con posible bug (falta validación)
+                # Primera versión: código Python básico con bug lógico
                 return (
                     "def sumar(a: float, b: float) -> float:\n"
                     "    \"\"\"Suma dos números con precisión de punto flotante.\"\"\"\n"
                     "    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):\n"
                     "        raise TypeError('Ambos argumentos deben ser números')\n"
-                    "    return round(a + b, 10)"
+                    "    # BUG: Resta en lugar de sumar\n"
+                    "    return round(a - b, 10)"
                 )
     
     # PRODUCT OWNER - Requisitos formales (ahora va DESPUÉS del Desarrollador)
