@@ -33,8 +33,8 @@ Capstone proyect v2/
 │   │   ├── product_owner.py         # Agente 2: Formalización
 │   │   ├── desarrollador.py # Agente 3: Desarrollo y corrección
 │   │   ├── sonarqube.py  # Agente 3.5: Análisis de calidad
-│   │   ├── generador_unit_tests.py  # Agente 3.6: Generación de tests
-│   │   ├── ejecutor_pruebas.py      # Agente 4: Ejecución de tests
+│   │   ├── generador_uts.py         # Agente 3.6: Generación de tests
+│   │   ├── probador_uts.py          # Agente 4: Ejecución de tests
 │   │   └── stakeholder.py           # Agente 5: Validación
 │   │
 │   ├── llm/                         # Cliente LLM

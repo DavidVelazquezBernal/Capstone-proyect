@@ -66,8 +66,8 @@ class AgentFormatter(logging.Formatter):
         'product_owner': '💼',
         'desarrollador': '💻',
         'sonarqube': '🔍',
-        'generador_unit_tests': '🧪',
-        'ejecutor_pruebas': '⚡',
+        'generador_uts': '🧪',
+        'probador_uts': '⚡',
         'stakeholder': '✅',
         'workflow': '⚙️',
         'main': '🚀'

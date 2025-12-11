@@ -1,4 +1,4 @@
-"""Agente 4: Ejecutor de Pruebas
+"""Agente 4.5: Probador de UTs (Probador de Unit Tests)
 Responsable de ejecutar los tests unitarios generados (vitest/pytest).
 Valida que el código funcione correctamente según los requisitos.
 """
@@ -25,9 +25,9 @@ def _limpiar_ansi(text: str) -> str:
     return ansi_escape.sub('', text)
 
 
-def ejecutor_pruebas_node(state: AgentState) -> AgentState:
+def probador_uts_node(state: AgentState) -> AgentState:
     """
-    Nodo del Ejecutor de Pruebas.
+    Nodo del Probador de UTs (Probador de Unit Tests).
     Ejecuta directamente los tests unitarios generados por el generador_unit_tests.
     
     Estrategia:
@@ -38,7 +38,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
     """
     print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
-    logger.info("EJECUTOR DE PRUEBAS - INICIO")
+    logger.info("PROBADOR UTs - INICIO")
     logger.info("=" * 60)
     
     # === INICIO: Actualizar estado del Work Item de Testing a "In Progress" ===
@@ -77,7 +77,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
     
     log_agent_execution(
         logger,
-        "Ejecutor Pruebas",
+        "Probador UTs",
         "Preparando ejecución",
         {
             "lenguaje": lenguaje,
@@ -147,7 +147,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
                 
                 log_agent_execution(
                     logger,
-                    "Ejecutor Pruebas",
+                    "Probador UTs",
                     "Tests exitosos",
                     {"total": total, "passed": passed, "failed": failed}
                 )
@@ -206,7 +206,7 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
                 
                 log_agent_execution(
                     logger,
-                    "Ejecutor Pruebas",
+                    "Probador UTs",
                     "Tests fallidos",
                     {"total": total, "passed": passed, "failed": failed},
                     level=logging.ERROR
@@ -265,7 +265,8 @@ def ejecutor_pruebas_node(state: AgentState) -> AgentState:
             directorio=settings.OUTPUT_DIR
         )
     
-    logger.info("EJECUTOR DE PRUEBAS - FIN")
+    logger.info("=" * 60)
+    logger.info("PROBADOR UTs - FIN")
     logger.info("=" * 60)
     
     return state

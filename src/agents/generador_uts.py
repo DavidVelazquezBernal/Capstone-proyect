@@ -1,5 +1,5 @@
 """
-Agente: Generador de Unit Tests
+Agente: Generador de UTs (Generador de Unit Tests)
 Responsable de generar tests unitarios (vitest para TypeScript, pytest para Python).
 """
 
@@ -15,17 +15,17 @@ from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_fi
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
-def generador_unit_tests_node(state: AgentState) -> AgentState:
+def generador_uts_node(state: AgentState) -> AgentState:
     """
-    Nodo del Generador de Unit Tests.
+    Nodo del Generador de UTs (Unit Tests).
     Genera tests unitarios para el código generado según el lenguaje.
     """
     print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
-    logger.info("GENERADOR UNIT TESTS - INICIO")
+    logger.info("GENERADOR UTs - INICIO")
     logger.info("=" * 60)
 
-    log_agent_execution(logger, "Generador Unit Tests", "iniciado", {
+    log_agent_execution(logger, "Generador UTs", "iniciado", {
         "requisito_id": state['attempt_count']
     })
     
@@ -66,7 +66,7 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     # Llamar al LLM para generar los tests
     logger.info("🤖 Llamando a LLM para generar tests...")
     start_time = time.time()
-    tests_generados = call_gemini(Prompts.GENERADOR_UNIT_TESTS, contexto_llm)
+    tests_generados = call_gemini(Prompts.GENERADOR_UTS, contexto_llm)
     duration = time.time() - start_time
     
     log_llm_call(logger, "generacion_tests", duration=duration)
@@ -88,7 +88,7 @@ def generador_unit_tests_node(state: AgentState) -> AgentState:
     
     logger.info(f"Tests unitarios generados: {test_filename}")
     
-    log_agent_execution(logger, "Generador Unit Tests", "completado", {
+    log_agent_execution(logger, "Generador UTs", "completado", {
         "archivo_tests": test_filename,
         "archivo_codigo": codigo_filename,
         "lenguaje": lenguaje,

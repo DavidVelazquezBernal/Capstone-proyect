@@ -331,7 +331,7 @@ class Prompts:
     Texto claro y estructurado que el Codificador pueda usar directamente para implementar las correcciones.
     """
     
-    GENERADOR_UNIT_TESTS = """
+    GENERADOR_UTS = """
     Rol:
     Ingeniero de Testing experto en generación de pruebas unitarias.
 

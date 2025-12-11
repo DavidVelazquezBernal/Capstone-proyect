@@ -10,8 +10,8 @@ from utils.logger import setup_logger
 from agents.product_owner import product_owner_node
 from agents.desarrollador import desarrollador_node
 from agents.sonarqube import sonarqube_node
-from agents.generador_unit_tests import generador_unit_tests_node
-from agents.ejecutor_pruebas import ejecutor_pruebas_node
+from agents.generador_uts import generador_uts_node
+from agents.probador_uts import probador_uts_node
 from agents.stakeholder import stakeholder_node
 
 logger = setup_logger(__name__, level=settings.get_log_level())
@@ -30,8 +30,8 @@ def create_workflow() -> StateGraph:
     workflow.add_node("ProductOwner", product_owner_node)
     workflow.add_node("Desarrollador", desarrollador_node)
     workflow.add_node("SonarQube", sonarqube_node)
-    workflow.add_node("GeneradorUnitTests", generador_unit_tests_node)
-    workflow.add_node("EjecutorPruebas", ejecutor_pruebas_node)
+    workflow.add_node("Generador_UTs", generador_uts_node)
+    workflow.add_node("Probador_UTs", probador_uts_node)
     workflow.add_node("Stakeholder", stakeholder_node)
 
     # 2. Definir Transiciones Iniciales y Lineales
@@ -52,18 +52,18 @@ def create_workflow() -> StateGraph:
         ),
         {
             "QUALITY_FAILED": "Desarrollador",
-            "QUALITY_PASSED": "GeneradorUnitTests",
+            "QUALITY_PASSED": "Generador_UTs",
             "QUALITY_LIMIT_EXCEEDED": END
         }
     )
 
-    # B. Transición del Generador de Unit Tests al Ejecutor de Pruebas
-    workflow.add_edge("GeneradorUnitTests", "EjecutorPruebas")
+    # B. Transición del Generador de UTs al Probador de UTs
+    workflow.add_edge("Generador_UTs", "Probador_UTs")
 
     # C. Bucle de Depuración (Interno: Corrección de Código)
     # Incluye control de límite de intentos
     workflow.add_conditional_edges(
-        "EjecutorPruebas",
+        "Probador_UTs",
         lambda x: (
             "PASSED" if x['pruebas_superadas']
             else ("DEBUG_LIMIT_EXCEEDED" if x['debug_attempt_count'] >= x['max_debug_attempts']
