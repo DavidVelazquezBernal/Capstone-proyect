@@ -41,5 +41,14 @@ class AgentState(TypedDict):
     # Unit Tests Generation
     tests_unitarios_generados: str  # Tests unitarios generados (vitest/pytest)
 
+    # GitHub Integration
+    github_branch_name: str | None  # Nombre del branch creado
+    github_pr_number: int | None  # Número de la PR creada
+    github_pr_url: str | None  # URL de la PR
+    codigo_revisado: bool  # Si el código fue revisado
+    revision_comentario: str  # Comentario de la revisión
+    revision_puntuacion: int | None  # Puntuación de la revisión (1-10)
+    pr_aprobada: bool  # Si la PR fue aprobada
+
     # Validación
     validado: bool

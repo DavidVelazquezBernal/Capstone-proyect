@@ -9,7 +9,7 @@ import shutil
 import time
 from config.settings import settings
 from workflow.graph import create_workflow, visualize_graph
-from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
+from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension, extraer_nombre_archivo, limpiar_codigo_markdown
 from utils.logger import setup_logger, log_agent_execution
 
 logger = setup_logger(__name__, level=settings.get_log_level())
@@ -79,7 +79,15 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         "codigo_generado": "",
         "azure_pbi_id": None,
         "azure_implementation_task_id": None,
-        "azure_testing_task_id": None
+        "azure_testing_task_id": None,
+        # GitHub Integration
+        "github_branch_name": None,
+        "github_pr_number": None,
+        "github_pr_url": None,
+        "codigo_revisado": False,
+        "revision_comentario": "",
+        "revision_puntuacion": None,
+        "pr_aprobada": False
     }
 
     print()  # Línea en blanco para separación visual
@@ -151,8 +159,11 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
             final_state.get('requisitos_formales', '')
         )
         
-        codigo_limpio = re.sub(patron_limpieza, '', final_state['codigo_generado']).strip()
-        nombre_archivo = f"codigo_final{extension}"
+        codigo_limpio = limpiar_codigo_markdown(final_state['codigo_generado'])
+        
+        # Extraer nombre descriptivo del archivo desde requisitos formales
+        nombre_base = extraer_nombre_archivo(final_state.get('requisitos_formales', ''))
+        nombre_archivo = f"{nombre_base}{extension}"
         
         guardar_fichero_texto(
             nombre_archivo, 

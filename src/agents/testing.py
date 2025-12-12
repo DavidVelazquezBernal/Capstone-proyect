@@ -16,8 +16,9 @@ from config.prompts import Prompts
 from config.prompt_templates import PromptTemplates
 from config.settings import settings
 from llm.gemini_client import call_gemini
-from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
+from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension, extraer_nombre_archivo, limpiar_codigo_markdown
 from services.azure_devops_service import azure_service
+from services.github_service import github_service
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
 
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
@@ -27,6 +28,59 @@ def _limpiar_ansi(text: str) -> str:
     """Elimina códigos de escape ANSI (colores) del texto."""
     ansi_escape = re.compile(r'\x1b\[[0-9;]*[mGKHF]')
     return ansi_escape.sub('', text)
+
+
+def _validar_codigo_tests_completo(codigo: str, lenguaje: str) -> tuple[bool, str]:
+    """
+    Valida que el código de tests esté completo y no truncado.
+    
+    Args:
+        codigo: Código de tests generado
+        lenguaje: 'typescript' o 'python'
+        
+    Returns:
+        Tuple (es_valido, mensaje_error)
+    """
+    if not codigo or len(codigo) < 50:
+        return False, "Código demasiado corto"
+    
+    # Contar llaves/paréntesis para detectar código truncado
+    if lenguaje.lower() == 'typescript':
+        # TypeScript: verificar balance de llaves y paréntesis
+        llaves_abiertas = codigo.count('{')
+        llaves_cerradas = codigo.count('}')
+        parentesis_abiertos = codigo.count('(')
+        parentesis_cerrados = codigo.count(')')
+        
+        if llaves_abiertas != llaves_cerradas:
+            return False, f"Llaves desbalanceadas: {llaves_abiertas} abiertas, {llaves_cerradas} cerradas"
+        
+        if parentesis_abiertos != parentesis_cerrados:
+            return False, f"Paréntesis desbalanceados: {parentesis_abiertos} abiertos, {parentesis_cerrados} cerrados"
+        
+        # Verificar que termina con }); o similar (cierre de describe)
+        codigo_limpio = codigo.rstrip()
+        if not (codigo_limpio.endswith(');') or codigo_limpio.endswith('}') or codigo_limpio.endswith('});')):
+            return False, "Código no termina correctamente (esperado }); o })"
+        
+        # Verificar que tiene al menos un describe y un it/test
+        if 'describe(' not in codigo and 'test(' not in codigo:
+            return False, "No se encontró describe() o test() en el código"
+            
+    else:  # Python
+        # Python: verificar que tiene funciones de test
+        if 'def test_' not in codigo:
+            return False, "No se encontraron funciones test_* en el código"
+        
+        # Verificar indentación consistente (no líneas cortadas)
+        lineas = codigo.split('\n')
+        for i, linea in enumerate(lineas):
+            if linea.strip() and not linea.startswith(' ') and not linea.startswith('def ') and not linea.startswith('class ') and not linea.startswith('import ') and not linea.startswith('from ') and not linea.startswith('@') and not linea.startswith('#'):
+                # Línea que no empieza con indentación ni es declaración válida
+                if i > 5:  # Ignorar primeras líneas (imports)
+                    return False, f"Posible código truncado en línea {i+1}"
+    
+    return True, ""
 
 
 def testing_node(state: AgentState) -> AgentState:
@@ -74,7 +128,7 @@ def testing_node(state: AgentState) -> AgentState:
     lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
         state.get('requisitos_formales', '')
     )
-    codigo_limpio = re.sub(patron_limpieza, '', state['codigo_generado']).strip()
+    codigo_limpio = limpiar_codigo_markdown(state['codigo_generado'])
     
     logger.info(f"🔍 Lenguaje detectado: {lenguaje}")
     
@@ -83,12 +137,15 @@ def testing_node(state: AgentState) -> AgentState:
     sq_attempt = state['sonarqube_attempt_count']
     debug_attempt = state['debug_attempt_count']
     
+    # Extraer nombre descriptivo del archivo desde requisitos formales
+    nombre_base = extraer_nombre_archivo(state.get('requisitos_formales', ''))
+    
     if lenguaje.lower() == 'typescript':
-        codigo_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.ts"
-        test_filename = f"unit_tests_req{attempt}_sq{sq_attempt}.test.ts"
+        codigo_filename = f"{nombre_base}.ts"
+        test_filename = f"test_{nombre_base}.spec.ts"
     else:  # Python
-        codigo_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
-        test_filename = f"test_unit_req{attempt}_sq{sq_attempt}.py"
+        codigo_filename = f"{nombre_base}.py"
+        test_filename = f"test_{nombre_base}.spec.py"
     
     code_path = os.path.join(settings.OUTPUT_DIR, codigo_filename)
     test_path = os.path.join(settings.OUTPUT_DIR, test_filename)
@@ -123,6 +180,27 @@ def testing_node(state: AgentState) -> AgentState:
     tests_generados = re.sub(r'\n?```\s*$', '', tests_generados)
     tests_generados = re.sub(r'^(?:typescript|python|ts|py)\s*\n', '', tests_generados, flags=re.MULTILINE)
     tests_generados = tests_generados.strip()
+    
+    # Validar que el código de tests esté completo (no truncado)
+    codigo_valido, error_validacion = _validar_codigo_tests_completo(tests_generados, lenguaje)
+    if not codigo_valido:
+        logger.warning(f"⚠️ Código de tests posiblemente incompleto: {error_validacion}")
+        logger.info("🔄 Intentando regenerar tests con más tokens...")
+        
+        # Reintentar con instrucción de código completo
+        prompt_retry = prompt_formateado + "\n\nIMPORTANTE: Asegúrate de generar el código COMPLETO. No lo cortes. Cierra todos los bloques y funciones."
+        tests_generados = call_gemini(prompt_retry, "")
+        
+        # Limpiar de nuevo
+        tests_generados = re.sub(r'^```(?:typescript|python|ts|py)\s*\n?', '', tests_generados, flags=re.MULTILINE)
+        tests_generados = re.sub(r'\n?```\s*$', '', tests_generados)
+        tests_generados = re.sub(r'^(?:typescript|python|ts|py)\s*\n', '', tests_generados, flags=re.MULTILINE)
+        tests_generados = tests_generados.strip()
+        
+        # Validar de nuevo
+        codigo_valido2, error2 = _validar_codigo_tests_completo(tests_generados, lenguaje)
+        if not codigo_valido2:
+            logger.error(f"❌ Tests siguen incompletos después de reintento: {error2}")
     
     # Guardar tests generados
     resultado_guardado = guardar_fichero_texto(
@@ -161,7 +239,7 @@ def testing_node(state: AgentState) -> AgentState:
     # Verificar que existe el archivo de código
     if not os.path.exists(code_path):
         logger.warning(f"⚠️ No se encontró el archivo de código: {code_path}")
-        guardar_fichero_texto(codigo_filename, state['codigo_generado'], directorio=settings.OUTPUT_DIR)
+        guardar_fichero_texto(codigo_filename, codigo_limpio, directorio=settings.OUTPUT_DIR)
         logger.info("✅ Código guardado desde el estado")
     
     logger.info(f"📄 Archivo de tests: {test_filename}")
@@ -222,22 +300,92 @@ def testing_node(state: AgentState) -> AgentState:
                 try:
                     total = stats.get('total', 0) if isinstance(stats, dict) else 0
                     
-                    azure_service.attach_tests_to_work_items(
+                    azure_service.attach_tests_and_add_success_comment(
                         state=state,
                         test_file_path=test_path,
-                        attempt=attempt,
-                        sq_attempt=sq_attempt
-                    )
-                    
-                    azure_service.add_test_success_comment(
-                        task_id=state['azure_testing_task_id'],
-                        total_tests=total,
-                        output_filename=nombre_archivo
+                        total_tests=total
                     )
                     
                 except Exception as e:
                     logger.warning(f"⚠️ Error en operaciones de Azure DevOps: {e}")
             # === FIN: Adjuntar tests a Azure DevOps ===
+            
+            # === GITHUB: Crear branch, commit y PR cuando tests pasen ===
+            if settings.GITHUB_ENABLED:
+                try:
+                    from datetime import datetime
+                    
+                    # Generar nombre del branch
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    branch_name = f"feature/ai-generated-{nombre_base}-{timestamp}"
+                    
+                    logger.info("=" * 60)
+                    logger.info("🐙 GITHUB - Creando branch y PR")
+                    logger.info("-" * 60)
+                    
+                    # Preparar archivos para commit
+                    files_to_commit = {
+                        f"src/{codigo_filename}": codigo_limpio,
+                        f"tests/{test_filename}": tests_generados
+                    }
+                    
+                    # Crear branch y commit
+                    commit_message = f"feat: Add {nombre_base} implementation and tests\n\nGenerated by AI Development Agent\n- Implementation: {codigo_filename}\n- Tests: {test_filename} ({stats.get('total', 0)} tests passed)"
+                    
+                    success_commit, commit_sha = github_service.create_branch_and_commit(
+                        branch_name=branch_name,
+                        files=files_to_commit,
+                        commit_message=commit_message
+                    )
+                    
+                    if success_commit:
+                        state['github_branch_name'] = branch_name
+                        logger.info(f"✅ Branch '{branch_name}' creado con commit {commit_sha[:7]}")
+                        
+                        # Crear Pull Request
+                        pr_title = f"[AI-Generated] {nombre_base.replace('_', ' ').title()}"
+                        pr_body = f"""## 🤖 Pull Request Generada Automáticamente
+
+### 📋 Descripción
+Este código fue generado automáticamente por el sistema de desarrollo multiagente.
+
+### 📁 Archivos incluidos
+- `src/{codigo_filename}` - Implementación principal
+- `tests/{test_filename}` - Tests unitarios
+
+### ✅ Estado de Tests
+- **Total:** {stats.get('total', 0)}
+- **Pasados:** {stats.get('passed', 0)}
+- **Fallidos:** {stats.get('failed', 0)}
+
+### 🔍 Revisión
+Esta PR será revisada automáticamente por el agente RevisorCodigo.
+
+---
+*Generado por AI Development Agent*
+"""
+                        
+                        success_pr, pr_number, pr_url = github_service.create_pull_request(
+                            branch_name=branch_name,
+                            title=pr_title,
+                            body=pr_body
+                        )
+                        
+                        if success_pr:
+                            state['github_pr_number'] = pr_number
+                            state['github_pr_url'] = pr_url
+                            logger.info(f"✅ PR #{pr_number} creada: {pr_url}")
+                        else:
+                            logger.warning("⚠️ No se pudo crear la PR")
+                    else:
+                        logger.warning("⚠️ No se pudo crear el branch y commit")
+                    
+                    logger.info("=" * 60)
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Error en operaciones de GitHub: {e}")
+                    logger.debug(f"Stack trace: {e}", exc_info=True)
+            # === FIN: GitHub branch y PR ===
         else:
             # Tests fallaron - incrementar contador de debug
             state['debug_attempt_count'] += 1
@@ -289,7 +437,7 @@ def testing_node(state: AgentState) -> AgentState:
                         total=total,
                         passed=passed,
                         failed=failed,
-                        report_filename=nombre_archivo
+                        report_file=nombre_archivo
                     )
                     logger.info(f"📝 Comentario de fallo agregado a Task #{state['azure_testing_task_id']}")
                 except Exception as e:

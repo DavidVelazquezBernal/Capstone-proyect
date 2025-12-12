@@ -10,7 +10,7 @@ from config.prompts import Prompts
 from config.prompt_templates import PromptTemplates
 from config.settings import settings
 from llm.gemini_client import call_gemini
-from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
+from tools.file_utils import detectar_lenguaje_y_extension, limpiar_codigo_markdown, guardar_fichero_texto
 from tools.sonarqube_mcp import analizar_codigo_con_sonarqube, formatear_reporte_sonarqube, es_codigo_aceptable
 from services.azure_devops_service import azure_service
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
@@ -61,7 +61,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
     lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
         state.get('requisitos_formales', '')
     )
-    codigo_limpio = re.sub(patron_limpieza, '', state['codigo_generado']).strip()
+    codigo_limpio = limpiar_codigo_markdown(state['codigo_generado'])
     
     # Generar nombre de archivo para análisis
     # Usar el contador actual para esta validación (antes de incrementar)
@@ -109,7 +109,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
         if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
             try:
                 task_id = state['azure_implementation_task_id']
-                azure_service.add_sonarqube_approved_comment(task_id, nombre_reporte)
+                azure_service.add_sonarqube_approval_comment(task_id, nombre_reporte)
                 logger.info(f"📝 Comentario de aprobación agregado a Task #{task_id}")
             except Exception as e:
                 logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")

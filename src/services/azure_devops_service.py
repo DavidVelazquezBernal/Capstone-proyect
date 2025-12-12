@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, Tuple
 from models.state import AgentState
 from models.schemas import AzureDevOpsMetadata
 from tools.azure_devops_integration import AzureDevOpsClient, estimate_story_points, estimate_effort_hours
-from tools.file_utils import detectar_lenguaje_y_extension
+from tools.file_utils import detectar_lenguaje_y_extension, extraer_nombre_archivo, limpiar_codigo_markdown
 from config.settings import settings
 from config.prompt_templates import PromptTemplates
 from utils.logger import setup_logger
@@ -607,23 +607,34 @@ El código será corregido automáticamente por el Desarrollador."""
         
         try:
             # Detectar lenguaje y construir path
-            lenguaje, extension, _ = detectar_lenguaje_y_extension(
+            lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
                 state.get('requisitos_formales', '')
             )
             
-            codigo_final_path = os.path.join(settings.OUTPUT_DIR, f"codigo_final{extension}")
+            # Extraer nombre descriptivo del archivo
+            nombre_base = extraer_nombre_archivo(state.get('requisitos_formales', ''))
+            nombre_archivo = f"{nombre_base}{extension}"
+            codigo_path = os.path.join(settings.OUTPUT_DIR, nombre_archivo)
             
-            if not os.path.exists(codigo_final_path):
-                logger.warning(f"⚠️ Archivo codigo_final{extension} no encontrado")
-                return False
+            # Si el archivo no existe, crearlo desde el estado
+            if not os.path.exists(codigo_path):
+                codigo_generado = state.get('codigo_generado', '')
+                if codigo_generado:
+                    codigo_limpio = limpiar_codigo_markdown(codigo_generado)
+                    with open(codigo_path, 'w', encoding='utf-8') as f:
+                        f.write(codigo_limpio)
+                    logger.info(f"📝 Archivo {nombre_archivo} creado para adjuntar")
+                else:
+                    logger.warning(f"⚠️ No hay código generado para crear {nombre_archivo}")
+                    return False
             
-            file_size = os.path.getsize(codigo_final_path)
+            file_size = os.path.getsize(codigo_path)
             
             print()  # Línea en blanco
             logger.info("=" * 60)
             logger.info("📎 ADJUNTANDO CÓDIGO FINAL A AZURE DEVOPS")
             logger.info("-" * 60)
-            logger.info(f"📄 Archivo: codigo_final{extension}")
+            logger.info(f"📄 Archivo: {nombre_archivo}")
             logger.info(f"📊 Tamaño: {file_size} bytes")
             logger.info(f"🎯 PBI: #{pbi_id}")
             logger.info(f"⚙️ Task Implementación: #{task_id}")
@@ -631,7 +642,7 @@ El código será corregido automáticamente por el Desarrollador."""
             # Adjuntar al PBI
             success_pbi = self.client.attach_file(
                 work_item_id=pbi_id,
-                file_path=codigo_final_path,
+                file_path=codigo_path,
                 comment="✅ Código final validado por el Stakeholder - Listo para producción"
             )
             
@@ -641,7 +652,7 @@ El código será corregido automáticamente por el Desarrollador."""
             # Adjuntar a Task
             success_task = self.client.attach_file(
                 work_item_id=task_id,
-                file_path=codigo_final_path,
+                file_path=codigo_path,
                 comment=f"✅ Implementación completa y validada - {file_size} bytes"
             )
             

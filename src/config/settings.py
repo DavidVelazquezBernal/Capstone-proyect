@@ -37,10 +37,17 @@ class Settings:
     AZURE_AREA_PATH: str = os.getenv("AZURE_AREA_PATH", "")  # ej: "MyProject\\Backend"
     AZURE_ASSIGNED_TO: str = os.getenv("AZURE_ASSIGNED_TO", "")  # Usuario asignado por defecto (vacío = sin asignar)
     
+    # Configuración de GitHub (opcional - para integración con repositorios)
+    GITHUB_ENABLED: bool = os.getenv("GITHUB_ENABLED", "false").lower() == "true"
+    GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")  # Personal Access Token con permisos repo
+    GITHUB_OWNER: str = os.getenv("GITHUB_OWNER", "")  # Usuario u organización dueña del repo
+    GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")  # Nombre del repositorio
+    GITHUB_BASE_BRANCH: str = os.getenv("GITHUB_BASE_BRANCH", "main")  # Branch base para PRs
+    
     # Configuración del modelo LLM
     MODEL_NAME: str = "gemini-2.5-flash"
     TEMPERATURE: float = 0.1
-    MAX_OUTPUT_TOKENS: int = 4000
+    MAX_OUTPUT_TOKENS: int = 8192  # Aumentado para evitar código truncado
     
     # Modo Testing/Mock (evita llamadas reales al LLM)
     LLM_MOCK_MODE: bool = os.getenv("LLM_MOCK_MODE", "false").lower() == "true"

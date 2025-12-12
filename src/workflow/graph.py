@@ -11,6 +11,7 @@ from agents.product_owner import product_owner_node
 from agents.desarrollador import desarrollador_node
 from agents.sonarqube import sonarqube_node
 from agents.testing import testing_node
+from agents.revisor_codigo import revisor_codigo_node
 from agents.stakeholder import stakeholder_node
 
 logger = setup_logger(__name__, level=settings.get_log_level())
@@ -30,6 +31,7 @@ def create_workflow() -> StateGraph:
     workflow.add_node("Desarrollador", desarrollador_node)
     workflow.add_node("SonarQube", sonarqube_node)
     workflow.add_node("Testing", testing_node)
+    workflow.add_node("RevisorCodigo", revisor_codigo_node)
     workflow.add_node("Stakeholder", stakeholder_node)
 
     # 2. Definir Transiciones Iniciales y Lineales
@@ -57,19 +59,24 @@ def create_workflow() -> StateGraph:
 
     # B. Bucle de Depuración (Testing: Corrección de Código)
     # Incluye control de límite de intentos
+    # Si pasa los tests y GitHub está habilitado, va a RevisorCodigo; si no, va a Stakeholder
     workflow.add_conditional_edges(
         "Testing",
         lambda x: (
-            "PASSED" if x['pruebas_superadas']
+            ("PASSED_WITH_GITHUB" if settings.GITHUB_ENABLED else "PASSED") if x['pruebas_superadas']
             else ("DEBUG_LIMIT_EXCEEDED" if x['debug_attempt_count'] >= x['max_debug_attempts']
                   else "FAILED")
         ),
         {
             "FAILED": "Desarrollador",
             "PASSED": "Stakeholder",
+            "PASSED_WITH_GITHUB": "RevisorCodigo",
             "DEBUG_LIMIT_EXCEEDED": END
         }
     )
+    
+    # C. Transición del Revisor de Código al Stakeholder
+    workflow.add_edge("RevisorCodigo", "Stakeholder")
 
     # C. Bucle de Validación (Externo: Reingeniería de Requisitos / Fallo Final)
     workflow.add_conditional_edges(

@@ -12,7 +12,7 @@ from config.prompts import Prompts
 from config.prompt_templates import PromptTemplates
 from config.settings import settings
 from llm.gemini_client import call_gemini
-from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
+from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension, limpiar_codigo_markdown
 from services.azure_devops_service import azure_service
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
 
@@ -78,7 +78,7 @@ def desarrollador_node(state: AgentState) -> AgentState:
     lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
         state.get('requisitos_formales', '')
     )
-    codigo_limpio = re.sub(patron_limpieza, '', state['codigo_generado']).strip()
+    codigo_limpio = limpiar_codigo_markdown(state['codigo_generado'])
     
     # Incluir intento de requisito, de debug y de sonarqube
     nombre_archivo = f"3_desarrollador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
