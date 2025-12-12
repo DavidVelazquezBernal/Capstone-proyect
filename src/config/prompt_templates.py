@@ -44,6 +44,10 @@ Instrucciones:
    - objetivo_funcional: Qué debe hacer el código
    - nombre_funcion: Nombre descriptivo de la función
    - lenguaje_version: Lenguaje de programación y versión (ej: "Python 3.10", "TypeScript 5.0")
+     IMPORTANTE: Extrae el lenguaje EXACTAMENTE como aparece en el prompt del usuario.
+     Si el usuario menciona "typescript", "TypeScript", "ts" → usa "TypeScript 5.0"
+     Si el usuario menciona "python", "Python", "py" → usa "Python 3.10"
+     Si no se especifica lenguaje → usa "Python 3.10" por defecto
    - entradas_esperadas: Tipos y formato de parámetros de entrada
    - salidas_esperadas: Tipo y formato del resultado esperado
    - casos_de_prueba: Array con al menos 3 casos de prueba con input/expected
@@ -159,7 +163,7 @@ Genera las instrucciones de corrección.""")
     
     GENERADOR_UTS = ChatPromptTemplate.from_messages([
         ("system", """Rol:
-Ingeniero de Testing experto en generación de pruebas unitarias.
+Ingeniero de Test experto en generación de pruebas unitarias.
 
 Objetivo:
 Generar tests unitarios completos y bien estructurados para el código proporcionado.
@@ -222,6 +226,12 @@ Requisitos Formales:
 
 Lenguaje: {lenguaje}
 
+Nombre del archivo de código: {nombre_archivo_codigo}
+
+IMPORTANTE: Para los imports, usa el nombre exacto del archivo sin extensión.
+Para Python: from {nombre_archivo_sin_extension} import ...
+Para TypeScript: import {{ ... }} from './{nombre_archivo_sin_extension}'
+
 Genera los tests unitarios completos.""")
     ])
     
@@ -263,6 +273,49 @@ Resultado de Tests:
 {resultado_tests}
 
 Valida si el código cumple con los requisitos de negocio.""")
+    ])
+    
+    # ============================================================
+    # RELEASE NOTE GENERATOR - Generador de Notas de Versión
+    # ============================================================
+    
+    RELEASE_NOTE_GENERATOR = ChatPromptTemplate.from_messages([
+        ("system", """Rol:
+Eres un Technical Writer especializado en Release Notes para equipos de desarrollo ágil.
+
+Objetivo:
+Generar una Release Note profesional en formato HTML que documente el desarrollo completado,
+incluyendo funcionalidades implementadas, métricas del proyecto y validaciones realizadas.
+
+Instrucciones:
+1. ESTRUCTURA: Usa formato HTML con secciones claras y bien organizadas
+2. CONTENIDO: Incluye:
+   - Resumen ejecutivo del objetivo funcional
+   - Funcionalidades implementadas (lista detallada)
+   - Detalles técnicos (lenguaje, función/clase principal, validaciones)
+   - Métricas del desarrollo (story points, iteraciones, intentos)
+   - Estado de validaciones (SonarQube, Tests, Stakeholder)
+3. ESTILO: Profesional, conciso y técnicamente preciso
+4. FORMATO: HTML válido con etiquetas semánticas (<h3>, <p>, <ul>, <li>, <strong>, <code>)
+5. EMOJIS: Usa emojis apropiados para mejorar la legibilidad (📋, ✨, 🔧, ✅, 📊)
+
+Output Esperado:
+HTML completo y bien formateado, listo para ser insertado en un sistema de documentación o Azure DevOps."""),
+        ("human", """Requisitos Formales (JSON):
+{requisitos_formales}
+
+Código Final Implementado:
+{codigo_generado}
+
+Métricas del Proyecto:
+- Story Points: {story_points}
+- Iteraciones totales: {total_attempts}
+- Intentos de debug: {debug_attempts}
+- Intentos de SonarQube: {sonarqube_attempts}
+- Tests Unitarios: {test_suites} suites
+- Estado Final: {estado_final}
+
+Genera la Release Note en formato HTML.""")
     ])
     
     # ============================================================
@@ -330,7 +383,7 @@ Valida si el código cumple con los requisitos de negocio.""")
         return cls._messages_to_string(messages)
     
     @classmethod
-    def format_generador_uts(cls, codigo_generado: str, requisitos_formales: str, lenguaje: str) -> str:
+    def format_generador_uts(cls, codigo_generado: str, requisitos_formales: str, lenguaje: str, nombre_archivo_codigo: str = "") -> str:
         """
         Formatea el template del Generador de UTs con las variables proporcionadas.
         
@@ -338,14 +391,20 @@ Valida si el código cumple con los requisitos de negocio.""")
             codigo_generado: Código generado a testear
             requisitos_formales: Requisitos formales en JSON
             lenguaje: Lenguaje del código (python o typescript)
+            nombre_archivo_codigo: Nombre del archivo de código (con extensión)
             
         Returns:
             Prompt formateado como string
         """
+        # Extraer nombre sin extensión para imports
+        nombre_sin_extension = nombre_archivo_codigo.rsplit('.', 1)[0] if nombre_archivo_codigo else "codigo_generado"
+        
         messages = cls.GENERADOR_UTS.format_messages(
             codigo_generado=codigo_generado,
             requisitos_formales=requisitos_formales,
-            lenguaje=lenguaje
+            lenguaje=lenguaje,
+            nombre_archivo_codigo=nombre_archivo_codigo or "codigo_generado",
+            nombre_archivo_sin_extension=nombre_sin_extension
         )
         return cls._messages_to_string(messages)
     
@@ -366,6 +425,46 @@ Valida si el código cumple con los requisitos de negocio.""")
             requisitos_formales=requisitos_formales,
             codigo_generado=codigo_generado,
             resultado_tests=resultado_tests
+        )
+        return cls._messages_to_string(messages)
+    
+    @classmethod
+    def format_release_note_generator(
+        cls, 
+        requisitos_formales: str, 
+        codigo_generado: str,
+        story_points: str = "N/A",
+        total_attempts: int = 1,
+        debug_attempts: int = 0,
+        sonarqube_attempts: int = 0,
+        test_suites: int = 0,
+        estado_final: str = "VALIDADO por Stakeholder"
+    ) -> str:
+        """
+        Formatea el template del Release Note Generator con las variables proporcionadas.
+        
+        Args:
+            requisitos_formales: Requisitos formales en JSON
+            codigo_generado: Código generado final
+            story_points: Story points estimados
+            total_attempts: Número total de iteraciones
+            debug_attempts: Intentos de depuración
+            sonarqube_attempts: Intentos de corrección de SonarQube
+            test_suites: Número de suites de tests
+            estado_final: Estado final del proyecto
+            
+        Returns:
+            Prompt formateado como string
+        """
+        messages = cls.RELEASE_NOTE_GENERATOR.format_messages(
+            requisitos_formales=requisitos_formales,
+            codigo_generado=codigo_generado,
+            story_points=story_points,
+            total_attempts=total_attempts,
+            debug_attempts=debug_attempts,
+            sonarqube_attempts=sonarqube_attempts,
+            test_suites=test_suites,
+            estado_final=estado_final
         )
         return cls._messages_to_string(messages)
     

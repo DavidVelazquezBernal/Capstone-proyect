@@ -12,6 +12,7 @@ from models.schemas import AzureDevOpsMetadata
 from tools.azure_devops_integration import AzureDevOpsClient, estimate_story_points, estimate_effort_hours
 from tools.file_utils import detectar_lenguaje_y_extension
 from config.settings import settings
+from config.prompt_templates import PromptTemplates
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.get_log_level())
@@ -787,36 +788,33 @@ El código ha sido:
             logger.info("📝 GENERANDO RELEASE NOTE")
             logger.info("-" * 60)
             
-            # Preparar contexto para el LLM
+            # Preparar métricas para el template
             requisitos = json.loads(state.get('requisitos_formales', '{}'))
             
-            # Calcular métricas
             story_points = requisitos.get('azure_devops', {}).get('story_points', 'N/A')
             total_attempts = state.get('attempt_count', 1)
             debug_attempts = state.get('debug_attempt_count', 0)
             sonarqube_attempts = state.get('sonarqube_attempt_count', 0)
-            
-            contexto = f"""
-Requisitos Formales:
-{state.get('requisitos_formales', 'N/A')}
-
-Código Final Implementado:
-{state.get('codigo_generado', 'N/A')}
-
-Métricas del Proyecto:
-- Story Points: {story_points}
-- Iteraciones totales: {total_attempts}
-- Intentos de debug: {debug_attempts}
-- Intentos de SonarQube: {sonarqube_attempts}
-- Tests Unitarios: {len(state.get('tests_unitarios_generados', '').split('describe')) - 1 if state.get('tests_unitarios_generados') else 0} suites
-- Estado Final: VALIDADO por Stakeholder
-"""
+            test_suites = len(state.get('tests_unitarios_generados', '').split('describe')) - 1 if state.get('tests_unitarios_generados') else 0
             
             logger.info("🤖 Generando Release Note con LLM...")
+            logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
             start_time = time.time()
             
-            # Llamar al LLM para generar el Release Note
-            release_note = call_gemini(Prompts.RELEASE_NOTE_GENERATOR, contexto)
+            # Usar ChatPromptTemplate para generar el Release Note
+            prompt_formateado = PromptTemplates.format_release_note_generator(
+                requisitos_formales=state.get('requisitos_formales', 'N/A'),
+                codigo_generado=state.get('codigo_generado', 'N/A'),
+                story_points=str(story_points),
+                total_attempts=total_attempts,
+                debug_attempts=debug_attempts,
+                sonarqube_attempts=sonarqube_attempts,
+                test_suites=test_suites,
+                estado_final="VALIDADO por Stakeholder"
+            )
+            
+            # Llamar al LLM con el prompt formateado
+            release_note = call_gemini(prompt_formateado, "")
             
             duration = time.time() - start_time
             logger.info(f"⏱️  Release Note generado en {duration:.2f}s")

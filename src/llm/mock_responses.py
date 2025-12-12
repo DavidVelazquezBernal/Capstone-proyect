@@ -3,22 +3,30 @@ Respuestas mockeadas para el modo de pruebas del LLM.
 Evita llamadas reales a la API de Gemini durante testing.
 """
 
-def get_mock_response(role_prompt: str, context: str) -> str:
+def get_mock_response(role_prompt: str, context: str = "") -> str:
     """
     Devuelve una respuesta mockeada según el tipo de agente detectado en el prompt.
     
     Args:
-        role_prompt: El prompt que define el rol del agente
-        context: El contexto actual del proyecto
+        role_prompt: El prompt completo (incluye system + human de ChatPromptTemplate)
+        context: El contexto adicional (DEPRECATED - ahora todo está en role_prompt)
         
     Returns:
         str: Respuesta mockeada apropiada para el agente
+        
+    Note:
+        Con ChatPromptTemplate, toda la información está en role_prompt.
+        Se busca en role_prompt en lugar de context para detectar el tipo de agente.
     """
     
     # Detectar tipo de agente por palabras clave en el prompt
     # IMPORTANTE: El orden importa - debemos detectar el agente más específico primero
+    # Con ChatPromptTemplate, toda la información está en role_prompt
     prompt_lower = role_prompt.lower()
-    context_lower = context.lower()
+    context_lower = context.lower() if context else ""
+    
+    # Buscar en ambos lugares para máxima compatibilidad
+    texto_completo = (role_prompt + " " + context).lower()
     
     # GENERADOR DE RELEASE NOTES (debe ir PRIMERO para evitar conflictos)
     if "release note" in prompt_lower or "release notes" in prompt_lower:
@@ -61,26 +69,232 @@ def get_mock_response(role_prompt: str, context: str) -> str:
 <hr/>
 <p><em>🤖 Release Note generado automáticamente por el sistema multiagente de desarrollo ágil</em></p>"""
     
+    # GENERADOR DE TESTS
+    if prompt_lower.startswith("rol:\ningeniero de test") and ("generar" in prompt_lower or "unitarios" in prompt_lower):
+        # Extraer el nombre del archivo de código del prompt (con ChatPromptTemplate está ahí)
+        import re
+        filename_match = re.search(r"nombre del archivo de código:\s*([^\s\n]+)", role_prompt, re.IGNORECASE)
+        if filename_match:
+            codigo_filename = filename_match.group(1)
+            # Remover extensión para el import
+            codigo_module = codigo_filename.replace('.ts', '').replace('.py', '')
+        else:
+            # Fallback si no se encuentra el nombre
+            codigo_module = "codigo_generado"
+        
+        # Detectar si es una clase Calculator
+        es_calculator = "calculator" in texto_completo
+        
+        if "typescript" in texto_completo:
+            if es_calculator:
+                # Tests para clase Calculator
+                return (
+                    "import { describe, it, expect, beforeEach } from 'vitest';\n"
+                    f"import {{ Calculator }} from './{codigo_module}';\n\n"
+                    "describe('Calculator', () => {\n"
+                    "    let calc: Calculator;\n\n"
+                    "    beforeEach(() => {\n"
+                    "        calc = new Calculator();\n"
+                    "    });\n\n"
+                    "    describe('add', () => {\n"
+                    "        it('should add two positive numbers', () => {\n"
+                    "            expect(calc.add(5, 3)).toBe(8);\n"
+                    "        });\n\n"
+                    "        it('should add negative numbers', () => {\n"
+                    "            expect(calc.add(-5, -3)).toBe(-8);\n"
+                    "        });\n"
+                    "    });\n\n"
+                    "    describe('subtract', () => {\n"
+                    "        it('should subtract two numbers', () => {\n"
+                    "            expect(calc.subtract(5, 3)).toBe(2);\n"
+                    "        });\n"
+                    "    });\n\n"
+                    "    describe('multiply', () => {\n"
+                    "        it('should multiply two numbers', () => {\n"
+                    "            expect(calc.multiply(5, 3)).toBe(15);\n"
+                    "        });\n"
+                    "    });\n\n"
+                    "    describe('divide', () => {\n"
+                    "        it('should divide two numbers', () => {\n"
+                    "            expect(calc.divide(6, 3)).toBe(2);\n"
+                    "        });\n\n"
+                    "        it('should throw error when dividing by zero', () => {\n"
+                    "            expect(() => calc.divide(5, 0)).toThrow('División por cero no permitida');\n"
+                    "        });\n"
+                    "    });\n"
+                    "});"
+                )
+            else:
+                # Tests para función sumar
+                return (
+                    "import { describe, it, expect } from 'vitest';\n"
+                    f"import {{ sumar }} from './{codigo_module}';\n\n"
+                    "describe('sumar', () => {\n"
+                    "    it('should sum two positive numbers', () => {\n"
+                    "        expect(sumar(2, 3)).toBe(5);\n"
+                    "    });\n\n"
+                    "    it('should sum with zero', () => {\n"
+                    "        expect(sumar(5, 0)).toBe(5);\n"
+                    "        expect(sumar(0, 5)).toBe(5);\n"
+                    "    });\n\n"
+                    "    it('should sum negative numbers', () => {\n"
+                    "        expect(sumar(-2, -3)).toBe(-5);\n"
+                    "    });\n\n"
+                    "    it('should sum positive and negative', () => {\n"
+                    "        expect(sumar(5, -2)).toBe(3);\n"
+                    "    });\n\n"
+                    "    it('should handle floating point precision', () => {\n"
+                    "        expect(sumar(0.1, 0.2)).toBeCloseTo(0.3);\n"
+                    "    });\n\n"
+                    "    it('should throw error for invalid input', () => {\n"
+                    "        expect(() => sumar('a' as any, 5)).toThrow();\n"
+                    "        expect(() => sumar(5, null as any)).toThrow();\n"
+                    "    });\n"
+                    "});"
+                )
+        else:
+            return (
+                "import pytest\n"
+                f"from {codigo_module} import sumar\n\n"
+                "def test_sumar_positivos():\n"
+                "    # Test suma de números positivos\n"
+                "    assert sumar(2, 3) == 5\n\n"
+                "def test_sumar_con_cero():\n"
+                "    # Test suma con cero\n"
+                "    assert sumar(5, 0) == 5\n"
+                "    assert sumar(0, 5) == 5\n\n"
+                "def test_sumar_negativos():\n"
+                "    # Test suma de números negativos\n"
+                "    assert sumar(-2, -3) == -5\n\n"
+                "def test_sumar_positivo_negativo():\n"
+                "    # Test suma de positivo y negativo\n"
+                "    assert sumar(5, -2) == 3\n\n"
+                "def test_sumar_flotantes():\n"
+                "    # Test suma con números de punto flotante\n"
+                "    assert abs(sumar(0.1, 0.2) - 0.3) < 1e-10\n\n"
+                "def test_tipo_invalido():\n"
+                "    # Test con tipos de datos inválidos\n"
+                "    with pytest.raises(TypeError):\n"
+                "        sumar('a', 5)\n"
+                "    with pytest.raises(TypeError):\n"
+                "        sumar(5, None)"
+            )
+    
     # DESARROLLADOR - Código (debe ir PRIMERO porque su contexto también contiene "Requisitos")
-    if "desarrollador" in prompt_lower or "codifica" in prompt_lower or "generar código" in prompt_lower:
-        # Detectar si es una corrección de SonarQube
-        es_correccion_sonarqube = "sonarqube" in context_lower or "instrucciones de corrección de calidad" in context_lower
+    elif prompt_lower.startswith("rol:\ndesarrollador de software")  or "codifica" in prompt_lower or "generar código" in prompt_lower:
+        # Detectar si es una corrección de SonarQube (buscar en texto completo)
+        es_correccion_sonarqube = "sonarqube" in texto_completo or "instrucciones de corrección de calidad" in texto_completo
         
         # Detectar si es una corrección de tests fallidos (traceback)
-        es_correccion_tests = "traceback" in context_lower or "error de ejecución" in context_lower
+        es_correccion_tests =  "error de ejecución" in texto_completo
         
         # Detectar si son requisitos mejorados (segunda iteración completa después de Stakeholder)
         son_requisitos_mejorados = (
-            "múltiples números" in context_lower or 
-            "número variable" in context_lower or 
-            "array" in context_lower or
-            "versátil" in context_lower
+            "múltiples números" in texto_completo or 
+            "número variable" in texto_completo or 
+            "array" in texto_completo or
+            "versátil" in texto_completo
         )
         
-        # Detectar lenguaje
-        if "typescript" in context_lower:
+        # Detectar lenguaje desde los requisitos formales JSON
+        import json
+        import re  # Asegurar que re está importado aquí
+        lenguaje_detectado = "python"  # Por defecto
+        es_clase_calculator = False
+        
+        # DEBUG: Imprimir role_prompt para ver qué está recibiendo
+        #print(f"\n[MOCK DEBUG] Role_prompt (primeros 500 chars): {role_prompt[:500]}")
+        
+        try:
+            # Buscar directamente en el texto completo (role_prompt contiene todo con ChatPromptTemplate)
+            # Buscar "lenguaje_version": "TypeScript" o similar
+            lenguaje_match = re.search(r'"lenguaje_version"\s*:\s*"([^"]+)"', role_prompt, re.IGNORECASE)
+            if lenguaje_match:
+                lenguaje_version = lenguaje_match.group(1).lower()
+                print(f"[MOCK DEBUG] Lenguaje encontrado: {lenguaje_version}")
+                if 'typescript' in lenguaje_version or 'ts' in lenguaje_version:
+                    lenguaje_detectado = "typescript"
+            
+            # Buscar "nombre_funcion": "Calculator" o similar
+            nombre_match = re.search(r'"nombre_funcion"\s*:\s*"([^"]+)"', role_prompt, re.IGNORECASE)
+            if nombre_match:
+                nombre_funcion = nombre_match.group(1).lower()
+                print(f"[MOCK DEBUG] Nombre función encontrado: {nombre_funcion}")
+                if 'calculator' in nombre_funcion:
+                    es_clase_calculator = True
+        except Exception as e:
+            print(f"[MOCK DEBUG] Error en detección: {e}")
+            pass
+        
+        # Fallback adicional: buscar en el texto completo
+        if lenguaje_detectado == "python":
+            if "typescript" in texto_completo or "typescript 5" in texto_completo:
+                lenguaje_detectado = "typescript"
+                print(f"[MOCK DEBUG] Lenguaje detectado por fallback: typescript")
+        if not es_clase_calculator:
+            if "calculator" in texto_completo or "clase calculator" in texto_completo:
+                es_clase_calculator = True
+                print(f"[MOCK DEBUG] Calculator detectado por fallback")
+        
+        print(f"[MOCK DEBUG] Lenguaje final: {lenguaje_detectado}, Es Calculator: {es_clase_calculator}")
+        
+        # Generar código según lenguaje detectado
+        if lenguaje_detectado == "typescript":
+            # CASO ESPECIAL: Clase Calculator
+            if es_clase_calculator and not es_correccion_tests and not es_correccion_sonarqube:
+                return (
+                    "/**\n"
+                    " * Clase Calculator con operaciones aritméticas básicas.\n"
+                    " * Incluye manejo de división por cero.\n"
+                    " */\n"
+                    "export class Calculator {\n"
+                    "    /**\n"
+                    "     * Suma dos números.\n"
+                    "     * @param a - Primer número\n"
+                    "     * @param b - Segundo número\n"
+                    "     * @returns La suma de a y b\n"
+                    "     */\n"
+                    "    add(a: number, b: number): number {\n"
+                    "        return a + b;\n"
+                    "    }\n"
+                    "\n"
+                    "    /**\n"
+                    "     * Resta dos números.\n"
+                    "     * @param a - Primer número\n"
+                    "     * @param b - Segundo número\n"
+                    "     * @returns La resta de a menos b\n"
+                    "     */\n"
+                    "    subtract(a: number, b: number): number {\n"
+                    "        return a - b;\n"
+                    "    }\n"
+                    "\n"
+                    "    /**\n"
+                    "     * Multiplica dos números.\n"
+                    "     * @param a - Primer número\n"
+                    "     * @param b - Segundo número\n"
+                    "     * @returns El producto de a y b\n"
+                    "     */\n"
+                    "    multiply(a: number, b: number): number {\n"
+                    "        return a * b;\n"
+                    "    }\n"
+                    "\n"
+                    "    /**\n"
+                    "     * Divide dos números.\n"
+                    "     * @param a - Dividendo\n"
+                    "     * @param b - Divisor\n"
+                    "     * @returns El cociente de a dividido por b\n"
+                    "     * @throws Error si b es cero\n"
+                    "     */\n"
+                    "    divide(a: number, b: number): number {\n"
+                    "        if (b === 0) {\n"
+                    "            throw new Error('División por cero no permitida');\n"
+                    "        }\n"
+                    "        return a / b;\n"
+                    "    }\n"
+                    "}"
+                )
             # Prioridad: Requisitos mejorados (segunda iteración completa)
-            if son_requisitos_mejorados and not es_correccion_tests and not es_correccion_sonarqube:
+            elif son_requisitos_mejorados and not es_correccion_tests and not es_correccion_sonarqube:
                 # Código con soporte para múltiples números (segunda iteración completa)
                 return (
                     "/**\n"
@@ -327,132 +541,92 @@ def get_mock_response(role_prompt: str, context: str) -> str:
                 )
     
     # PRODUCT OWNER - Requisitos formales (ahora va DESPUÉS del Desarrollador)
-    elif "product owner" in prompt_lower or "requirements manager" in prompt_lower:
+    elif prompt_lower.startswith("rol:\nrequirements manager") or "requirements manager" in prompt_lower:
         # Detectar si es una reingeniería (segunda iteración)
         # Debe tener feedback real del Stakeholder, no solo mencionar la palabra
         es_reingenieria = (
-            ("feedback" in context_lower and "rechazado" in context_lower) or
-            ("validación final: rechazado" in context_lower) or
-            ("motivo:" in context_lower and "stakeholder" in context_lower)
+            ("feedback" in texto_completo and "rechazado" in texto_completo) or
+            ("validación final: rechazado" in texto_completo) or
+            ("motivo:" in texto_completo and "stakeholder" in texto_completo)
         )
         
-        # Detectar lenguaje del contexto
-        if "typescript" in context_lower:
-            lenguaje = "TypeScript 5.x"
-            nombre_funcion = "sumar"
+        # Detectar lenguaje del prompt (con ChatPromptTemplate todo está en role_prompt)
+        if "typescript" in texto_completo or " ts " in texto_completo or "clase calculator" in texto_completo:
+            lenguaje = "TypeScript 5.0"
+            nombre_funcion = "Calculator"
         else:
-            lenguaje = "Python 3.12"
-            nombre_funcion = "calcular"
+            lenguaje = "Python 3.10"
+            nombre_funcion = "sumar"
         
         if es_reingenieria:
             # Segunda versión: Requisitos mejorados después de feedback del Stakeholder
             return (
                 "{\n"
-                f'  "objetivo_funcional": "Implementar una función {nombre_funcion} versátil que soporte suma de múltiples números y arrays",\n'
+                f'  "objetivo_funcional": "Implementar una clase {nombre_funcion} versátil con operaciones aritméticas completas",\n'
                 f'  "lenguaje_version": "{lenguaje}",\n'
                 f'  "nombre_funcion": "{nombre_funcion}",\n'
-                '  "entradas_esperadas": "Número variable de argumentos (a, b, c, ...) o array de números",\n'
-                '  "salidas_esperadas": "Un número que representa la suma total de todos los argumentos",\n'
-                '  "casos_uso": [\n'
-                '    "Sumar dos números: sumar(2, 3) = 5",\n'
-                '    "Sumar múltiples números: sumar(1, 2, 3, 4) = 10",\n'
-                '    "Sumar array: sumar([1, 2, 3]) = 6",\n'
-                '    "Manejo de decimales con precisión",\n'
-                '    "Validación de tipos y valores especiales (NaN, Infinity)"\n'
+                '  "entradas_esperadas": "Dos números para cada operación (+, -, *, /)",\n'
+                '  "salidas_esperadas": "Resultado de la operación aritmética",\n'
+                '  "casos_de_prueba": [\n'
+                '    {"input": {"a": 10, "b": 5, "operacion": "suma"}, "expected": 15},\n'
+                '    {"input": {"a": 10, "b": 5, "operacion": "resta"}, "expected": 5},\n'
+                '    {"input": {"a": 10, "b": 5, "operacion": "multiplicacion"}, "expected": 50},\n'
+                '    {"input": {"a": 10, "b": 5, "operacion": "division"}, "expected": 2},\n'
+                '    {"input": {"a": 10, "b": 0, "operacion": "division"}, "expected": "Error: División por cero"}\n'
                 '  ],\n'
-                '  "restricciones_tecnicas": [\n'
-                '    "Usar spread operator o rest parameters para argumentos variables",\n'
-                '    "Manejar precisión de punto flotante correctamente",\n'
-                '    "Validar cada argumento individual",\n'
-                '    "Soportar mínimo 1 argumento, máximo ilimitado"\n'
-                '  ],\n'
-                '  "documentacion": "Función debe estar completamente documentada con JSDoc/docstring incluyendo ejemplos de uso"\n'
+                '  "version": "1.1",\n'
+                '  "estado": "Propuesto",\n'
+                '  "fuente": "stakeholder",\n'
+                '  "fecha_creacion": "2024-12-12T11:39:00"\n'
                 "}"
             )
         else:
-            # Primera versión: Requisitos básicos
-            return (
-                "{\n"
-                f'  "objetivo_funcional": "Implementar una función {nombre_funcion} que realice operaciones aritméticas básicas",\n'
-                f'  "lenguaje_version": "{lenguaje}",\n'
-                f'  "nombre_funcion": "{nombre_funcion}",\n'
-                '  "entradas_esperadas": "Dos números (a, b) de tipo number/int",\n'
-                '  "salidas_esperadas": "Un número que representa el resultado de la operación",\n'
-                '  "casos_uso": ["Sumar dos números positivos", "Sumar números negativos", "Manejar decimales"],\n'
-                '  "restricciones_tecnicas": "La función debe manejar precisión de punto flotante correctamente"\n'
-                "}"
-            )
+            # Primera versión: Requisitos básicos para Calculator
+            if "calculator" in nombre_funcion.lower():
+                return (
+                    "{\n"
+                    f'  "objetivo_funcional": "Implementar una clase {nombre_funcion} con operaciones aritméticas básicas (+, -, *, /) y manejo de división por cero",\n'
+                    f'  "lenguaje_version": "{lenguaje}",\n'
+                    f'  "nombre_funcion": "{nombre_funcion}",\n'
+                    '  "entradas_esperadas": "Dos números (a: number, b: number) para cada operación",\n'
+                    '  "salidas_esperadas": "Resultado numérico de la operación o error en caso de división por cero",\n'
+                    '  "casos_de_prueba": [\n'
+                    '    {"input": {"a": 5, "b": 3, "operacion": "add"}, "expected": 8},\n'
+                    '    {"input": {"a": 5, "b": 3, "operacion": "subtract"}, "expected": 2},\n'
+                    '    {"input": {"a": 5, "b": 3, "operacion": "multiply"}, "expected": 15},\n'
+                    '    {"input": {"a": 6, "b": 3, "operacion": "divide"}, "expected": 2},\n'
+                    '    {"input": {"a": 5, "b": 0, "operacion": "divide"}, "expected": "Error"}\n'
+                    '  ],\n'
+                    '  "version": "1.0",\n'
+                    '  "estado": "Propuesto",\n'
+                    '  "fuente": "usuario",\n'
+                    '  "fecha_creacion": "2024-12-12T11:39:00"\n'
+                    "}"
+                )
+            else:
+                # Función simple de suma
+                return (
+                    "{\n"
+                    f'  "objetivo_funcional": "Implementar una función {nombre_funcion} que realice operaciones aritméticas básicas",\n'
+                    f'  "lenguaje_version": "{lenguaje}",\n'
+                    f'  "nombre_funcion": "{nombre_funcion}",\n'
+                    '  "entradas_esperadas": "Dos números (a, b) de tipo number/int",\n'
+                    '  "salidas_esperadas": "Un número que representa el resultado de la operación",\n'
+                    '  "casos_de_prueba": [\n'
+                    '    {"input": {"a": 2, "b": 3}, "expected": 5},\n'
+                    '    {"input": {"a": -1, "b": 1}, "expected": 0},\n'
+                    '    {"input": {"a": 0.1, "b": 0.2}, "expected": 0.3}\n'
+                    '  ],\n'
+                    '  "version": "1.0",\n'
+                    '  "estado": "Propuesto",\n'
+                    '  "fuente": "usuario",\n'
+                    '  "fecha_creacion": "2024-12-12T11:39:00"\n'
+                    "}"
+                )
     
-    # GENERADOR DE TESTS
-    elif "test" in prompt_lower and ("generar" in prompt_lower or "unitarios" in prompt_lower):
-        # Extraer el nombre del archivo de código del contexto
-        import re
-        filename_match = re.search(r"archivo de código se llama '([^']+)'", context)
-        if filename_match:
-            codigo_filename = filename_match.group(1)
-            # Remover extensión para el import
-            codigo_module = codigo_filename.replace('.ts', '').replace('.py', '')
-        else:
-            # Fallback si no se encuentra el nombre
-            codigo_module = "codigo_generado"
         
-        if "typescript" in context_lower:
-            return (
-                "import { describe, it, expect } from 'vitest';\n"
-                f"import {{ sumar }} from './{codigo_module}';\n\n"
-                "describe('sumar', () => {\n"
-                "    it('should sum two positive numbers', () => {\n"
-                "        expect(sumar(2, 3)).toBe(5);\n"
-                "    });\n\n"
-                "    it('should sum with zero', () => {\n"
-                "        expect(sumar(5, 0)).toBe(5);\n"
-                "        expect(sumar(0, 5)).toBe(5);\n"
-                "    });\n\n"
-                "    it('should sum negative numbers', () => {\n"
-                "        expect(sumar(-2, -3)).toBe(-5);\n"
-                "    });\n\n"
-                "    it('should sum positive and negative', () => {\n"
-                "        expect(sumar(5, -2)).toBe(3);\n"
-                "    });\n\n"
-                "    it('should handle floating point precision', () => {\n"
-                "        expect(sumar(0.1, 0.2)).toBeCloseTo(0.3);\n"
-                "    });\n\n"
-                "    it('should throw error for invalid input', () => {\n"
-                "        expect(() => sumar('a' as any, 5)).toThrow();\n"
-                "        expect(() => sumar(5, null as any)).toThrow();\n"
-                "    });\n"
-                "});"
-            )
-        else:
-            return (
-                "import pytest\n"
-                f"from {codigo_module} import sumar\n\n"
-                "def test_sumar_positivos():\n"
-                "    # Test suma de números positivos\n"
-                "    assert sumar(2, 3) == 5\n\n"
-                "def test_sumar_con_cero():\n"
-                "    # Test suma con cero\n"
-                "    assert sumar(5, 0) == 5\n"
-                "    assert sumar(0, 5) == 5\n\n"
-                "def test_sumar_negativos():\n"
-                "    # Test suma de números negativos\n"
-                "    assert sumar(-2, -3) == -5\n\n"
-                "def test_sumar_positivo_negativo():\n"
-                "    # Test suma de positivo y negativo\n"
-                "    assert sumar(5, -2) == 3\n\n"
-                "def test_sumar_flotantes():\n"
-                "    # Test suma con números de punto flotante\n"
-                "    assert abs(sumar(0.1, 0.2) - 0.3) < 1e-10\n\n"
-                "def test_tipo_invalido():\n"
-                "    # Test con tipos de datos inválidos\n"
-                "    with pytest.raises(TypeError):\n"
-                "        sumar('a', 5)\n"
-                "    with pytest.raises(TypeError):\n"
-                "        sumar(5, None)"
-            )
-    
     # STAKEHOLDER - Validación
-    elif "stakeholder" in prompt_lower or "validar" in prompt_lower:
+    elif prompt_lower.startswith("rol:\neres un stakeholder") or "validar" in prompt_lower:
         # Detectar si es la primera validación (attempt_count = 1)
         # Buscar "intento" o "attempt_count" en el contexto
         import re

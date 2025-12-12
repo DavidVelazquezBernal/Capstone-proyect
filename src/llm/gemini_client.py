@@ -51,21 +51,25 @@ else:
 
 def call_gemini(
     role_prompt: str, 
-    context: str, 
+    context: str = "", 
     response_schema: Optional[BaseModel] = None, 
     allow_use_tool: bool = False
 ) -> str:
     """
-    Realiza una llamada a Gemini 2.5 Flash con el prompt de rol y el contexto.
+    Realiza una llamada a Gemini 2.5 Flash con el prompt formateado.
     
     Args:
-        role_prompt (str): El prompt que define el rol y las instrucciones del agente
-        context (str): El contexto actual del proyecto
+        role_prompt (str): El prompt completo (puede incluir system + human de ChatPromptTemplate)
+        context (str, optional): Contexto adicional (DEPRECATED - usar ChatPromptTemplate)
         response_schema (BaseModel, optional): Schema Pydantic para validación de respuesta JSON
         allow_use_tool (bool): Si se permite el uso de herramientas (tools)
     
     Returns:
         str: La respuesta del modelo LLM
+        
+    Note:
+        Con ChatPromptTemplate, el parámetro 'context' ya no es necesario porque
+        todo el prompt se construye en el template. Se mantiene por compatibilidad.
     """
     # MODO MOCK - Evitar llamadas reales al LLM durante testing
     if settings.LLM_MOCK_MODE:
@@ -86,12 +90,18 @@ def call_gemini(
     if not client:
         return "ERROR: Cliente Gemini no inicializado correctamente."
 
-    full_prompt = (
-        f"{role_prompt}\n\n"
-        f"--- DATOS ACTUALES DEL PROYECTO ---\n"
-        f"{context}\n\n"
-        f"--- TAREA ---\n"
-    )
+    # Con ChatPromptTemplate, role_prompt ya contiene todo el prompt formateado
+    # Solo añadir context si se proporciona (para compatibilidad con código antiguo)
+    if context:
+        full_prompt = (
+            f"{role_prompt}\n\n"
+            f"--- DATOS ACTUALES DEL PROYECTO ---\n"
+            f"{context}\n\n"
+            f"--- TAREA ---\n"
+        )
+    else:
+        # Prompt ya está completo desde ChatPromptTemplate
+        full_prompt = role_prompt
 
     config = {
         "temperature": settings.TEMPERATURE,

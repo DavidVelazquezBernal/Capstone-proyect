@@ -333,7 +333,7 @@ class Prompts:
     
     GENERADOR_UTS = """
     Rol:
-    Ingeniero de Testing experto en generación de pruebas unitarias.
+    Ingeniero de Test experto en generación de pruebas unitarias.
 
     Objetivo:
     Generar tests unitarios completos y bien estructurados para el código proporcionado.

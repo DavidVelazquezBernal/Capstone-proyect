@@ -1,21 +1,25 @@
-"""Agente 4.5: Probador de UTs (Probador de Unit Tests)
-Responsable de ejecutar los tests unitarios generados (vitest/pytest).
-Valida que el código funcione correctamente según los requisitos.
+"""
+Agente: Testing (Generador y Ejecutor de Unit Tests)
+Responsable de generar tests unitarios con LLM y ejecutarlos con vitest/pytest.
+Combina las responsabilidades de generación y ejecución en un único agente cohesivo.
 """
 
 import os
 import re
 import json
+import time
 import subprocess
 import logging
 from typing import Dict, Any
 from models.state import AgentState
+from config.prompts import Prompts
+from config.prompt_templates import PromptTemplates
 from config.settings import settings
+from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
 from services.azure_devops_service import azure_service
-from utils.logger import setup_logger, log_agent_execution, log_file_operation
+from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
 
-# Configurar logger para este agente
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
@@ -25,32 +29,35 @@ def _limpiar_ansi(text: str) -> str:
     return ansi_escape.sub('', text)
 
 
-def probador_uts_node(state: AgentState) -> AgentState:
+def testing_node(state: AgentState) -> AgentState:
     """
-    Nodo del Probador de UTs (Probador de Unit Tests).
-    Ejecuta directamente los tests unitarios generados por el generador_unit_tests.
+    Nodo de Testing - Genera y ejecuta tests unitarios.
     
-    Estrategia:
-    1. Detectar lenguaje del código generado
-    2. Localizar archivo de tests generado
-    3. Ejecutar tests con el framework apropiado (vitest/pytest)
+    Flujo:
+    1. Generar tests unitarios con LLM (vitest/pytest)
+    2. Guardar archivo de tests
+    3. Ejecutar tests con el framework apropiado
     4. Parsear resultados y actualizar estado
     """
     print()  # Línea en blanco para separación visual
     logger.info("=" * 60)
-    logger.info("PROBADOR UTs - INICIO")
+    logger.info("🧪 TESTING - INICIO")
     logger.info("=" * 60)
+    
+    log_agent_execution(logger, "Testing", "iniciado", {
+        "requisito_id": state['attempt_count'],
+        "debug_attempt": state['debug_attempt_count']
+    })
     
     # === INICIO: Actualizar estado del Work Item de Testing a "In Progress" ===
     if (settings.AZURE_DEVOPS_ENABLED and 
         state.get('azure_testing_task_id') and 
-        state['debug_attempt_count'] == 0):  # Solo en la primera ejecución de tests
+        state['debug_attempt_count'] == 0):  # Solo en la primera ejecución
         
         try:
             task_id = state['azure_testing_task_id']
             logger.info(f"🔄 Actualizando estado de Task de Testing #{task_id} a 'In Progress'...")
             
-            # Usar servicio centralizado
             success = azure_service.update_testing_task_to_in_progress(task_id)
             
             if success:
@@ -63,42 +70,79 @@ def probador_uts_node(state: AgentState) -> AgentState:
             logger.debug(f"Stack trace: {e}", exc_info=True)
     # === FIN: Actualización de estado en Azure DevOps ===
     
-    # Detectar lenguaje
-    lenguaje, extension, _ = detectar_lenguaje_y_extension(
+    # Detectar lenguaje del código
+    lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
         state.get('requisitos_formales', '')
     )
+    codigo_limpio = re.sub(patron_limpieza, '', state['codigo_generado']).strip()
     
-    logger.info(f"📝 Lenguaje detectado: {lenguaje}")
+    logger.info(f"🔍 Lenguaje detectado: {lenguaje}")
     
-    # Construir rutas de archivos
+    # Determinar nombres de archivos
     attempt = state['attempt_count']
     sq_attempt = state['sonarqube_attempt_count']
     debug_attempt = state['debug_attempt_count']
     
-    log_agent_execution(
-        logger,
-        "Probador UTs",
-        "Preparando ejecución",
-        {
-            "lenguaje": lenguaje,
-            "req": attempt,
-            "debug": debug_attempt,
-            "sq": sq_attempt
-        }
-    )
-    
-    # Ruta del código generado
     if lenguaje.lower() == 'typescript':
-        code_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.ts"
+        codigo_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.ts"
         test_filename = f"unit_tests_req{attempt}_sq{sq_attempt}.test.ts"
     else:  # Python
-        code_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
+        codigo_filename = f"3_desarrollador_req{attempt}_debug{debug_attempt}_sq{sq_attempt}.py"
         test_filename = f"test_unit_req{attempt}_sq{sq_attempt}.py"
     
-    code_path = os.path.join(settings.OUTPUT_DIR, code_filename)
+    code_path = os.path.join(settings.OUTPUT_DIR, codigo_filename)
     test_path = os.path.join(settings.OUTPUT_DIR, test_filename)
     
-    # Verificar que existen los archivos
+    logger.debug(f"Archivo de código: {codigo_filename}")
+    logger.debug(f"Archivo de tests: {test_filename}")
+    
+    # ============================================
+    # FASE 1: GENERACIÓN DE TESTS (LLM)
+    # ============================================
+    logger.info("🧪 Generando tests unitarios...")
+    
+    # Usar ChatPromptTemplate
+    logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
+    prompt_formateado = PromptTemplates.format_generador_uts(
+        codigo_generado=state['codigo_generado'],
+        requisitos_formales=state['requisitos_formales'],
+        lenguaje=lenguaje,
+        nombre_archivo_codigo=codigo_filename
+    )
+    
+    # Llamar al LLM para generar los tests
+    logger.info("🤖 Llamando a LLM para generar tests...")
+    start_time = time.time()
+    tests_generados = call_gemini(prompt_formateado, "")
+    duration = time.time() - start_time
+    
+    log_llm_call(logger, "generacion_tests", duration=duration)
+    
+    # Limpiar bloques de código markdown
+    tests_generados = re.sub(r'^```(?:typescript|python|ts|py)\s*\n?', '', tests_generados, flags=re.MULTILINE)
+    tests_generados = re.sub(r'\n?```\s*$', '', tests_generados)
+    tests_generados = re.sub(r'^(?:typescript|python|ts|py)\s*\n', '', tests_generados, flags=re.MULTILINE)
+    tests_generados = tests_generados.strip()
+    
+    # Guardar tests generados
+    resultado_guardado = guardar_fichero_texto(
+        test_filename,
+        tests_generados,
+        directorio=settings.OUTPUT_DIR
+    )
+    
+    logger.info(f"✅ Tests generados y guardados: {test_filename}")
+    log_file_operation(logger, "guardar", test_path, success=resultado_guardado)
+    
+    # Almacenar los tests en el estado
+    state['tests_unitarios_generados'] = tests_generados
+    
+    # ============================================
+    # FASE 2: EJECUCIÓN DE TESTS
+    # ============================================
+    logger.info("⚡ Ejecutando tests unitarios...")
+    
+    # Verificar que existe el archivo de tests
     if not os.path.exists(test_path):
         logger.error(f"❌ No se encontró el archivo de tests: {test_path}")
         state['pruebas_superadas'] = False
@@ -106,7 +150,7 @@ def probador_uts_node(state: AgentState) -> AgentState:
         state['debug_attempt_count'] += 1
         
         guardar_fichero_texto(
-            f"4_probador_req{attempt}_debug{debug_attempt}_ERROR.txt",
+            f"4_testing_req{attempt}_debug{debug_attempt}_ERROR.txt",
             f"Status: ERROR\n\nError: Archivo de tests no encontrado\n{test_path}",
             directorio=settings.OUTPUT_DIR
         )
@@ -114,14 +158,14 @@ def probador_uts_node(state: AgentState) -> AgentState:
         log_file_operation(logger, "buscar", test_path, success=False, error="Archivo no encontrado")
         return state
     
+    # Verificar que existe el archivo de código
     if not os.path.exists(code_path):
         logger.warning(f"⚠️ No se encontró el archivo de código: {code_path}")
-        # Intentar guardar el código del estado
-        guardar_fichero_texto(code_filename, state['codigo_generado'], directorio=settings.OUTPUT_DIR)
+        guardar_fichero_texto(codigo_filename, state['codigo_generado'], directorio=settings.OUTPUT_DIR)
         logger.info("✅ Código guardado desde el estado")
     
     logger.info(f"📄 Archivo de tests: {test_filename}")
-    logger.info(f"📄 Archivo de código: {code_filename}")
+    logger.info(f"📄 Archivo de código: {codigo_filename}")
     
     # Ejecutar tests según el lenguaje
     try:
@@ -130,12 +174,15 @@ def probador_uts_node(state: AgentState) -> AgentState:
         else:  # Python
             result = _ejecutar_tests_python(test_path, state)
         
-        # Actualizar estado con resultados
+        # ============================================
+        # FASE 3: EVALUACIÓN Y ACTUALIZACIÓN DE ESTADO
+        # ============================================
         state['pruebas_superadas'] = result['success']
         state['traceback'] = result['traceback']
         
         if result['success']:
-            state['debug_attempt_count'] = 0  # Resetear contador
+            # Tests pasaron - resetear contador de debug
+            state['debug_attempt_count'] = 0
             
             # Obtener estadísticas
             stats = result.get('tests_run', {})
@@ -143,25 +190,25 @@ def probador_uts_node(state: AgentState) -> AgentState:
                 total = stats.get('total', 0)
                 passed = stats.get('passed', 0)
                 failed = stats.get('failed', 0)
-                logger.info(f"Tests PASSED - Total: {total}, Pasados: {passed}, Fallidos: {failed}")
+                logger.info(f"✅ Tests PASSED - Total: {total}, Pasados: {passed}, Fallidos: {failed}")
                 
                 log_agent_execution(
                     logger,
-                    "Probador UTs",
+                    "Testing",
                     "Tests exitosos",
                     {"total": total, "passed": passed, "failed": failed}
                 )
             else:
-                logger.info("Tests PASSED")
+                logger.info("✅ Tests PASSED")
             
-            # Guardar resultado exitoso con estadísticas legibles
+            # Guardar resultado exitoso
             clean_output = _limpiar_ansi(result['output'])
             stats_summary = ""
             if isinstance(stats, dict):
                 stats_summary = f"\nEstadísticas:\n  Total: {stats.get('total', 0)}\n  Pasados: {stats.get('passed', 0)}\n  Fallidos: {stats.get('failed', 0)}\n"
             
             output_content = f"Status: PASSED{stats_summary}\n{'='*60}\n{clean_output}"
-            nombre_archivo = f"4_probador_req{attempt}_debug{debug_attempt}_PASSED.txt"
+            nombre_archivo = f"4_testing_req{attempt}_debug{debug_attempt}_PASSED.txt"
             guardar_fichero_texto(
                 nombre_archivo,
                 output_content,
@@ -173,10 +220,8 @@ def probador_uts_node(state: AgentState) -> AgentState:
             # === AZURE DEVOPS: Adjuntar archivo de tests cuando pasen ===
             if state.get('azure_pbi_id') and state.get('azure_testing_task_id'):
                 try:
-                    stats = result.get('tests_run', {})
                     total = stats.get('total', 0) if isinstance(stats, dict) else 0
                     
-                    # Usar servicio centralizado
                     azure_service.attach_tests_to_work_items(
                         state=state,
                         test_file_path=test_path,
@@ -194,6 +239,7 @@ def probador_uts_node(state: AgentState) -> AgentState:
                     logger.warning(f"⚠️ Error en operaciones de Azure DevOps: {e}")
             # === FIN: Adjuntar tests a Azure DevOps ===
         else:
+            # Tests fallaron - incrementar contador de debug
             state['debug_attempt_count'] += 1
             
             # Obtener estadísticas
@@ -206,17 +252,17 @@ def probador_uts_node(state: AgentState) -> AgentState:
                 
                 log_agent_execution(
                     logger,
-                    "Probador UTs",
+                    "Testing",
                     "Tests fallidos",
                     {"total": total, "passed": passed, "failed": failed},
                     level=logging.ERROR
                 )
             else:
-                logger.error("Tests FAILED")
+                logger.error("❌ Tests FAILED")
             
-            logger.info(f"Intento de depuración: {state['debug_attempt_count']}/{state['max_debug_attempts']}")
+            logger.info(f"🔄 Intento de depuración: {state['debug_attempt_count']}/{state['max_debug_attempts']}")
             
-            # Guardar resultado fallido con contenido limpio
+            # Guardar resultado fallido
             clean_output = _limpiar_ansi(result['output'])
             clean_traceback = _limpiar_ansi(result['traceback'])
             stats_summary = ""
@@ -224,7 +270,7 @@ def probador_uts_node(state: AgentState) -> AgentState:
                 stats_summary = f"\nEstadísticas:\n  Total: {stats.get('total', 0)}\n  Pasados: {stats.get('passed', 0)}\n  Fallidos: {stats.get('failed', 0)}\n"
             
             output_content = f"Status: FAILED{stats_summary}\n{'='*60}\n\nTraceback:\n{clean_traceback}\n\n{'='*60}\n{clean_output}"
-            nombre_archivo = f"4_probador_req{attempt}_debug{debug_attempt}_FAILED.txt"
+            nombre_archivo = f"4_testing_req{attempt}_debug{debug_attempt}_FAILED.txt"
             guardar_fichero_texto(
                 nombre_archivo,
                 output_content,
@@ -260,13 +306,13 @@ def probador_uts_node(state: AgentState) -> AgentState:
         state['debug_attempt_count'] += 1
         
         guardar_fichero_texto(
-            f"4_probador_req{attempt}_debug{debug_attempt}_ERROR.txt",
+            f"4_testing_req{attempt}_debug{debug_attempt}_ERROR.txt",
             f"Status: ERROR\n\nError de ejecución:\n{str(e)}",
             directorio=settings.OUTPUT_DIR
         )
     
     logger.info("=" * 60)
-    logger.info("PROBADOR UTs - FIN")
+    logger.info("🧪 TESTING - FIN")
     logger.info("=" * 60)
     
     return state
@@ -282,11 +328,10 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
         state: Estado actual del agente
         
     Returns:
-        Dict con 'success', 'output', 'traceback'
+        Dict con 'success', 'output', 'traceback', 'tests_run'
     """
-    logger.info("Ejecutando vitest...")
+    logger.info("▶️ Ejecutando vitest...")
     
-    # Cambiar al directorio output para que las importaciones relativas funcionen
     original_dir = os.getcwd()
     output_dir = os.path.abspath(settings.OUTPUT_DIR)
     
@@ -294,7 +339,7 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
         os.chdir(output_dir)
         logger.debug(f"Directorio de trabajo: {output_dir}")
         
-        # Asegurar que existe package.json para que npx encuentre vitest
+        # Asegurar que existe package.json
         package_json_path = os.path.join(output_dir, 'package.json')
         if not os.path.exists(package_json_path):
             package_json_content = {
@@ -307,19 +352,17 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
             }
             with open(package_json_path, 'w') as f:
                 json.dump(package_json_content, f, indent=2)
-            logger.info(f" ℹ️ package.json creado en {output_dir}")
+            logger.info(f"ℹ️ package.json creado en {output_dir}")
         
-        # Ejecutar vitest con el archivo de tests
-        # Usar --run para modo no-watch, --reporter=verbose para detalles
-        # En Windows, usar shell=True para que encuentre npx correctamente
+        # Ejecutar vitest
         result = subprocess.run(
             ['npx', 'vitest', 'run', os.path.basename(test_path), '--reporter=verbose'],
             capture_output=True,
             text=True,
             encoding='utf-8',
-            errors='replace',  # Reemplazar caracteres no decodificables
-            timeout=60,  # 60 segundos de timeout
-            shell=True  # Necesario en Windows para encontrar npx
+            errors='replace',
+            timeout=60,
+            shell=True
         )
         
         os.chdir(original_dir)
@@ -343,25 +386,15 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
             'success': False,
             'output': "Timeout: Los tests tardaron más de 60 segundos",
             'traceback': "TimeoutError: Test execution exceeded 60 seconds",
-            'tests_run': 0
+            'tests_run': {'total': 0, 'passed': 0, 'failed': 0}
         }
     except FileNotFoundError as e:
         os.chdir(original_dir)
-        # Error al ejecutar npx - el comando no existe
         return {
             'success': False,
             'output': f"Node.js/npx no está instalado o no está en el PATH.\n\nVerifique:\n  1. Node.js instalado: node --version\n  2. npx disponible: npx --version\n  3. Vitest instalado en output/: cd output && npm install -D vitest",
             'traceback': f"FileNotFoundError: npx command not found - {str(e)}",
-            'tests_run': 0
-        }
-    except OSError as e:
-        os.chdir(original_dir)
-        # Error del sistema operativo (permisos, directorio no existe, etc.)
-        return {
-            'success': False,
-            'output': f"Error del sistema operativo:\n{str(e)}\n\nDirectorio de trabajo: {output_dir}\nArchivo de tests: {test_path}",
-            'traceback': f"OSError: {str(e)}",
-            'tests_run': 0
+            'tests_run': {'total': 0, 'passed': 0, 'failed': 0}
         }
     except Exception as e:
         os.chdir(original_dir)
@@ -369,7 +402,7 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
             'success': False,
             'output': f"Error inesperado al ejecutar vitest:\n{str(e)}\n\nTipo: {type(e).__name__}",
             'traceback': f"Exception ({type(e).__name__}): {str(e)}",
-            'tests_run': 0
+            'tests_run': {'total': 0, 'passed': 0, 'failed': 0}
         }
 
 
@@ -382,20 +415,19 @@ def _ejecutar_tests_python(test_path: str, state: AgentState) -> Dict[str, Any]:
         state: Estado actual del agente
         
     Returns:
-        Dict con 'success', 'output', 'traceback'
+        Dict con 'success', 'output', 'traceback', 'tests_run'
     """
     logger.info("▶️ Ejecutando pytest...")
     
     try:
-        # Ejecutar pytest con verbose para detalles
         logger.debug(f"Test path: {test_path}")
         result = subprocess.run(
             ['pytest', test_path, '-v', '--tb=short'],
             capture_output=True,
             text=True,
             encoding='utf-8',
-            errors='replace',  # Reemplazar caracteres no decodificables
-            timeout=60  # 60 segundos de timeout
+            errors='replace',
+            timeout=60
         )
         
         success = result.returncode == 0
@@ -414,65 +446,44 @@ def _ejecutar_tests_python(test_path: str, state: AgentState) -> Dict[str, Any]:
             'success': False,
             'output': "Timeout: Los tests tardaron más de 60 segundos",
             'traceback': "TimeoutError: Test execution exceeded 60 seconds",
-            'tests_run': 0
+            'tests_run': {'total': 0, 'passed': 0, 'failed': 0}
         }
     except FileNotFoundError as e:
-        # Error al ejecutar pytest
         error_msg = str(e)
         if 'pytest' in error_msg.lower():
             return {
                 'success': False,
                 'output': f"pytest no está instalado.\n\nEjecute:\n  pip install pytest\n\nO si usa entorno virtual:\n  .venv\\Scripts\\activate\n  pip install pytest",
                 'traceback': f"FileNotFoundError: pytest command not found - {error_msg}",
-                'tests_run': 0
+                'tests_run': {'total': 0, 'passed': 0, 'failed': 0}
             }
         else:
             return {
                 'success': False,
                 'output': f"Archivo no encontrado: {error_msg}\n\nVerifique que existe: {test_path}",
                 'traceback': f"FileNotFoundError: Test file not found - {error_msg}",
-                'tests_run': 0
+                'tests_run': {'total': 0, 'passed': 0, 'failed': 0}
             }
-    except OSError as e:
-        # Error del sistema operativo
-        return {
-            'success': False,
-            'output': f"Error del sistema operativo:\n{str(e)}\n\nArchivo de tests: {test_path}",
-            'traceback': f"OSError: {str(e)}",
-            'tests_run': 0
-        }
     except Exception as e:
         return {
             'success': False,
             'output': f"Error inesperado al ejecutar pytest:\n{str(e)}\n\nTipo: {type(e).__name__}",
             'traceback': f"Exception ({type(e).__name__}): {str(e)}",
-            'tests_run': 0
+            'tests_run': {'total': 0, 'passed': 0, 'failed': 0}
         }
 
 
 def _parsear_resultados_vitest(output: str) -> Dict[str, int]:
-    """Parsea la salida de vitest para extraer estadísticas de tests.
-    
-    Returns:
-        Dict con 'total', 'passed', 'failed'
-    """
-    # Limpiar códigos ANSI primero
+    """Parsea la salida de vitest para extraer estadísticas."""
     clean_output = _limpiar_ansi(output)
-    
     stats = {'total': 0, 'passed': 0, 'failed': 0}
     
-    # Verificar si hay "no tests"
     if 'no tests' in clean_output.lower():
         return stats
     
     # Buscar línea como: "Tests  33 passed (33)" o "Tests  5 passed | 2 failed (7)"
-    # También puede ser: "Tests  3 failed | 27 passed (30)" cuando hay fallos
     tests_match = re.search(r'Tests\s+(?:(\d+)\s+failed\s+\|\s+)?(\d+)\s+passed(?:\s+\|\s+(\d+)\s+failed)?\s+\((\d+)\)', clean_output)
     if tests_match:
-        # Grupo 1: failed al principio (si existe)
-        # Grupo 2: passed (siempre existe)
-        # Grupo 3: failed al final (si existe)
-        # Grupo 4: total
         failed_first = tests_match.group(1)
         passed = tests_match.group(2)
         failed_last = tests_match.group(3)
@@ -481,13 +492,6 @@ def _parsear_resultados_vitest(output: str) -> Dict[str, int]:
         stats['passed'] = int(passed)
         stats['failed'] = int(failed_first) if failed_first else (int(failed_last) if failed_last else 0)
         stats['total'] = int(total)
-        return stats
-    
-    # Buscar "Test Files X failed (Y)" cuando no se ejecutan tests individuales
-    test_files_match = re.search(r'Test Files\s+(\d+)\s+failed\s+\((\d+)\)', clean_output)
-    if test_files_match:
-        stats['failed'] = int(test_files_match.group(1))
-        stats['total'] = int(test_files_match.group(2))
         return stats
     
     # Fallback: contar por símbolos
@@ -499,14 +503,9 @@ def _parsear_resultados_vitest(output: str) -> Dict[str, int]:
 
 
 def _parsear_resultados_pytest(output: str) -> Dict[str, int]:
-    """Parsea la salida de pytest para extraer estadísticas de tests.
-    
-    Returns:
-        Dict con 'total', 'passed', 'failed'
-    """
+    """Parsea la salida de pytest para extraer estadísticas."""
     stats = {'total': 0, 'passed': 0, 'failed': 0}
     
-    # Buscar líneas como: "3 passed, 1 failed in 0.12s" o "5 passed in 0.12s"
     passed_match = re.search(r'(\d+)\s+passed', output)
     failed_match = re.search(r'(\d+)\s+failed', output)
     
@@ -521,13 +520,12 @@ def _parsear_resultados_pytest(output: str) -> Dict[str, int]:
 
 def _mostrar_resumen_ejecucion(result: Dict[str, Any]) -> None:
     """Muestra un resumen visual de la ejecución de tests."""
-    print()  # Línea en blanco para separación visual
+    print()
     logger.info("=" * 60)
-    logger.info("RESUMEN DE EJECUCIÓN DE TESTS")
+    logger.info("📊 RESUMEN DE EJECUCIÓN DE TESTS")
     logger.info("-" * 60)
     logger.info(f"Estado: {'✅ PASSED' if result['success'] else '❌ FAILED'}")
     
-    # Mostrar estadísticas detalladas si están disponibles
     stats = result.get('tests_run', {})
     if isinstance(stats, dict):
         total = stats.get('total', 0)
@@ -537,13 +535,9 @@ def _mostrar_resumen_ejecucion(result: Dict[str, Any]) -> None:
         logger.info(f"  ✅ Pasados: {passed}")
         if failed > 0:
             logger.info(f"  ❌ Fallidos: {failed}")
-    else:
-        # Fallback para formato antiguo (solo número)
-        logger.info(f"Tests ejecutados: {stats}")
     
     if not result['success'] and result['traceback']:
         logger.error("🚨 Error principal:")
-        # Mostrar solo las primeras líneas del traceback
         traceback_lines = result['traceback'].split('\n')[:10]
         for line in traceback_lines:
             logger.error(f"  {line}")
@@ -551,5 +545,3 @@ def _mostrar_resumen_ejecucion(result: Dict[str, Any]) -> None:
             logger.error("  ...")
     
     logger.info("=" * 60)
-
-
