@@ -45,6 +45,9 @@ class Settings:
     # Modo Testing/Mock (evita llamadas reales al LLM)
     LLM_MOCK_MODE: bool = os.getenv("LLM_MOCK_MODE", "false").lower() == "true"
     
+    # Usar wrapper de LangChain (proporciona callbacks, streaming, token counting)
+    USE_LANGCHAIN_WRAPPER: bool = os.getenv("USE_LANGCHAIN_WRAPPER", "false").lower() == "true"
+    
     # Configuración de reintentos para errores 503
     MAX_API_RETRIES: int = 3  # Número de reintentos si el servicio está sobrecargado
     RETRY_BASE_DELAY: int = 2  # Segundos base para backoff exponencial (2, 4, 8...)

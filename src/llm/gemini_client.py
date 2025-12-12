@@ -1,6 +1,7 @@
 """
 Cliente LLM para interacción con Google Gemini.
 Incluye manejo de errores y reintentos automáticos.
+Soporta wrapper de LangChain opcional para debugging avanzado.
 """
 
 import os
@@ -15,6 +16,18 @@ from tools.code_executor import CodeExecutionToolWithInterpreterPY, CodeExecutio
 from llm.mock_responses import get_mock_response
 
 logger = setup_logger(__name__, level=settings.get_log_level())
+
+# Importación condicional del wrapper de LangChain
+_langchain_available = False
+if settings.USE_LANGCHAIN_WRAPPER:
+    try:
+        from llm.langchain_gemini import call_gemini_with_langchain, get_token_count
+        _langchain_available = True
+        logger.info("✅ Wrapper de LangChain habilitado")
+    except ImportError as e:
+        logger.warning(f"⚠️ No se pudo importar wrapper de LangChain: {e}")
+        logger.warning("   Instala: pip install langchain-google-genai")
+        _langchain_available = False
 
 # Inicialización del cliente Gemini
 # try:
@@ -58,6 +71,17 @@ def call_gemini(
     if settings.LLM_MOCK_MODE:
         logger.info("🧪 [MOCK] Devolviendo respuesta mockeada (LLM_MOCK_MODE=true)")
         return get_mock_response(role_prompt, context)
+    
+    # MODO LANGCHAIN - Usar wrapper de LangChain si está habilitado
+    # Nota: Solo para llamadas simples sin response_schema ni tools
+    if settings.USE_LANGCHAIN_WRAPPER and _langchain_available:
+        if response_schema is None and not allow_use_tool:
+            logger.debug("🔗 Usando wrapper de LangChain")
+            try:
+                return call_gemini_with_langchain(role_prompt, context)
+            except Exception as e:
+                logger.warning(f"⚠️ Error con wrapper LangChain, fallback a cliente directo: {e}")
+                # Continuar con el cliente directo si falla
     
     if not client:
         return "ERROR: Cliente Gemini no inicializado correctamente."

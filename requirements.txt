@@ -5,6 +5,7 @@
 google-genai>=0.3.0
 langgraph>=0.2.0
 langchain-core>=0.3.0
+langchain-google-genai>=2.0.0  # Wrapper LangChain para Gemini
 
 # Validación de datos - versiones compatibles
 pydantic>=2.0.0,<3.0.0
