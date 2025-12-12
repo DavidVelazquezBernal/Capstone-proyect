@@ -29,17 +29,25 @@ Capstone proyect v2/
 │   │
 │   ├── agents/                      # Agentes del sistema
 │   │   ├── __init__.py
-│   │   ├── ingeniero_requisitos.py  # Agente 1: Clarificación
-│   │   ├── product_owner.py         # Agente 2: Formalización
-│   │   ├── desarrollador.py # Agente 3: Desarrollo y corrección
-│   │   ├── sonarqube.py  # Agente 3.5: Análisis de calidad
-│   │   ├── generador_uts.py         # Agente 3.6: Generación de tests
-│   │   ├── probador_uts.py          # Agente 4: Ejecución de tests
-│   │   └── stakeholder.py           # Agente 5: Validación
+│   │   ├── product_owner.py         # Agente 1: Formalización de requisitos
+│   │   ├── desarrollador.py         # Agente 2: Desarrollo y corrección
+│   │   ├── sonarqube.py             # Agente 3: Análisis de calidad
+│   │   ├── generador_uts.py         # Agente 4: Generación de tests
+│   │   ├── probador_uts.py          # Agente 5: Ejecución de tests
+│   │   └── stakeholder.py           # Agente 6: Validación
 │   │
 │   ├── llm/                         # Cliente LLM
 │   │   ├── __init__.py
 │   │   └── gemini_client.py         # Cliente Gemini
+│   │
+│   ├── utils/                       # Utilidades
+│   │   ├── __init__.py
+│   │   ├── logger.py                # Sistema de logging
+│   │   └── file_manager.py          # Gestión de archivos
+│   │
+│   ├── services/                    # Servicios auxiliares
+│   │   ├── __init__.py
+│   │   └── github_service.py        # Integración con GitHub
 │   │
 │   └── workflow/                    # Workflow LangGraph
 │       ├── __init__.py
@@ -90,6 +98,7 @@ Crear archivo `.env` en la raíz del proyecto:
 ```env
 # APIs requeridas
 GEMINI_API_KEY=tu_clave_api_aqui
+E2B_API_KEY=tu_clave_e2b_aqui
 
 # SonarQube (opcional - para análisis avanzado)
 SONARQUBE_URL=https://sonarcloud.io
@@ -103,24 +112,32 @@ AZURE_DEVOPS_PROJECT=tu-proyecto
 AZURE_DEVOPS_PAT=tu-personal-access-token
 AZURE_ITERATION_PATH=MiProyecto\\Sprint 1
 AZURE_AREA_PATH=MiProyecto\\Backend
-```
+AZURE_ASSIGNED_TO=
 
-**Nota:** E2B ya no es requerido. El sistema usa vitest/pytest directamente.
+# GitHub (opcional - para integración con repositorio)
+GITHUB_REPO_URL=
+GITHUB_USERNAME=
+GITHUB_TOKEN=
+GITHUB_EMAIL=
+
+# Logging
+LOG_LEVEL=INFO
+LOG_TO_FILE=true
+```
 
 **Nota:** Las credenciales de SonarQube son **opcionales**. El sistema funciona con análisis estático básico sin ellas.
 
-Para configurar SonarQube, consulta: [`SONARQUBE_SETUP.md`](SONARQUBE_SETUP.md)
+**🔷 Azure DevOps Integration**: Para habilitar la creación automática de PBIs y Tasks:
 
-**🔷 Azure DevOps Integration**: Para habilitar la creación automática de PBIs:
+- Configurar variables en `.env` con credenciales de Azure DevOps
+- Habilitar `AZURE_DEVOPS_ENABLED=true`
+- El sistema creará automáticamente PBIs y Tasks relacionadas
+- Adjuntará código final y tests a los work items
 
-- Consulta: [`AZURE_DEVOPS_QUICKSTART.md`](AZURE_DEVOPS_QUICKSTART.md) (5 minutos)
-- Documentación completa: [`AZURE_DEVOPS_INTEGRATION.md`](AZURE_DEVOPS_INTEGRATION.md)
+**🔗 GitHub Integration**: Para integración con repositorio remoto:
 
-5. **Verificar configuración de SonarQube** (opcional)
-
-```bash
-python test_sonarqube_connection.py
-```
+- Configurar variables `GITHUB_*` en `.env`
+- El sistema puede hacer commits y push automáticos (opcional)
 
 ## 💻 Uso
 
@@ -154,52 +171,48 @@ El sistema detecta automáticamente el lenguaje del código generado:
 El código se limpia automáticamente de marcadores markdown (` ```python `, ` ```typescript `, ` ``` `).
 
 ````
-START → Ingeniero Requisitos → Product Owner → Codificador → SonarQube Analyzer
-           ↑                                        ↑               ↓
-           |                                        |          ¿Calidad OK?
-           |                                        ←──────── NO (max 2 intentos)
-           |                                                      ↓
-           |                                              Generador Unit Tests
-           |                                                      ↓
-           |                                              Ejecutor de Pruebas
-           |                                                      ↓
-           |                                                   ¿Pasa?
-           |                                                      ↓
-           |                                                 Stakeholder
-           |                                                      ↓
-           |                                                 ¿Validado?
-           |                                                      ↓
-           ←──────────────────────────────────────────────────  NO
-                                                                 ↓
-                                                                END
-```        |                                                      ↓
-           ←──────────────────────────────────────────────────  NO
-                                                                 ↓
-                                                                END
+START → Product Owner → Desarrollador → SonarQube Analyzer
+           ↑                    ↑               ↓
+           |                    |          ¿Calidad OK?
+           |                    ←──────── NO (max 3 intentos)
+           |                                   ↓
+           |                           Generador Unit Tests
+           |                                   ↓
+           |                           Ejecutor de Pruebas
+           |                                   ↓
+           |                                ¿Pasa?
+           |                    ←──────── NO (max 3 intentos)
+           |                                   ↓
+           |                              Stakeholder
+           |                                   ↓
+           |                              ¿Validado?
+           |                                   ↓
+           ←──────────────────────────────── NO
+                                              ↓
+                                             END
 ### Agentes
 
-1. **Ingeniero de Requisitos**: Clarifica y refina requisitos
-2. **Product Owner**: Formaliza especificaciones técnicas en JSON estructurado + 🔷 crea PBIs en Azure DevOps (opcional)
-3. **Codificador Corrector**: Genera y corrige código Python/TypeScript
-4. **Analizador SonarQube**: Verifica calidad del código (bugs, vulnerabilidades, code smells)
-5. **Generador de Unit Tests**: Genera tests unitarios profesionales con vitest/pytest
-6. **Ejecutor de Pruebas**: Ejecuta tests directamente con vitest/pytest y valida funcionalidad
-7. **Stakeholder**: Valida cumplimiento de visión de negocio
+1. **Product Owner**: Formaliza especificaciones técnicas en JSON estructurado + 🔷 crea PBIs y Tasks en Azure DevOps (opcional)
+2. **Desarrollador**: Genera y corrige código Python/TypeScript + 🔷 crea Tasks de implementación y testing (opcional)
+3. **Analizador SonarQube**: Verifica calidad del código (bugs, vulnerabilidades, code smells)
+4. **Generador de Unit Tests**: Genera tests unitarios profesionales con vitest/pytest
+5. **Ejecutor de Pruebas**: Ejecuta tests directamente con vitest/pytest y valida funcionalidad + 📎 adjunta tests a Azure DevOps (opcional)
+6. **Stakeholder**: Valida cumplimiento de visión de negocio + 📎 adjunta código final a Azure DevOps (opcional)
 
 ### Bucles de Corrección
 
 El sistema implementa tres bucles de corrección:
 
-1. **Bucle de Calidad** (SonarQube → Codificador):
+1. **Bucle de Calidad** (SonarQube → Desarrollador):
    - Detecta issues de calidad, seguridad y code smells
-   - Máximo 2 intentos de corrección (configurable)
+   - Máximo 3 intentos de corrección (configurable)
    - Criterios: 0 BLOCKER, máximo 2 CRITICAL
 
-2. **Bucle de Depuración** (Probador → Codificador):
+2. **Bucle de Depuración** (Probador → Desarrollador):
    - Corrige errores de ejecución
    - Máximo 3 intentos (configurable)
 
-3. **Bucle de Validación** (Stakeholder → Ingeniero):
+3. **Bucle de Validación** (Stakeholder → Product Owner):
    - Reingeniería de requisitos si no cumple visión de negocio
    - Máximo 1 ciclo completo (configurable)
 
@@ -219,9 +232,11 @@ El sistema implementa tres bucles de corrección:
 Editar `src/config/settings.py` para ajustar:
 - `MAX_ATTEMPTS`: Máximo de ciclos completos (default: 1)
 - `MAX_DEBUG_ATTEMPTS`: Máximo intentos de depuración (default: 3)
-- `MAX_SONARQUBE_ATTEMPTS`: Máximo intentos de corrección de calidad (default: 2)
+- `MAX_SONARQUBE_ATTEMPTS`: Máximo intentos de corrección de calidad (default: 3)
 - `TEMPERATURE`: Temperatura del LLM (default: 0.1)
 - `MAX_OUTPUT_TOKENS`: Tokens máximos de salida (default: 4000)
+- `LOG_LEVEL`: Nivel de logging (default: INFO)
+- `LOG_TO_FILE`: Guardar logs en archivo (default: true)
 
 ### Ejecución de Tests Moderna (Refactorizado)
 
@@ -253,9 +268,6 @@ El sistema ejecuta directamente tests unitarios generados usando frameworks est�
 - Mensajes de error específicos y accionables
 - Manejo robusto de errores (FileNotFoundError, OSError, TimeoutExpired)
 
-**Más información:** [`GUIA_NUEVO_EJECUTOR.md`](GUIA_NUEVO_EJECUTOR.md) | [`REFACTOR_EJECUTOR_PRUEBAS.md`](REFACTOR_EJECUTOR_PRUEBAS.md)
-
-**Más información:** [`GUIA_NUEVO_EJECUTOR.md`](GUIA_NUEVO_EJECUTOR.md) | [`REFACTOR_EJECUTOR_PRUEBAS.md`](REFACTOR_EJECUTOR_PRUEBAS.md)
 
 ### Análisis de Calidad con SonarQube
 
@@ -274,6 +286,8 @@ El sistema ahora puede crear automáticamente **Product Backlog Items (PBIs)** e
 
 **Características:**
 - ✅ Creación automática de PBIs con descripción HTML enriquecida
+- ✅ Creación automática de Tasks relacionadas (Implementación + Testing)
+- ✅ Adjuntos automáticos de código final y tests a work items
 - ✅ Estimación inteligente de Story Points (1, 2, 3, 5, 8, 13)
 - ✅ Asignación automática a Iteration y Area Path
 - ✅ Tags descriptivos (AI-Generated, Multiagente, Lenguaje)
@@ -281,13 +295,12 @@ El sistema ahora puede crear automáticamente **Product Backlog Items (PBIs)** e
 - ✅ Trazabilidad completa con URLs en requisitos formales
 - ✅ Modo degradado (funciona sin Azure DevOps si está deshabilitado)
 
-**Quick Start:**
-1. Ver guía rápida: [`AZURE_DEVOPS_QUICKSTART.md`](AZURE_DEVOPS_QUICKSTART.md) (5 minutos)
-2. Configurar `.env` con credenciales de Azure DevOps
-3. Ejecutar `python test_azure_devops_connection.py` para validar
-4. El flujo normal creará PBIs automáticamente
+**Configuración:**
+1. Configurar `.env` con credenciales de Azure DevOps
+2. Habilitar `AZURE_DEVOPS_ENABLED=true`
+3. El flujo normal creará PBIs, Tasks y adjuntará archivos automáticamente
 
-**Documentación completa:** [`AZURE_DEVOPS_INTEGRATION.md`](AZURE_DEVOPS_INTEGRATION.md)
+**Documentación completa:** [`IMPLEMENTACION_ADJUNTOS_AZURE.md`](IMPLEMENTACION_ADJUNTOS_AZURE.md)
 
 ## 📄 Licencia
 

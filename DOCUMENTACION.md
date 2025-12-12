@@ -107,30 +107,34 @@
 
 ## 🛠️ Proyecto Capstone: Asistente de Desarrollo y Depuración Ágil (LangGraph)
 
-Este sistema multiagente automatiza el proceso de toma de requisitos, formalización, codificación, prueba, depuración y validación, todo dentro de un **ciclo de retroalimentación continuo**.
+Este sistema multiagente automatiza el proceso de formalización de requisitos, codificación, análisis de calidad, generación de tests, prueba, depuración y validación, todo dentro de un **ciclo de retroalimentación continuo**.
 
-### 1\. ⚙️ Arquitectura del Sistema (LangGraph)
+### 1. ⚙️ Arquitectura del Sistema (LangGraph)
 
 #### **Definición de Nodos (Agentes):**
 
 | Agente | Función Principal | Rol en el Ciclo | Condición de Salida |
 | :--- | :--- | :--- | :--- |
-| **Agente 1: 🙋‍♂️ Ingeniero de Requisitos** | Clarifica la necesidad del usuario, o el *feedback* de rechazo del Stakeholder. | **Inicio del Ciclo.** | Requisito inicial **clarificado** y validado. |
-| **Agente 2: 💼 Product Owner (PO)** | Genera un conjunto de **requisitos funcionales formales**. | **Formalización.** | Requisitos **formales** y **aceptados** por el PO. |
-| **Agente 3: 💻 Codificador** | Genera el código Python y corrige errores sintácticos o de *traceback*. | **Desarrollo.** | Código **generado** y listo para pruebas. |
-| **Agente 4: 🧪 Probador/Depurador** | Escribe y ejecuta pruebas unitarias (usando una *tool* de ejecución). Analiza los *tracebacks*. | **Control de Calidad (QA).** | **Pasa Pruebas** o **Falla Pruebas** (resultado binario). |
-| **Agente 5: ✅ Stakeholder** | Evalúa el código final y el resultado de las pruebas para verificar si cumple la intención de negocio. | **Validación de Negocio.** | **Validado** o **Rechazado** (resultado binario). |
+| **Agente 1: 💼 Product Owner (PO)** | Genera un conjunto de **requisitos funcionales formales** y crea PBIs en Azure DevOps (opcional). | **Formalización.** | Requisitos **formales** y **aceptados** por el PO. |
+| **Agente 2: 💻 Desarrollador** | Genera el código Python/TypeScript y corrige errores. Crea Tasks en Azure DevOps (opcional). | **Desarrollo.** | Código **generado** y listo para análisis. |
+| **Agente 3: 🔍 Analizador SonarQube** | Analiza calidad del código (bugs, vulnerabilidades, code smells). | **Control de Calidad.** | **Calidad OK** o **Requiere Corrección**. |
+| **Agente 4: 🧪 Generador Unit Tests** | Genera tests unitarios profesionales con vitest/pytest. | **Generación de Tests.** | Tests **generados** y listos para ejecución. |
+| **Agente 5: 🧪 Ejecutor de Pruebas** | Ejecuta tests unitarios y adjunta resultados a Azure DevOps (opcional). | **Ejecución de Tests.** | **Pasa Pruebas** o **Falla Pruebas**. |
+| **Agente 6: ✅ Stakeholder** | Evalúa el código final y adjunta a Azure DevOps (opcional). | **Validación de Negocio.** | **Validado** o **Rechazado**. |
 
 #### **Definición de Transiciones (Edges):**
 
 | Origen | Destino | Condición |
 | :--- | :--- | :--- |
-| Ingeniero de Requisitos | Product Owner | Siempre (Una vez clarificado el *prompt*) |
-| Product Owner | Codificador | Siempre (Una vez formalizados los requisitos) |
-| Codificador | Probador/Depurador | Siempre (Una vez generado el código) |
-| **Probador/Depurador** | **Codificador** | **Si Falla Pruebas** (Bucle interno de corrección) |
-| Probador/Depurador | Stakeholder | **Si Pasa Pruebas** |
-| **Stakeholder** | **Ingeniero de Requisitos** | **Si Rechazado** (Fallo conceptual. **Bucle externo**) |
+| START | Product Owner | Siempre (Inicio del flujo) |
+| Product Owner | Desarrollador | Siempre (Una vez formalizados los requisitos) |
+| Desarrollador | Analizador SonarQube | Siempre (Una vez generado el código) |
+| **Analizador SonarQube** | **Desarrollador** | **Si Calidad Falla** (Bucle de calidad - max 3 intentos) |
+| Analizador SonarQube | Generador Unit Tests | **Si Calidad OK** |
+| Generador Unit Tests | Ejecutor de Pruebas | Siempre (Una vez generados los tests) |
+| **Ejecutor de Pruebas** | **Desarrollador** | **Si Falla Pruebas** (Bucle de depuración - max 3 intentos) |
+| Ejecutor de Pruebas | Stakeholder | **Si Pasa Pruebas** |
+| **Stakeholder** | **Product Owner** | **Si Rechazado** (Bucle de validación - max 1 intento) |
 | Stakeholder | **FIN** | **Si Validado** |
 
 -----
@@ -140,73 +144,116 @@ Este sistema multiagente automatiza el proceso de toma de requisitos, formalizac
 | Variable de Estado | Tipo | Propósito |
 | :--- | :--- | :--- |
 | `prompt_inicial` | `str` | El texto inicial del usuario. |
-| `requisito_clarificado` | `str` | El *prompt* refinado por el Agente 1. |
-| `requisitos_formales` | `str` | La especificación técnica del Agente 2. |
-| `codigo_generado` | `str` | El código Python actual. |
-| `traceback` | `str` | El resultado del error de ejecución del Agente 4 (si falla). |
-| `resultado_pruebas` | `bool` | `True` si pasa las pruebas, `False` si falla. |
+| `requisitos_formales` | `str` | La especificación técnica del Product Owner (JSON). |
+| `codigo_generado` | `str` | El código Python/TypeScript actual. |
+| `lenguaje_detectado` | `str` | Lenguaje detectado (python/typescript). |
+| `sonarqube_passed` | `bool` | `True` si pasa análisis de calidad. |
+| `sonarqube_report` | `str` | Reporte de análisis de SonarQube. |
+| `tests_unitarios_generados` | `str` | Tests unitarios generados. |
+| `pruebas_superadas` | `bool` | `True` si pasa las pruebas, `False` si falla. |
+| `resultado_ejecucion` | `str` | Resultado de ejecución de tests. |
+| `validado` | `bool` | `True` si Stakeholder valida. |
+| `azure_pbi_id` | `int \| None` | ID del PBI en Azure DevOps. |
+| `azure_implementation_task_id` | `int \| None` | ID de Task de Implementación. |
+| `azure_testing_task_id` | `int \| None` | ID de Task de Testing. |
+| `attempt_count` | `int` | Contador de ciclos completos. |
+| `debug_attempt_count` | `int` | Contador de intentos de depuración. |
+| `sonarqube_attempt_count` | `int` | Contador de intentos de calidad. |
 
 -----
 
 ## 📝 Borrador de Prompts para Agentes del Sistema Ágil
 
-### 1\. 🙋‍♂️ Ingeniero de Requisitos (Role: Clarificador y Adaptador)
-
-> **Tu rol es el de un Ingeniero de Requisitos experto.**
->
-> **Objetivo:** Refinar el `prompt_inicial` o el `feedback_stakeholder` hasta convertirlo en una especificación clara, concisa y completa. Tu resultado debe incluir el lenguaje de programación, *inputs* y *outputs* esperados, y el objetivo funcional exacto.
->
-> **Instrucción Principal:** Analiza el texto. Si encuentras ambigüedades, plantea preguntas de clarificación o añade detalles lógicos.
->
-> **Output Esperado:** Un único bloque de texto bajo el título "**REQUISITO CLARIFICADO**".
-
------
-
-### 2\. 💼 Product Owner (Role: Formalizador de Requisitos)
+### 1\. 💼 Product Owner (Role: Formalizador de Requisitos)
 
 > **Tu rol es el de un Product Owner estricto y orientado a la entrega.**
 >
-> **Objetivo:** Recibir el requisito clarificado y transformarlo en una especificación formal y ejecutable.
+> **Objetivo:** Recibir el prompt inicial y transformarlo en una especificación formal y ejecutable en formato JSON.
 >
-> **Instrucción Principal:** Desglosa el requisito clarificado en: 1. **Objetivo Funcional**. 2. **Lenguaje**. 3. **Función Principal** (Nombre y firma). 4. **Entradas Esperadas**. 5. **Salidas Esperadas**.
+> **Instrucción Principal:** Desglosa el requisito en: 1. **Objetivo Funcional**. 2. **Lenguaje**. 3. **Función Principal** (Nombre y firma). 4. **Entradas Esperadas**. 5. **Salidas Esperadas**. 6. **Criterios de Aceptación**.
 >
-> **Output Esperado:** Un único bloque de texto bajo el título "**REQUISITOS FORMALES**".
+> **Output Esperado:** JSON estructurado con requisitos formales.
+>
+> **Integración Azure DevOps:** Si está habilitado, crea automáticamente un PBI con la especificación.
 
 -----
 
-### 3\. 💻 Codificador (Role: Desarrollador y Corrector)
+### 2\. 💻 Desarrollador (Role: Desarrollador y Corrector)
 
-> **Tu rol es el de un Desarrollador de Software Python sénior.**
+> **Tu rol es el de un Desarrollador de Software sénior (Python/TypeScript).**
 >
-> **Objetivo:** Generar el código Python que **satisface exactamente** todos los puntos de los `requisitos_formales`. Si se proporciona un `traceback`, tu objetivo principal es **identificar la causa raíz de ese error y corregir el código**.
+> **Objetivo:** Generar código que **satisface exactamente** todos los puntos de los `requisitos_formales`. Si hay feedback de SonarQube o errores de tests, corregir el código.
 >
 > **Instrucción Principal:**
 >
-> 1.  Si **NO** hay `traceback`, escribe el código desde cero.
-> 2.  Si **SÍ** hay `traceback`, analiza el error y corrige el código anterior.
-> 3.  El código debe ser una única función autocontenida.
+> 1.  Si es primera ejecución, escribe el código desde cero.
+> 2.  Si hay issues de SonarQube, corrige los problemas de calidad.
+> 3.  Si hay errores de tests, corrige los bugs funcionales.
+> 4.  El código debe seguir mejores prácticas y estándares.
 >
-> **Output Esperado:** El código Python completo envuelto en un único bloque de código markdown (e.g., \`\`\`python ... \`\`\`).
+> **Output Esperado:** Código Python/TypeScript completo en bloque markdown.
+>
+> **Integración Azure DevOps:** En primera ejecución, crea Tasks de Implementación y Testing.
 
 -----
 
-### 4\. 🧪 Probador/Depurador (Role: QA y Ejecutor de Código)
+### 3\. 🔍 Analizador SonarQube (Role: Control de Calidad)
 
-> **Tu rol es el de un Ingeniero de Control de Calidad (QA) extremadamente riguroso.**
+> **Tu rol es el de un Analista de Calidad de Código.**
 >
-> **Objetivo:** Verificar la funcionalidad del `codigo_generado` contra los `requisitos_formales` usando la `CodeExecutorTool`.
+> **Objetivo:** Analizar el código generado en busca de bugs, vulnerabilidades y code smells.
 >
 > **Instrucción Principal:**
 >
-> 1.  **Genera al menos 2 casos de prueba** (éxito y borde/falla).
-> 2.  **Simula la ejecución del código** con los casos de prueba. Analiza la salida o el error.
-> 3.  **Determina el resultado:** **PASSED** o **FAILED**.
+> 1.  Ejecutar análisis estático del código.
+> 2.  Identificar issues por severidad (BLOCKER, CRITICAL, MAJOR, MINOR).
+> 3.  Generar reporte detallado con instrucciones de corrección.
 >
-> **Output Esperado:** Un reporte de análisis bajo el título "**REPORTE DE PRUEBAS**". Si es FAILED, debe contener el `traceback` simulado.
+> **Criterios de Aceptación:**
+> - 0 issues BLOCKER
+> - Máximo 2 issues CRITICAL
+>
+> **Output Esperado:** Reporte de análisis y decisión PASSED/FAILED.
 
 -----
 
-### 5\. ✅ Stakeholder (Role: Validador de Negocio Final)
+### 4\. 🧪 Generador Unit Tests (Role: Generador de Tests)
+
+> **Tu rol es el de un Ingeniero de Testing experto.**
+>
+> **Objetivo:** Generar tests unitarios profesionales para el código generado.
+>
+> **Instrucción Principal:**
+>
+> 1.  Detectar lenguaje del código (Python/TypeScript).
+> 2.  Generar tests con framework apropiado (pytest/vitest).
+> 3.  Incluir casos normales, edge cases y manejo de errores.
+> 4.  Usar sintaxis moderna y mejores prácticas.
+>
+> **Output Esperado:** Archivo de tests completo y ejecutable.
+
+-----
+
+### 5\. 🧪 Ejecutor de Pruebas (Role: QA y Ejecutor de Tests)
+
+> **Tu rol es el de un Ejecutor de Tests automatizado.**
+>
+> **Objetivo:** Ejecutar los tests unitarios generados y reportar resultados.
+>
+> **Instrucción Principal:**
+>
+> 1.  Ejecutar tests con vitest (TypeScript) o pytest (Python).
+> 2.  Parsear resultados y extraer estadísticas.
+> 3.  Generar reporte con tests pasados/fallidos.
+> 4.  Si hay errores, proporcionar traceback detallado.
+>
+> **Output Esperado:** Reporte de ejecución con estadísticas y decisión PASSED/FAILED.
+>
+> **Integración Azure DevOps:** Si tests pasan, adjuntar archivo de tests al PBI y Task de Testing.
+
+-----
+
+### 6\. ✅ Stakeholder (Role: Validador de Negocio Final)
 
 > **Tu rol es el de un Stakeholder de negocio de alto nivel.**
 >
@@ -218,19 +265,24 @@ Este sistema multiagente automatiza el proceso de toma de requisitos, formalizac
 >   * **Si es NO:** El resultado es **RECHAZADO**. Proporciona un **feedback claro** sobre el motivo conceptual.
 >
 > **Output Esperado:** Un único bloque de texto bajo el título "**VALIDACIÓN FINAL**" que contenga **VALIDADO** o **RECHAZADO** y el **motivo** si es rechazado.
+>
+> **Integración Azure DevOps:** Si valida, adjuntar código final al PBI y Task de Implementación.
 
 -----
 
-## 🧪 Herramienta para el Probador/Depurador
+## 🧪 Herramientas del Sistema
 
-El **Agente 4** utiliza una herramienta simulada:
+### CodeExecutorTool
+Ejecuta código Python/TypeScript de forma segura usando E2B Code Interpreter.
 
-| Propiedad | Descripción |
-| :--- | :--- |
-| **Nombre** | `CodeExecutorTool` |
-| **Descripción** | Ejecuta el código Python proporcionado (`code`) con argumentos de prueba (`test_args`) y devuelve el resultado, o un `traceback` si falla. |
-| **Inputs** | `code` (string), `test_args` (lista de argumentos de prueba) |
-| **Output** | Un diccionario con `{'success': bool, 'output': str, 'error': str}` |
+### SonarQubeMCP
+Analiza calidad de código mediante Model Context Protocol.
+
+### AzureDevOpsClient
+Integración con Azure DevOps para crear PBIs, Tasks y adjuntar archivos.
+
+### GitHubService
+Integración con GitHub para commits y push automáticos (opcional).
 
 -----
 
@@ -247,31 +299,41 @@ El **Agente 4** utiliza una herramienta simulada:
 ### Flujo de Trabajo
 
 ```
-START → Ingeniero de Requisitos → Product Owner → Codificador → Probador/Depurador
-                ↑                                                      ↓
-                |                                                   ¿Pasa?
-                |                                                      ↓
-                |                                                  Stakeholder
-                |                                                      ↓
-                |                                                 ¿Validado?
-                |                                                      ↓
-                ←──────────────────────────────────────────────────── NO
-                                                                       ↓
-                                                                      END
+START → Product Owner → Desarrollador → SonarQube → Generador Tests → Ejecutor Tests → Stakeholder
+           ↑                ↑              ↓                                    ↓              ↓
+           |                |         ¿Calidad OK?                           ¿Pasa?       ¿Validado?
+           |                ←─── NO (max 3)                        ← NO (max 3)              ↓
+           |                                                                                 ↓
+           ←─────────────────────────────────────────────────────────────────────────── NO
+                                                                                          ↓
+                                                                                         END
 ```
 
 ### Tecnologías Utilizadas
 
 - **LangGraph**: Framework para construcción de grafos de agentes
-- **Google Gemini**: Modelo LLM para generación de contenido
+- **Google Gemini 2.5 Flash**: Modelo LLM para generación de contenido
 - **Pydantic**: Validación de esquemas JSON
 - **E2B Code Interpreter**: Sandbox para ejecución segura de código
+- **Vitest**: Framework de testing para TypeScript
+- **Pytest**: Framework de testing para Python
+- **SonarQube MCP**: Análisis estático de calidad de código
+- **Azure DevOps REST API**: Integración con Azure DevOps (opcional)
 - **Python-dotenv**: Gestión de variables de entorno
 
 ### Variables de Entorno Requeridas
 
-- `GEMINI_API_KEY`: Clave API de Google Gemini
-- `E2B_API_KEY`: Clave API de E2B Code Interpreter
+- `GEMINI_API_KEY`: Clave API de Google Gemini (requerida)
+- `E2B_API_KEY`: Clave API de E2B Code Interpreter (requerida)
+- `SONARQUBE_URL`: URL de SonarQube (opcional)
+- `SONARQUBE_TOKEN`: Token de SonarQube (opcional)
+- `SONARQUBE_PROJECT_KEY`: Clave de proyecto SonarQube (opcional)
+- `AZURE_DEVOPS_ENABLED`: Habilitar integración con Azure DevOps (opcional)
+- `AZURE_DEVOPS_ORG`: Organización de Azure DevOps (opcional)
+- `AZURE_DEVOPS_PROJECT`: Proyecto de Azure DevOps (opcional)
+- `AZURE_DEVOPS_PAT`: Personal Access Token de Azure DevOps (opcional)
+- `LOG_LEVEL`: Nivel de logging (opcional, default: INFO)
+- `LOG_TO_FILE`: Guardar logs en archivo (opcional, default: true)
 
 -----
 

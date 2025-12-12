@@ -26,7 +26,7 @@ Cuando el Stakeholder **valida** el código generado:
 
 ### 2. ✅ Adjunto de Tests Unitarios
 
-**Responsable:** Agente `Ejecutor de Pruebas`
+**Responsable:** Agente `Ejecutor de Pruebas` (probador_uts.py)
 
 Cuando los tests unitarios **pasan exitosamente**:
 
@@ -73,14 +73,14 @@ azure_testing_task_id: int | None  # ID de Task de Testing
 
 ### 3. Guardado de IDs en `desarrollador.py`
 
-Cuando el Codificador crea las Tasks (primera ejecución), guarda los IDs:
+Cuando el Desarrollador crea las Tasks (primera ejecución), guarda los IDs:
 
 ```python
 state['azure_implementation_task_id'] = task_implementation['id']
 state['azure_testing_task_id'] = task_testing['id']
 ```
 
-### 4. Función auxiliar en `ejecutor_pruebas.py`
+### 4. Función auxiliar en `probador_uts.py`
 
 **Función:** `_adjuntar_tests_azure_devops(state, test_file_path, attempt, sq_attempt)`
 
@@ -90,6 +90,8 @@ state['azure_testing_task_id'] = task_testing['id']
 - ✅ Manejo de errores sin interrumpir el flujo
 
 **Activación:** Se llama cuando `pruebas_superadas=True` y existen `azure_pbi_id` y `azure_testing_task_id`
+
+**Ubicación:** `src/agents/probador_uts.py`
 
 ### 5. Función auxiliar en `stakeholder.py`
 
@@ -103,6 +105,8 @@ state['azure_testing_task_id'] = task_testing['id']
 
 **Activación:** Se llama cuando `validado=True` y existen `azure_pbi_id` y `azure_implementation_task_id`
 
+**Ubicación:** `src/agents/stakeholder.py`
+
 ---
 
 ## 📊 Flujo Completo
@@ -112,7 +116,7 @@ state['azure_testing_task_id'] = task_testing['id']
    ↓ Crea PBI #2020946
    ↓ state['azure_pbi_id'] = 2020946
 
-2. Codificador Corrector (primera ejecución)
+2. Desarrollador (primera ejecución)
    ↓ Genera código
    ↓ Crea Task #2020950 (Implementación)
    ↓ state['azure_implementation_task_id'] = 2020950
@@ -224,8 +228,8 @@ python test_attach_files.py
 - [x] Campos `azure_implementation_task_id` y `azure_testing_task_id` en `AgentState`
 - [x] Inicialización de nuevos campos en `main.py`
 - [x] Guardado de Task IDs en `desarrollador.py`
-- [x] Función `_adjuntar_tests_azure_devops()` en `ejecutor_pruebas.py`
-- [x] Llamada a adjunto en `ejecutor_pruebas.py` cuando tests pasan
+- [x] Función `_adjuntar_tests_azure_devops()` en `probador_uts.py`
+- [x] Llamada a adjunto en `probador_uts.py` cuando tests pasan
 - [x] Función `_adjuntar_codigo_final_azure_devops()` en `stakeholder.py`
 - [x] Llamada a adjunto en `stakeholder.py` cuando valida
 - [x] Script de prueba `test_attach_files.py` creado
@@ -321,7 +325,7 @@ src/
 │   └── state.py  ← azure_implementation_task_id, azure_testing_task_id
 ├── agents/
 │   ├── desarrollador.py  ← Guarda Task IDs
-│   ├── ejecutor_pruebas.py  ← Adjunta tests
+│   ├── probador_uts.py  ← Adjunta tests
 │   └── stakeholder.py  ← Adjunta código final
 └── main.py  ← Inicializa nuevos campos
 
