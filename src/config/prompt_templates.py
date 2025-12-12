@@ -183,6 +183,17 @@ Para TypeScript (Vitest):
 - IMPORTANTE: Usar it() para cada caso de prueba individual, NO usar test() directamente
 - EXCEPCIÓN: test.each() SI es válido para múltiples casos con la misma lógica
 - Usar expect() con matchers apropiados (.toBe(), .toEqual(), .toThrow(), etc.)
+- CRÍTICO PARA COMPARACIONES NUMÉRICAS: SIEMPRE usar .toBeCloseTo(expected, numDigits) en lugar de .toBe() para:
+  * Números con decimales (0.1 + 0.2, divisiones, etc.)
+  * Números grandes (mayores a 1e9) que pueden perder precisión
+  * Cualquier resultado de operaciones aritméticas (+, -, *, /)
+  Ejemplos:
+  ✅ expect(0.1 + 0.2).toBeCloseTo(0.3, 5)
+  ✅ expect(largeNumber).toBeCloseTo(1000000000001, 0)
+  ✅ expect(calc.add(999999999999, 1)).toBeCloseTo(1000000000000, 0)
+  ❌ expect(0.1 + 0.2).toBe(0.3) // NUNCA usar .toBe() para resultados numéricos
+  ❌ expect(largeNumber).toBe(1000000000001) // Puede fallar por precisión de punto flotante
+- EVITAR TESTS CON -0 y +0: No generes tests que comparen -0 con +0 o viceversa. En JavaScript, -0 === +0 es true pero Object.is(-0, +0) es false, lo que causa fallos con .toBe(). Si necesitas testear multiplicación con cero negativo, usa .toBeCloseTo(0) o simplemente usa 0 sin signo.
 - Si usas beforeEach, afterEach, beforeAll, afterAll: DEBEN estar en el import de vitest
 - Incluir tests para casos normales, casos edge y manejo de errores
 

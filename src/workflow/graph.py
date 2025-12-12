@@ -59,26 +59,33 @@ def create_workflow() -> StateGraph:
 
     # B. Bucle de Depuración (Testing: Corrección de Código)
     # Incluye control de límite de intentos
-    # Si pasa los tests y GitHub está habilitado, va a RevisorCodigo; si no, va a Stakeholder
+    # Cuando pasa los tests siempre va a RevisorCodigo (que decide si va a Stakeholder o vuelve a Desarrollador)
     workflow.add_conditional_edges(
         "Testing",
         lambda x: (
-            ("PASSED_WITH_GITHUB" if settings.GITHUB_ENABLED else "PASSED") if x['pruebas_superadas']
+            "PASSED" if x['pruebas_superadas']
             else ("DEBUG_LIMIT_EXCEEDED" if x['debug_attempt_count'] >= x['max_debug_attempts']
                   else "FAILED")
         ),
         {
             "FAILED": "Desarrollador",
-            "PASSED": "Stakeholder",
-            "PASSED_WITH_GITHUB": "RevisorCodigo",
+            "PASSED": "RevisorCodigo",
             "DEBUG_LIMIT_EXCEEDED": END
         }
     )
     
-    # C. Transición del Revisor de Código al Stakeholder
-    workflow.add_edge("RevisorCodigo", "Stakeholder")
+    # C. Transición condicional del Revisor de Código
+    # Si aprueba el código va a Stakeholder, si no vuelve a Desarrollador
+    workflow.add_conditional_edges(
+        "RevisorCodigo",
+        lambda x: "CODE_APPROVED" if x.get('codigo_revisado', False) else "CODE_REJECTED",
+        {
+            "CODE_APPROVED": "Stakeholder",
+            "CODE_REJECTED": "Desarrollador"
+        }
+    )
 
-    # C. Bucle de Validación (Externo: Reingeniería de Requisitos / Fallo Final)
+    # D. Bucle de Validación (Externo: Reingeniería de Requisitos / Fallo Final)
     workflow.add_conditional_edges(
         "Stakeholder",
         lambda x: (

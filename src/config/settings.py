@@ -43,6 +43,7 @@ class Settings:
     GITHUB_OWNER: str = os.getenv("GITHUB_OWNER", "")  # Usuario u organización dueña del repo
     GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")  # Nombre del repositorio
     GITHUB_BASE_BRANCH: str = os.getenv("GITHUB_BASE_BRANCH", "main")  # Branch base para PRs
+    GITHUB_REPO_PATH: str = os.getenv("GITHUB_REPO_PATH", r"C:\ACADEMIA\IIA\Output\Multiagentes-Coding")  # Ruta física del repo local
     
     # Configuración del modelo LLM
     MODEL_NAME: str = "gemini-2.5-flash"

@@ -314,6 +314,7 @@ def testing_node(state: AgentState) -> AgentState:
             if settings.GITHUB_ENABLED:
                 try:
                     from datetime import datetime
+                    import shutil
                     
                     # Generar nombre del branch
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -323,10 +324,31 @@ def testing_node(state: AgentState) -> AgentState:
                     logger.info("🐙 GITHUB - Creando branch y PR")
                     logger.info("-" * 60)
                     
-                    # Preparar archivos para commit
+                    # Copiar archivos al repositorio local antes de crear el branch
+                    repo_path = settings.GITHUB_REPO_PATH
+                    src_dir = os.path.join(repo_path, "src")
+                    test_dir = os.path.join(repo_path, "src", "test")
+                    
+                    # Crear directorios si no existen
+                    os.makedirs(src_dir, exist_ok=True)
+                    os.makedirs(test_dir, exist_ok=True)
+                    
+                    # Copiar archivo de código a src/
+                    codigo_dest = os.path.join(src_dir, codigo_filename)
+                    with open(codigo_dest, 'w', encoding='utf-8') as f:
+                        f.write(codigo_limpio)
+                    logger.info(f"📄 Código copiado a: {codigo_dest}")
+                    
+                    # Copiar archivo de tests a src/test/
+                    test_dest = os.path.join(test_dir, test_filename)
+                    with open(test_dest, 'w', encoding='utf-8') as f:
+                        f.write(tests_generados)
+                    logger.info(f"🧪 Tests copiados a: {test_dest}")
+                    
+                    # Preparar archivos para commit (rutas relativas en el repo)
                     files_to_commit = {
                         f"src/{codigo_filename}": codigo_limpio,
-                        f"tests/{test_filename}": tests_generados
+                        f"src/test/{test_filename}": tests_generados
                     }
                     
                     # Crear branch y commit
@@ -351,7 +373,7 @@ Este código fue generado automáticamente por el sistema de desarrollo multiage
 
 ### 📁 Archivos incluidos
 - `src/{codigo_filename}` - Implementación principal
-- `tests/{test_filename}` - Tests unitarios
+- `src/test/{test_filename}` - Tests unitarios
 
 ### ✅ Estado de Tests
 - **Total:** {stats.get('total', 0)}
@@ -502,7 +524,11 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
                 json.dump(package_json_content, f, indent=2)
             logger.info(f"ℹ️ package.json creado en {output_dir}")
         
-        # Ejecutar vitest
+        # Ejecutar vitest con idioma inglés para mensajes consistentes
+        env = os.environ.copy()
+        env['LANG'] = 'en_US.UTF-8'
+        env['LC_ALL'] = 'en_US.UTF-8'
+        
         result = subprocess.run(
             ['npx', 'vitest', 'run', os.path.basename(test_path), '--reporter=verbose'],
             capture_output=True,
@@ -510,7 +536,8 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
             encoding='utf-8',
             errors='replace',
             timeout=60,
-            shell=True
+            shell=True,
+            env=env
         )
         
         os.chdir(original_dir)
