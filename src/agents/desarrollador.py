@@ -9,6 +9,7 @@ import time
 import json
 from models.state import AgentState
 from config.prompts import Prompts
+from config.prompt_templates import PromptTemplates
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
@@ -35,26 +36,33 @@ def desarrollador_node(state: AgentState) -> AgentState:
         "sonarqube_attempt": state['sonarqube_attempt_count']
     })
 
-    # Construir contexto con todas las correcciones necesarias
-    contexto_llm = f"Requisitos Formales (JSON): {state['requisitos_formales']}\n"
+    # Construir contexto adicional con correcciones necesarias
+    contexto_adicional = ""
     
     # Añadir traceback si hay errores de ejecución
     if state['traceback']:
-        contexto_llm += f"\nTraceback para corrección de errores de ejecución:\n{state['traceback']}\n"
+        contexto_adicional += f"\nTraceback para corrección de errores de ejecución:\n{state['traceback']}\n"
         logger.info("🔧 Corrigiendo errores de ejecución basados en traceback")
     
     # Añadir issues de SonarQube si hay problemas de calidad
     if state.get('sonarqube_issues'):
-        contexto_llm += f"\nInstrucciones de corrección de calidad (SonarQube):\n{state['sonarqube_issues']}\n"
+        contexto_adicional += f"\nInstrucciones de corrección de calidad (SonarQube):\n{state['sonarqube_issues']}\n"
         logger.info("🔧 Corrigiendo issues de calidad de código (SonarQube)")
     
     # Añadir código previo si existe para facilitar la corrección
     if state.get('codigo_generado') and (state['traceback'] or state.get('sonarqube_issues')):
-        contexto_llm += f"\nCódigo anterior a corregir:\n{state['codigo_generado']}\n"
+        contexto_adicional += f"\nCódigo anterior a corregir:\n{state['codigo_generado']}\n"
         logger.debug("Incluyendo código anterior para contexto de corrección")
 
+    # Usar ChatPromptTemplate
+    logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
+    prompt_formateado = PromptTemplates.format_desarrollador(
+        requisitos_formales=state['requisitos_formales'],
+        contexto_adicional=contexto_adicional
+    )
+
     start_time = time.time()
-    respuesta_llm = call_gemini(Prompts.CODIFICADOR, contexto_llm)
+    respuesta_llm = call_gemini(prompt_formateado, "")
     duration = time.time() - start_time
     
     log_llm_call(logger, "codificacion", duration=duration)

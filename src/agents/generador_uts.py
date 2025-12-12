@@ -7,6 +7,7 @@ import re
 import time
 from models.state import AgentState
 from config.prompts import Prompts
+from config.prompt_templates import PromptTemplates
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
@@ -54,19 +55,17 @@ def generador_uts_node(state: AgentState) -> AgentState:
     logger.debug(f"Archivo de tests: {test_filename}")
     
     # Preparar contexto para el LLM con nombre de archivo correcto
-    contexto_llm = (
-        f"Requisitos formales:\n{state['requisitos_formales']}\n\n"
-        f"Código generado:\n{state['codigo_generado']}\n\n"
-        f"Lenguaje: {lenguaje}\n\n"
-        f"IMPORTANTE: El archivo de código se llama '{codigo_filename}' (sin extensión en el import).\n"
-        f"Para TypeScript: import {{ ClassName }} from './{codigo_filename.replace('.ts', '')}';\n"
-        f"Para Python: from {codigo_filename.replace('.py', '')} import function_or_class\n"
+    logger.debug(" Usando ChatPromptTemplate de LangChain")
+    prompt_formateado = PromptTemplates.format_generador_uts(
+        codigo_generado=state['codigo_generado'],
+        requisitos_formales=state['requisitos_formales'],
+        lenguaje=lenguaje
     )
     
     # Llamar al LLM para generar los tests
-    logger.info("🤖 Llamando a LLM para generar tests...")
+    logger.info(" Llamando a LLM para generar tests...")
     start_time = time.time()
-    tests_generados = call_gemini(Prompts.GENERADOR_UTS, contexto_llm)
+    tests_generados = call_gemini(prompt_formateado, "")
     duration = time.time() - start_time
     
     log_llm_call(logger, "generacion_tests", duration=duration)

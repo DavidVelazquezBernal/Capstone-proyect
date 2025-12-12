@@ -8,8 +8,10 @@ import json
 from models.state import AgentState
 from models.schemas import FormalRequirements, AzureDevOpsMetadata
 from config.prompts import Prompts
+from config.prompt_templates import PromptTemplates
 from config.settings import settings
 from llm.gemini_client import call_gemini
+from llm.output_parsers import get_formal_requirements_parser, validate_and_parse
 from tools.file_utils import guardar_fichero_texto
 from services.azure_devops_service import azure_service
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
@@ -40,20 +42,20 @@ def product_owner_node(state: AgentState) -> AgentState:
         }
     )
 
-    # Construir contexto para el LLM
-    contexto_llm = f"""
-Prompt Inicial del Usuario: {state['prompt_inicial']}
-
-Feedback del Stakeholder (si aplica): {state['feedback_stakeholder'] if state['feedback_stakeholder'] else 'Ninguno - Primera iteración'}
-"""
+    # Construir prompt usando ChatPromptTemplate
+    logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
+    prompt_formateado = PromptTemplates.format_product_owner(
+        prompt_inicial=state['prompt_inicial'],
+        feedback_stakeholder=state['feedback_stakeholder'] if state['feedback_stakeholder'] else ""
+    )
     
-    logger.debug(f"Contexto LLM: {contexto_llm[:200]}...")
+    logger.debug(f"Prompt formateado (primeros 200 chars): {prompt_formateado[:200]}...")
 
     # Llamar al LLM con medición de tiempo y schema JSON
     start_time = time.time()
     respuesta_llm = call_gemini(
-        Prompts.PRODUCT_OWNER, 
-        contexto_llm, 
+        prompt_formateado,
+        "",  # Contexto vacío porque ya está en el prompt
         response_schema=FormalRequirements
     )
     duration = time.time() - start_time
@@ -61,10 +63,12 @@ Feedback del Stakeholder (si aplica): {state['feedback_stakeholder'] if state['f
     log_llm_call(logger, "PRODUCT_OWNER", duration=duration)
 
     try:
-        # Validar y almacenar la salida JSON del LLM
-        req_data = FormalRequirements.model_validate_json(respuesta_llm)
+        # Validar y almacenar la salida JSON del LLM usando PydanticOutputParser
+        logger.debug("🔍 Parseando respuesta con PydanticOutputParser...")
+        parser = get_formal_requirements_parser()
+        req_data = parser.parse(respuesta_llm)
         
-        logger.info("✅ Requisitos formalizados y validados correctamente")
+        logger.info("✅ Requisitos formalizados y validados correctamente (con LangChain parser)")
         logger.debug(f"JSON generado: {req_data.model_dump_json(indent=2)[:200]}...")
         
         # === INICIO: Integración con Azure DevOps (usando servicio centralizado) ===
@@ -124,11 +128,27 @@ Feedback del Stakeholder (si aplica): {state['feedback_stakeholder'] if state['f
         
     except Exception as e:
         logger.error(f"❌ Error al validar o procesar requisitos: {e}")
-        state['requisitos_formales'] = (
-            f"ERROR_PARSING: Fallo al validar JSON. {e}. "
-            f"LLM Output: {respuesta_llm[:100]}"
-        )
-        logger.error("Fallo de parsing en Requirements Manager")
+        logger.error(f"   Tipo de error: {type(e).__name__}")
+        logger.debug(f"   Respuesta LLM completa: {respuesta_llm}")
+        
+        # Intento de fallback: parsing manual sin LangChain
+        logger.warning("⚠️ Intentando fallback con parsing manual...")
+        try:
+            req_data = FormalRequirements.model_validate_json(respuesta_llm)
+            logger.info("✅ Fallback exitoso con parsing manual")
+            state['requisitos_formales'] = req_data.model_dump_json(indent=2)
+            state['requisito_clarificado'] = req_data.objetivo_funcional
+            state['feedback_stakeholder'] = ""
+            state['attempt_count'] += 1
+            state['debug_attempt_count'] = 0
+            state['sonarqube_attempt_count'] = 0
+        except Exception as e2:
+            logger.error(f"❌ Fallback también falló: {e2}")
+            state['requisitos_formales'] = (
+                f"ERROR_PARSING: Fallo al validar JSON. {e}. "
+                f"LLM Output: {respuesta_llm[:100]}"
+            )
+            logger.error("Fallo de parsing en Requirements Manager")
 
     logger.info("REQUIREMENTS MANAGER - FIN")
     logger.info("=" * 60)

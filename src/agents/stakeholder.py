@@ -7,6 +7,7 @@ import re
 import time
 from models.state import AgentState
 from config.prompts import Prompts
+from config.prompt_templates import PromptTemplates
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto
@@ -42,15 +43,16 @@ def stakeholder_node(state: AgentState) -> AgentState:
         })
         return state
 
-    contexto_llm = (
-        f"Intento: {state['attempt_count']}/{state['max_attempts']}\n"
-        f"Código aprobado técnicamente: {state['codigo_generado']}\n"
-        f"Requisitos Formales (JSON): {state['requisitos_formales']}"
+    logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
+    prompt_formateado = PromptTemplates.format_stakeholder(
+        requisitos_formales=state['requisitos_formales'],
+        codigo_generado=state['codigo_generado'],
+        resultado_tests=state.get('resultado_tests', '')
     )
     
     logger.info(f"🔍 Validando código con stakeholder (Intento {state['attempt_count']}/{state['max_attempts']})...")
     start_time = time.time()
-    respuesta_llm = call_gemini(Prompts.STAKEHOLDER, contexto_llm)
+    respuesta_llm = call_gemini(prompt_formateado, "")
     duration = time.time() - start_time
     
     log_llm_call(logger, "validacion_stakeholder", duration=duration)

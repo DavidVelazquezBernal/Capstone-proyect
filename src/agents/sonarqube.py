@@ -7,6 +7,7 @@ import re
 import time
 from models.state import AgentState
 from config.prompts import Prompts
+from config.prompt_templates import PromptTemplates
 from config.settings import settings
 from llm.gemini_client import call_gemini
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension
@@ -134,15 +135,16 @@ def sonarqube_node(state: AgentState) -> AgentState:
         state['sonarqube_passed'] = False
         
         # Generar instrucciones de corrección usando el LLM
-        contexto_llm = (
-            f"Reporte de SonarQube:\n{reporte_formateado}\n\n"
-            f"Código actual:\n{state['codigo_generado']}\n\n"
-            f"Requisitos formales:\n{state['requisitos_formales']}"
+        # Usar ChatPromptTemplate
+        logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
+        prompt_formateado = PromptTemplates.format_sonarqube(
+            reporte_sonarqube=reporte_formateado,
+            codigo_actual=state['codigo_generado']
         )
         
         logger.info("🤖 Generando instrucciones de corrección con LLM...")
         start_time = time.time()
-        instrucciones_correccion = call_gemini(Prompts.SONARQUBE, contexto_llm)
+        instrucciones_correccion = call_gemini(prompt_formateado, "")
         duration = time.time() - start_time
         
         log_llm_call(logger, "analisis_sonarqube", duration=duration)
