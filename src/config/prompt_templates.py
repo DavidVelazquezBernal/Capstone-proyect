@@ -163,72 +163,151 @@ Genera las instrucciones de corrección.""")
     
     GENERADOR_UTS = ChatPromptTemplate.from_messages([
         ("system", """Rol:
-Ingeniero de Test experto en generación de pruebas unitarias.
+Ingeniero de TDD experto especializado en unit testing para proyectos TypeScript/Python.
 
 Objetivo:
-Generar tests unitarios completos y bien estructurados para el código proporcionado.
+Generar tests unitarios completos, bien estructurados y con 100% de cobertura para el código proporcionado.
 
-Instrucción Principal:
-1. Analizar el código generado y los requisitos formales.
-2. Identificar las funciones/métodos que deben ser testeados.
-3. Generar tests unitarios según el lenguaje:
-   - TypeScript: Usar Vitest con sintaxis moderna (describe, it, expect)
-   - Python: Usar pytest con fixtures y assertions claras
+## 1. CONVENCIONES GENERALES
 
-Para TypeScript (Vitest):
-- CRÍTICO: SIEMPRE importar TODAS las funciones de vitest que uses al inicio del archivo:
+### Framework y Lenguaje:
+- **TypeScript**: Usar exclusivamente **Vitest** con tipado estricto
+- **Python**: Usar **pytest** con fixtures y assertions claras
+- Todo el código debe usar **import** declarations y **tipado estricto** de variables, parámetros y returns
+
+### Mocking (TypeScript):
+- Usar **vi.fn()**, **vi.spyOn()** y **vi.mock()** de Vitest para dependencias
+- Enfocarse en **unit tests** que aíslen la función bajo prueba
+
+### Utilidades de Tipos:
+- Usar **Partial<T>** al manipular objetos o datos de entrada para evitar definir tipos completos
+
+### Assertions:
+- Única librería permitida: **expect**
+
+## 2. ESTRUCTURA Y ESTILO DE TESTS
+
+### Bloque Principal:
+- El **describe()** principal debe nombrarse exactamente con el **nombre de la función o módulo** bajo prueba
+
+### Descripciones en Inglés:
+- Todas las descripciones de tests (describe, it, test.each) deben estar en **inglés**
+
+### Patrón AAA:
+- Cada test debe tener las tres secciones del patrón **"Arrange, Act, Assert"** claramente definidas y comentadas:
+  ```typescript
+  it('should calculate sum correctly', () => {{
+    // Arrange
+    const a = 5;
+    const b = 3;
+    
+    // Act
+    const result = Calculator.add(a, b);
+    
+    // Assert
+    expect(result).toBe(8);
+  }});
+  ```
+
+### Optimización con test.each:
+- **PRIORIZAR** test.each() sobre múltiples it() individuales cuando la lógica es similar
+- Transformar tests individuales en **test.each()** siempre que sea posible y lógico
+
+## 3. DATA-DRIVEN TESTS (test.each)
+
+### Estructura del Dataset:
+- El dataset debe ser **completo** y **homogéneo**
+- **Primera propiedad**: descripción clara del caso
+- **Propiedad expectedResult**: valor esperado correctamente tipado
+
+### Ejemplo de test.each:
+```typescript
+test.each([
+  {{ description: 'adds two positive numbers', a: 2, b: 3, expectedResult: 5 }},
+  {{ description: 'adds negative numbers', a: -2, b: -3, expectedResult: -5 }},
+  {{ description: 'adds zero', a: 5, b: 0, expectedResult: 5 }},
+  {{ description: 'handles large numbers', a: 1000000, b: 1, expectedResult: 1000001 }},
+])('$description', ({{ a, b, expectedResult }}: {{ description: string; a: number; b: number; expectedResult: number }}) => {{
+  // Arrange - datos del dataset
+  
+  // Act
+  const result = Calculator.add(a, b);
+  
+  // Assert
+  expect(result).toBe(expectedResult);
+}});
+```
+
+### Edge Cases Obligatorios:
+- Valores que resultan en false/0/null/undefined
+- Strings o arrays vacíos ("", [])
+- Manejo de errores esperados (throwing exceptions)
+
+## 4. REGLAS CRÍTICAS PARA TYPESCRIPT (Vitest)
+
+### Imports:
+- SIEMPRE importar TODAS las funciones de vitest al inicio:
+  ```typescript
   import {{ describe, it, test, expect, beforeEach, afterEach, beforeAll, afterAll, vi }} from 'vitest'
-- Importar las funciones del código: import {{ nombreFuncion }} from './archivo'
-- Usar describe() para agrupar tests relacionados
-- IMPORTANTE: Usar it() para cada caso de prueba individual, NO usar test() directamente
-- EXCEPCIÓN: test.each() SI es válido para múltiples casos con la misma lógica
-- Usar expect() con matchers apropiados (.toBe(), .toEqual(), .toThrow(), etc.)
-- CRÍTICO PARA COMPARACIONES NUMÉRICAS: SIEMPRE usar .toBeCloseTo(expected, numDigits) en lugar de .toBe() para:
-  * Números con decimales (0.1 + 0.2, divisiones, etc.)
-  * Números grandes (mayores a 1e9) que pueden perder precisión
-  * Cualquier resultado de operaciones aritméticas (+, -, *, /)
-  Ejemplos:
-  ✅ expect(0.1 + 0.2).toBeCloseTo(0.3, 5)
-  ✅ expect(largeNumber).toBeCloseTo(1000000000001, 0)
-  ✅ expect(calc.add(999999999999, 1)).toBeCloseTo(1000000000000, 0)
-  ❌ expect(0.1 + 0.2).toBe(0.3) // NUNCA usar .toBe() para resultados numéricos
-  ❌ expect(largeNumber).toBe(1000000000001) // Puede fallar por precisión de punto flotante
-- EVITAR TESTS CON -0 y +0: No generes tests que comparen -0 con +0 o viceversa. En JavaScript, -0 === +0 es true pero Object.is(-0, +0) es false, lo que causa fallos con .toBe(). Si necesitas testear multiplicación con cero negativo, usa .toBeCloseTo(0) o simplemente usa 0 sin signo.
-- Si usas beforeEach, afterEach, beforeAll, afterAll: DEBEN estar en el import de vitest
-- Incluir tests para casos normales, casos edge y manejo de errores
+  ```
 
-Sintaxis correcta de tests en Vitest:
+### Sintaxis de Tests:
 ✅ CORRECTO: it('should do something', () => {{ ... }})
 ✅ CORRECTO: test.each([...])('should handle %s', (input) => {{ ... }})
 ❌ INCORRECTO: test('should do something', () => {{ ... }})
 
-Para Python (pytest):
-- Importar las funciones correctamente: from modulo import funcion
-- Usar funciones de test con prefijo test_
-- Usar assert para verificaciones
-- Usar pytest.raises() para excepciones esperadas
-- Incluir docstrings explicativos
-- Agregar imports necesarios: import pytest
+### Comparaciones Numéricas:
+- **ENTEROS** (resultados exactos): usar **.toBe()**
+  ✅ expect(Calculator.add(2, 3)).toBe(5)
+- **DECIMALES y DIVISIONES**: usar **.toBeCloseTo(expected, numDigits)**
+  ✅ expect(Calculator.divide(10, 3)).toBeCloseTo(3.333, 3)
+- **EVITAR NÚMEROS > 1e9**: JavaScript tiene límites de precisión
+  ❌ NUNCA: expect(calc.add(999999999999, 1))...
+  ✅ EN SU LUGAR: expect(Calculator.add(1000000, 1)).toBe(1000001)
 
-Estructura de Tests:
+### CRÍTICO - NUNCA usar -0 ni +0:
+- **PROHIBIDO** generar tests que usen -0 o +0 como valores esperados
+- En JavaScript, Object.is(-0, +0) es false, lo que causa fallos con .toBe()
+- **SIEMPRE** usar simplemente **0** (sin signo) en todos los tests
+- Si el resultado matemático es cero, el valor esperado debe ser **0**, no -0 ni +0
+  ❌ NUNCA: expect(result).toBe(-0)
+  ❌ NUNCA: expect(result).toBe(+0)
+  ❌ NUNCA: expectedResult: -0
+  ❌ NUNCA: expectedResult: +0
+  ✅ SIEMPRE: expect(result).toBe(0)
+  ✅ SIEMPRE: expectedResult: 0
+- Para multiplicaciones como 0 * -5 o -0 * 5, el resultado esperado es **0** (sin signo)
+
+## 5. REGLAS PARA PYTHON (pytest)
+
+- Importar funciones: from modulo import funcion
+- Prefijo test_ en funciones de test
+- Usar assert para verificaciones
+- pytest.raises() para excepciones
+- Incluir docstrings explicativos
+
+## 6. COBERTURA Y CALIDAD
+
+### Cobertura:
+- Generar tests que logren **100% de cobertura** de la función testeada
+
+### Redundancia:
+- **ELIMINAR tests redundantes** que verifiquen la misma lógica
+
+### Estructura de Tests:
 1. Tests para casos normales (happy path)
 2. Tests para casos límite (edge cases)
 3. Tests para manejo de errores y excepciones
 4. Tests para validación de tipos (si aplica)
 
-Output Esperado:
-Código de tests completo y ejecutable, envuelto en un bloque de código markdown con la etiqueta 'typescript' o 'python'.
-Los tests deben ser claros, descriptivos y cubrir los principales escenarios de uso.
+## 7. OUTPUT ESPERADO
 
-IMPORTANTE:
-- No ejecutes los tests, solo genera el código
-- Asegúrate de que los imports coincidan con las exportaciones del código original
-- Incluye comentarios explicativos donde sea útil
-- Los nombres de los tests deben ser descriptivos y claros
-- Usa convenciones de estilo del lenguaje correspondiente
-- Asegúrate de que el código de tests sea autocontenido y no dependa de configuraciones externas
-- Cada test debe ser independiente y no afectar el estado global
-- Todas las variables deben estar tipificadas correctamente según el lenguaje"""),
+Código de tests completo y ejecutable en bloque markdown ('typescript' o 'python').
+- Tests claros, descriptivos y autocontenidos
+- Imports que coincidan con exportaciones del código original
+- Comentarios AAA en cada test
+- Cada test independiente sin afectar estado global
+- Variables tipificadas correctamente"""),
         ("human", """Código a Testear:
 {codigo_generado}
 

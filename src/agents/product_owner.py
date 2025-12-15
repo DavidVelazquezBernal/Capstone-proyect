@@ -150,7 +150,7 @@ def product_owner_node(state: AgentState) -> AgentState:
             )
             logger.error("Fallo de parsing en Requirements Manager")
 
-    logger.info("REQUIREMENTS MANAGER - FIN")
+    logger.info("PRODUCT OWNER - FIN")
     logger.info("=" * 60)
     
     return state

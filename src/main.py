@@ -87,7 +87,10 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         "codigo_revisado": False,
         "revision_comentario": "",
         "revision_puntuacion": None,
-        "pr_aprobada": False
+        "pr_aprobada": False,
+        # Code Review Limits
+        "revisor_attempt_count": 0,
+        "max_revisor_attempts": settings.MAX_REVISOR_ATTEMPTS
     }
 
     print()  # Línea en blanco para separación visual

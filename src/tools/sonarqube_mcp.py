@@ -1,6 +1,7 @@
 """
 Tool para integración con SonarQube via MCP (Model Context Protocol).
 Utiliza las herramientas de SonarQube disponibles en VS Code.
+También soporta SonarCloud API cuando está habilitado.
 
 Herramientas MCP disponibles:
 - sonarqube_analyze_file: Analiza un archivo y devuelve problemas
@@ -16,14 +17,27 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.get_log_level())
 
+# Importar SonarCloud service si está disponible
+try:
+    from services.sonarcloud_service import sonarcloud_service
+    SONARCLOUD_AVAILABLE = True
+except ImportError:
+    SONARCLOUD_AVAILABLE = False
+    logger.debug("SonarCloud service no disponible")
 
-def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str, Any]:
+
+def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str, branch_name: str = None) -> Dict[str, Any]:
     """
     Analiza código usando análisis estático de SonarQube.
+    
+    Si SonarCloud está habilitado y se proporciona un branch_name, 
+    consulta la API de SonarCloud para obtener issues reales.
+    De lo contrario, usa análisis estático local.
     
     Args:
         codigo: Código fuente a analizar
         nombre_archivo: Nombre del archivo (usado para determinar extensión)
+        branch_name: Nombre del branch en GitHub (para consultar SonarCloud)
         
     Returns:
         Dict con:
@@ -31,7 +45,47 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str,
             - issues: List[Dict] con los problemas encontrados
             - summary: Dict con resumen de issues por severidad
             - error: str (solo si success=False)
+            - source: str ('sonarcloud' o 'local')
     """
+    # Intentar usar SonarCloud si está habilitado y hay un branch
+    if SONARCLOUD_AVAILABLE and settings.SONARCLOUD_ENABLED and branch_name:
+        logger.info(f"☁️ Consultando SonarCloud para branch '{branch_name}'...")
+        
+        try:
+            result = sonarcloud_service.analyze_branch(branch_name)
+            
+            if result.get("success"):
+                issues_data = result.get("issues", {})
+                issues_list = issues_data.get("issues", [])
+                
+                # Convertir formato de SonarCloud a formato interno
+                converted_issues = []
+                for issue in issues_list:
+                    converted_issues.append({
+                        "rule": issue.get("rule", "UNKNOWN"),
+                        "severity": issue.get("severity", "INFO"),
+                        "type": issue.get("type", "CODE_SMELL"),
+                        "message": issue.get("message", ""),
+                        "line": issue.get("line", 0),
+                        "component": issue.get("component", "")
+                    })
+                
+                summary = result.get("issues", {}).get("summary", _generar_resumen_issues(converted_issues))
+                
+                logger.info(f"✅ SonarCloud: {len(converted_issues)} issues encontrados")
+                
+                return {
+                    "success": True,
+                    "issues": converted_issues,
+                    "summary": summary,
+                    "source": "sonarcloud",
+                    "quality_gate": result.get("quality_gate", {}),
+                    "metrics": result.get("metrics", {})
+                }
+        except Exception as e:
+            logger.warning(f"⚠️ Error consultando SonarCloud, usando análisis local: {e}")
+    
+    # Fallback: Análisis estático local
     temp_file = None
     try:
         # Guardar código temporalmente para análisis
@@ -49,7 +103,8 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str,
             "success": True,
             "issues": issues,
             "summary": summary,
-            "file_path": temp_file
+            "file_path": temp_file,
+            "source": "local"
         }
         
         return resultado
@@ -59,7 +114,8 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str) -> Dict[str,
             "success": False,
             "issues": [],
             "summary": {},
-            "error": str(e)
+            "error": str(e),
+            "source": "local"
         }
     finally:
         # Limpiar archivo temporal después del análisis
@@ -641,10 +697,10 @@ def _generar_resumen_issues(issues: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def formatear_reporte_sonarqube(resultado: Dict[str, Any]) -> str:
     """
-    Formatea el resultado del análisis de SonarQube en texto legible.
+    Formatea el resultado del análisis de SonarQube/SonarCloud en texto legible.
     
     Args:
-        resultado: Resultado del análisis de SonarQube
+        resultado: Resultado del análisis de SonarQube/SonarCloud
         
     Returns:
         String con reporte formateado
@@ -654,10 +710,74 @@ def formatear_reporte_sonarqube(resultado: Dict[str, Any]) -> str:
     
     summary = resultado.get("summary", {})
     issues = resultado.get("issues", [])
+    source = resultado.get("source", "local")
     
     reporte = ["=" * 60]
-    reporte.append("📊 REPORTE DE ANÁLISIS SONARQUBE")
+    
+    # Título según la fuente
+    if source == "sonarcloud":
+        reporte.append("☁️  REPORTE DE ANÁLISIS SONARCLOUD")
+    else:
+        reporte.append("📊 REPORTE DE ANÁLISIS SONARQUBE (Local)")
+    
     reporte.append("=" * 60)
+    
+    # Información de la fuente
+    if source == "sonarcloud":
+        reporte.append(f"\n🌐 Fuente: SonarCloud API")
+        if resultado.get("branch_analyzed"):
+            reporte.append(f"🌿 Branch analizado: {resultado.get('branch_analyzed')}")
+        
+        # Quality Gate status (solo disponible con SonarCloud real)
+        quality_gate = resultado.get("quality_gate", {})
+        if quality_gate.get("success"):
+            qg_status = quality_gate.get("status", "UNKNOWN")
+            qg_emoji = "✅" if qg_status == "OK" else "❌" if qg_status == "ERROR" else "⚠️"
+            reporte.append(f"\n🚦 Quality Gate: {qg_emoji} {qg_status}")
+            
+            # Condiciones del Quality Gate
+            conditions = quality_gate.get("conditions", [])
+            if conditions:
+                reporte.append("   Condiciones:")
+                for cond in conditions:
+                    cond_status = "✅" if cond.get("status") == "OK" else "❌"
+                    metric = cond.get("metricKey", "unknown")
+                    actual = cond.get("actualValue", "N/A")
+                    threshold = cond.get("errorThreshold", cond.get("warningThreshold", "N/A"))
+                    reporte.append(f"   {cond_status} {metric}: {actual} (umbral: {threshold})")
+        
+        # Métricas del proyecto (solo disponible con SonarCloud real)
+        metrics_data = resultado.get("metrics", {})
+        if metrics_data.get("success"):
+            metrics = metrics_data.get("metrics", {})
+            if metrics:
+                reporte.append("\n📈 Métricas del Proyecto:")
+                if "bugs" in metrics:
+                    reporte.append(f"   🐛 Bugs: {metrics.get('bugs', 'N/A')}")
+                if "vulnerabilities" in metrics:
+                    reporte.append(f"   🔒 Vulnerabilidades: {metrics.get('vulnerabilities', 'N/A')}")
+                if "code_smells" in metrics:
+                    reporte.append(f"   💨 Code Smells: {metrics.get('code_smells', 'N/A')}")
+                if "coverage" in metrics:
+                    reporte.append(f"   📊 Cobertura: {metrics.get('coverage', 'N/A')}%")
+                if "duplicated_lines_density" in metrics:
+                    reporte.append(f"   📋 Duplicación: {metrics.get('duplicated_lines_density', 'N/A')}%")
+                if "ncloc" in metrics:
+                    reporte.append(f"   📝 Líneas de código: {metrics.get('ncloc', 'N/A')}")
+                
+                # Ratings (A-E)
+                ratings = []
+                if "sqale_rating" in metrics:
+                    ratings.append(f"Mantenibilidad: {_rating_to_letter(metrics.get('sqale_rating'))}")
+                if "reliability_rating" in metrics:
+                    ratings.append(f"Fiabilidad: {_rating_to_letter(metrics.get('reliability_rating'))}")
+                if "security_rating" in metrics:
+                    ratings.append(f"Seguridad: {_rating_to_letter(metrics.get('security_rating'))}")
+                if ratings:
+                    reporte.append(f"   🏆 Ratings: {' | '.join(ratings)}")
+    else:
+        reporte.append(f"\n🔧 Fuente: Análisis estático local")
+    
     reporte.append(f"\n🔍 Total de issues encontrados: {summary.get('total', 0)}\n")
     
     # Resumen por severidad
@@ -724,13 +844,62 @@ def formatear_reporte_sonarqube(resultado: Dict[str, Any]) -> str:
                     
                     # Si hay información adicional del issue
                     if issue.get('component'):
-                        reporte.append(f"    📁 Archivo:  {issue.get('component')}")
+                        # Extraer solo el nombre del archivo del component
+                        component = issue.get('component', '')
+                        if ':' in component:
+                            component = component.split(':')[-1]
+                        reporte.append(f"    📁 Archivo:  {component}")
                     if issue.get('effort'):
                         reporte.append(f"    ⏱️  Esfuerzo: {issue.get('effort')}")
+                    if issue.get('debt'):
+                        reporte.append(f"    💰 Deuda técnica: {issue.get('debt')}")
+    
+    reporte.append("\n" + "=" * 60)
+    
+    # Criterios de aceptación
+    reporte.append("\n📋 CRITERIOS DE ACEPTACIÓN:")
+    reporte.append("   - Sin issues BLOCKER")
+    reporte.append("   - Máximo 2 issues CRITICAL")
+    reporte.append("   - Sin BUGS")
+    
+    blocker_count = by_severity.get('BLOCKER', 0)
+    critical_count = by_severity.get('CRITICAL', 0)
+    bug_count = by_type.get('BUG', 0)
+    
+    passed = blocker_count == 0 and critical_count <= 2 and bug_count == 0
+    
+    if passed:
+        reporte.append("\n✅ RESULTADO: CÓDIGO APROBADO")
+    else:
+        reporte.append("\n❌ RESULTADO: CÓDIGO RECHAZADO")
+        if blocker_count > 0:
+            reporte.append(f"   - {blocker_count} BLOCKER(s) encontrado(s)")
+        if critical_count > 2:
+            reporte.append(f"   - {critical_count} CRITICAL(s) (máximo permitido: 2)")
+        if bug_count > 0:
+            reporte.append(f"   - {bug_count} BUG(s) encontrado(s)")
     
     reporte.append("\n" + "=" * 60)
     
     return "\n".join(reporte)
+
+
+def _rating_to_letter(rating_value: str) -> str:
+    """Convierte el valor numérico del rating a letra (A-E)."""
+    try:
+        rating = float(rating_value)
+        if rating <= 1:
+            return "A"
+        elif rating <= 2:
+            return "B"
+        elif rating <= 3:
+            return "C"
+        elif rating <= 4:
+            return "D"
+        else:
+            return "E"
+    except (ValueError, TypeError):
+        return rating_value or "N/A"
 
 
 def es_codigo_aceptable(resultado: Dict[str, Any]) -> bool:

@@ -45,10 +45,16 @@ class Settings:
     GITHUB_BASE_BRANCH: str = os.getenv("GITHUB_BASE_BRANCH", "main")  # Branch base para PRs
     GITHUB_REPO_PATH: str = os.getenv("GITHUB_REPO_PATH", r"C:\ACADEMIA\IIA\Output\Multiagentes-Coding")  # Ruta física del repo local
     
+    # Configuración de SonarCloud (opcional - para análisis de calidad en la nube)
+    SONARCLOUD_ENABLED: bool = os.getenv("SONARCLOUD_ENABLED", "false").lower() == "true"
+    SONARCLOUD_TOKEN: str = os.getenv("SONARCLOUD_TOKEN", "")  # Token de SonarCloud
+    SONARCLOUD_ORGANIZATION: str = os.getenv("SONARCLOUD_ORGANIZATION", "")  # Organización en SonarCloud
+    SONARCLOUD_PROJECT_KEY: str = os.getenv("SONARCLOUD_PROJECT_KEY", "")  # Project key en SonarCloud
+    
     # Configuración del modelo LLM
     MODEL_NAME: str = "gemini-2.5-flash"
     TEMPERATURE: float = 0.1
-    MAX_OUTPUT_TOKENS: int = 8192  # Aumentado para evitar código truncado
+    MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "8192"))
     
     # Modo Testing/Mock (evita llamadas reales al LLM)
     LLM_MOCK_MODE: bool = os.getenv("LLM_MOCK_MODE", "false").lower() == "true"
@@ -64,6 +70,7 @@ class Settings:
     MAX_ATTEMPTS: int = 1  # Máximo de ciclos completos antes de fallo
     MAX_DEBUG_ATTEMPTS: int = 3 # Máximo de intentos en el bucle de depuración (Probador-Codificador)
     MAX_SONARQUBE_ATTEMPTS: int = 3  # Máximo de intentos en el bucle de calidad (SonarQube-Desarrollador)
+    MAX_REVISOR_ATTEMPTS: int = 2  # Máximo de intentos de revisión de código antes de fallo
     
     # Directorios
     OUTPUT_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "output")

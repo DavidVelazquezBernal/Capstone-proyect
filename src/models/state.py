@@ -49,6 +49,10 @@ class AgentState(TypedDict):
     revision_comentario: str  # Comentario de la revisión
     revision_puntuacion: int | None  # Puntuación de la revisión (1-10)
     pr_aprobada: bool  # Si la PR fue aprobada
+    
+    # Code Review Limits
+    revisor_attempt_count: int  # Contador de intentos de revisión de código
+    max_revisor_attempts: int  # Máximo de intentos de revisión antes de fallo
 
     # Validación
     validado: bool

@@ -68,11 +68,11 @@ def listar_archivos_output():
             nombre = archivo.name
             if nombre.startswith('1_product_owner'):
                 archivos_por_tipo['Requisitos (Product Owner)'].append(nombre)
-            elif nombre.startswith('3_desarrollador'):
+            elif nombre.startswith('2_desarrollador'):
                 archivos_por_tipo['Código (Desarrollador)'].append(nombre)
-            elif nombre.startswith('3.5_sonarqube_report'):
+            elif nombre.startswith('3_sonarqube_report'):
                 archivos_por_tipo['Reportes SonarQube'].append(nombre)
-            elif nombre.startswith('3.5_sonarqube_instrucciones'):
+            elif nombre.startswith('3_sonarqube_instrucciones'):
                 archivos_por_tipo['Instrucciones SonarQube'].append(nombre)
             elif nombre.startswith('unit_tests'):
                 archivos_por_tipo['Tests'].append(nombre)

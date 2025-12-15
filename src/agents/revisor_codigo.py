@@ -144,6 +144,11 @@ IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de cal
     state['revision_comentario'] = comentario
     state['revision_puntuacion'] = puntuacion
     
+    # Incrementar contador de intentos si rechaza
+    if not aprobado:
+        state['revisor_attempt_count'] = state.get('revisor_attempt_count', 0) + 1
+        logger.info(f"📊 Intento de revisión: {state['revisor_attempt_count']}/{state.get('max_revisor_attempts', 2)}")
+    
     # Aprobar o comentar en la PR
     if aprobado:
         logger.info(f"✅ Código APROBADO con puntuación {puntuacion}/10")

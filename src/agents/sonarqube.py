@@ -29,6 +29,20 @@ def sonarqube_node(state: AgentState) -> AgentState:
     logger.info("SONARQUBE - INICIO")
     logger.info("=" * 60)
 
+    if not settings.SONARCLOUD_ENABLED:
+        logger.warning("⚠️ SONARCLOUD_ENABLED=false: omitiendo análisis de calidad (SonarQube/SonarCloud) y continuando el flujo")
+        state['sonarqube_passed'] = True
+        state['sonarqube_issues'] = ""
+        state['sonarqube_attempt_count'] = 0
+
+        log_agent_execution(logger, "SonarQube", "omitido", {
+            "motivo": "SONARCLOUD_ENABLED=false",
+            "resultado": "aprobado"
+        })
+        logger.info("SONARQUBE - FIN")
+        logger.info("=" * 60)
+        return state
+
     log_agent_execution(logger, "SonarQube", "iniciado", {
         "requisito_id": state['attempt_count'],
         "validacion_numero": state['sonarqube_attempt_count'] + 1,
@@ -70,15 +84,28 @@ def sonarqube_node(state: AgentState) -> AgentState:
     
     logger.info(f"🔍 Analizando código con SonarQube - Validación #{intento_actual + 1} - Archivo: {nombre_archivo}")
     
-    # Analizar código con SonarQube
-    resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo)
+    # Obtener branch del estado (creado por el Desarrollador)
+    branch_name = state.get('github_branch_name')
+    
+    if branch_name and settings.SONARCLOUD_ENABLED:
+        logger.info(f"☁️ Usando branch '{branch_name}' para análisis SonarCloud")
+        # Esperar para dar tiempo a SonarCloud de analizar el branch
+        wait_time = 10  # 10 segundos de espera
+        logger.info(f"⏳ Esperando {wait_time}s para que SonarCloud procese el branch...")
+        time.sleep(wait_time)
+        logger.info("✅ Espera completada, consultando SonarCloud...")
+    elif settings.SONARCLOUD_ENABLED:
+        logger.warning("⚠️ No hay branch disponible para SonarCloud, usando análisis local")
+    
+    # Analizar código con SonarQube (usa SonarCloud si hay branch, sino análisis local)
+    resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, branch_name)
     
     # Formatear reporte
     reporte_formateado = formatear_reporte_sonarqube(resultado_analisis)
     logger.debug(f"Reporte generado:\n{reporte_formateado[:500]}...")
     
     # Guardar reporte SIEMPRE (tanto si pasa como si falla)
-    nombre_reporte = f"3.5_sonarqube_report_req{state['attempt_count']}_sq{intento_actual}.txt"
+    nombre_reporte = f"3_sonarqube_report_req{state['attempt_count']}_sq{intento_actual}.txt"
     guardar_fichero_texto(
         nombre_reporte,
         reporte_formateado,
@@ -120,6 +147,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
             "resultado": "aprobado",
             "reporte": nombre_reporte
         })
+        
     else:
         # Código no pasa los criterios de calidad
         logger.warning("❌ Código rechazado por SonarQube - requiere correcciones")
@@ -155,7 +183,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
         state['sonarqube_attempt_count'] += 1
         
         # Guardar instrucciones de corrección (con el contador ya incrementado para el siguiente intento)
-        nombre_instrucciones = f"3.5_sonarqube_instrucciones_req{state['attempt_count']}_sq{intento_actual}.txt"
+        nombre_instrucciones = f"3_sonarqube_instrucciones_req{state['attempt_count']}_sq{intento_actual}.txt"
         guardar_fichero_texto(
             nombre_instrucciones,
             instrucciones_correccion,
@@ -188,4 +216,6 @@ def sonarqube_node(state: AgentState) -> AgentState:
             "instrucciones": nombre_instrucciones
         })
     
+    logger.info("SONARQUBE - FIN")
+    logger.info("=" * 60)
     return state

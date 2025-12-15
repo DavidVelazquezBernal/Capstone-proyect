@@ -121,5 +121,7 @@ def stakeholder_node(state: AgentState) -> AgentState:
             "intento": state['attempt_count']
         })
 
+        logger.info("STAKEHOLDER - FIN")
+        logger.info("=" * 60)
     return state
 

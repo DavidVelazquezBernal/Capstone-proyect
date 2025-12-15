@@ -49,6 +49,26 @@ else:
 #     client = None
 
 
+def _log_warning_if_truncated(response, max_output_tokens: int) -> None:
+    try:
+        candidates = getattr(response, "candidates", None)
+        if not candidates:
+            return
+
+        finish_reason = getattr(candidates[0], "finish_reason", None)
+        finish_reason_str = str(finish_reason) if finish_reason is not None else ""
+        fr = finish_reason_str.lower()
+
+        if fr in {"max_tokens", "length", "token_limit"} or ("max" in fr and "token" in fr):
+            logger.warning(
+                "⚠️ Respuesta del LLM posiblemente TRUNCADA por límite de tokens "
+                f"(finish_reason={finish_reason_str}, max_output_tokens={max_output_tokens}). "
+                "Considera aumentar MAX_OUTPUT_TOKENS o pedir una salida más corta."
+            )
+    except Exception:
+        return
+
+
 def call_gemini(
     role_prompt: str, 
     context: str = "", 
@@ -132,6 +152,7 @@ def call_gemini(
             contents=full_prompt,
             config=config,
         )
+        _log_warning_if_truncated(response, config.get("max_output_tokens", settings.MAX_OUTPUT_TOKENS))
         if not response.text or response.text == "None" or response.text.lower() == "none":
             logger.error(f"\n{'='*60}")
             logger.error("❌ ERROR: EL LLM NO DEVOLVIÓ RESPUESTA VÁLIDA")
@@ -232,6 +253,7 @@ def call_gemini(
                         contents=full_prompt,
                         config=config,
                     )
+                    _log_warning_if_truncated(response, config.get("max_output_tokens", settings.MAX_OUTPUT_TOKENS))
                     logger.info(f"✅ Reintento exitoso en intento {attempt}")
                     return response.text
                 except APIError as retry_error:

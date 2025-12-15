@@ -15,7 +15,7 @@ logger = setup_logger(__name__, level=settings.get_log_level())
 
 # Intentar importar PyGithub
 try:
-    from github import Github, GithubException
+    from github import Github, GithubException, InputGitTreeElement
     GITHUB_AVAILABLE = True
 except ImportError:
     GITHUB_AVAILABLE = False
@@ -71,14 +71,21 @@ class GitHubService:
             
             logger.info(f"📌 Branch base: {settings.GITHUB_BASE_BRANCH} (SHA: {base_sha[:7]})")
             
-            # Crear el nuevo branch
+            # Crear el nuevo branch o obtener el existente
             ref_name = f"refs/heads/{branch_name}"
+            branch_exists = False
+            parent_sha = base_sha
+            
             try:
                 self.repo.create_git_ref(ref=ref_name, sha=base_sha)
                 logger.info(f"🌿 Branch '{branch_name}' creado")
             except GithubException as e:
                 if e.status == 422:  # Branch ya existe
-                    logger.warning(f"⚠️ Branch '{branch_name}' ya existe, actualizando...")
+                    branch_exists = True
+                    # Obtener el SHA actual del branch existente para usarlo como parent
+                    existing_ref = self.repo.get_git_ref(f"heads/{branch_name}")
+                    parent_sha = existing_ref.object.sha
+                    logger.info(f"📌 Branch '{branch_name}' ya existe (SHA: {parent_sha[:7]}), agregando commit...")
                 else:
                     raise
             
@@ -94,12 +101,22 @@ class GitHubService:
                 })
                 logger.debug(f"📄 Blob creado para: {file_path}")
             
-            # Crear el tree
-            base_tree = self.repo.get_git_tree(base_sha)
-            new_tree = self.repo.create_git_tree(tree_elements, base_tree)
+            # Crear el tree usando InputGitTreeElement
+            tree_input = []
+            for elem in tree_elements:
+                tree_input.append(InputGitTreeElement(
+                    path=elem["path"],
+                    mode=elem["mode"],
+                    type=elem["type"],
+                    sha=elem["sha"]
+                ))
             
-            # Crear el commit
-            parent_commit = self.repo.get_git_commit(base_sha)
+            # Usar el tree del parent correcto (branch existente o base)
+            parent_tree = self.repo.get_git_tree(parent_sha)
+            new_tree = self.repo.create_git_tree(tree_input, parent_tree)
+            
+            # Crear el commit con el parent correcto
+            parent_commit = self.repo.get_git_commit(parent_sha)
             new_commit = self.repo.create_git_commit(
                 message=commit_message,
                 tree=new_tree,
@@ -108,14 +125,17 @@ class GitHubService:
             
             # Actualizar la referencia del branch
             ref = self.repo.get_git_ref(f"heads/{branch_name}")
-            ref.edit(sha=new_commit.sha)
+            ref.edit(sha=new_commit.sha, force=True)
             
             logger.info(f"✅ Commit creado: {new_commit.sha[:7]} - {commit_message}")
             
             return True, new_commit.sha
             
+        except GithubException as e:
+            logger.error(f"❌ Error GitHub al crear branch y commit: {e.status} - {e.data}")
+            return False, None
         except Exception as e:
-            logger.error(f"❌ Error al crear branch y commit: {e}")
+            logger.error(f"❌ Error al crear branch y commit: {type(e).__name__}: {e}")
             return False, None
     
     def create_pull_request(

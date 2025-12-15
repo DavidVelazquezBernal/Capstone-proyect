@@ -30,6 +30,100 @@ def _limpiar_ansi(text: str) -> str:
     return ansi_escape.sub('', text)
 
 
+def _strip_ts_strings_and_comments(code: str) -> str:
+    i = 0
+    n = len(code)
+    out_chars: list[str] = []
+
+    NORMAL = 0
+    SQ = 1
+    DQ = 2
+    BT = 3
+    LINE_COMMENT = 4
+    BLOCK_COMMENT = 5
+
+    state = NORMAL
+    while i < n:
+        ch = code[i]
+        nxt = code[i + 1] if i + 1 < n else ""
+
+        if state == NORMAL:
+            if ch == "'":
+                state = SQ
+                out_chars.append(' ')
+                i += 1
+                continue
+            if ch == '"':
+                state = DQ
+                out_chars.append(' ')
+                i += 1
+                continue
+            if ch == '`':
+                state = BT
+                out_chars.append(' ')
+                i += 1
+                continue
+            if ch == '/' and nxt == '/':
+                state = LINE_COMMENT
+                out_chars.append(' ')
+                out_chars.append(' ')
+                i += 2
+                continue
+            if ch == '/' and nxt == '*':
+                state = BLOCK_COMMENT
+                out_chars.append(' ')
+                out_chars.append(' ')
+                i += 2
+                continue
+
+            out_chars.append(ch)
+            i += 1
+            continue
+
+        if state in (SQ, DQ, BT):
+            quote = "'" if state == SQ else ('"' if state == DQ else '`')
+            if ch == '\\':
+                out_chars.append(' ')
+                if i + 1 < n:
+                    out_chars.append(' ')
+                    i += 2
+                else:
+                    i += 1
+                continue
+            if ch == quote:
+                out_chars.append(' ')
+                state = NORMAL
+                i += 1
+                continue
+
+            out_chars.append('\n' if ch == '\n' else ' ')
+            i += 1
+            continue
+
+        if state == LINE_COMMENT:
+            if ch == '\n':
+                out_chars.append('\n')
+                state = NORMAL
+                i += 1
+            else:
+                out_chars.append(' ')
+                i += 1
+            continue
+
+        if state == BLOCK_COMMENT:
+            if ch == '*' and nxt == '/':
+                out_chars.append(' ')
+                out_chars.append(' ')
+                state = NORMAL
+                i += 2
+            else:
+                out_chars.append('\n' if ch == '\n' else ' ')
+                i += 1
+            continue
+
+    return ''.join(out_chars)
+
+
 def _validar_codigo_tests_completo(codigo: str, lenguaje: str) -> tuple[bool, str]:
     """
     Valida que el código de tests esté completo y no truncado.
@@ -47,10 +141,11 @@ def _validar_codigo_tests_completo(codigo: str, lenguaje: str) -> tuple[bool, st
     # Contar llaves/paréntesis para detectar código truncado
     if lenguaje.lower() == 'typescript':
         # TypeScript: verificar balance de llaves y paréntesis
-        llaves_abiertas = codigo.count('{')
-        llaves_cerradas = codigo.count('}')
-        parentesis_abiertos = codigo.count('(')
-        parentesis_cerrados = codigo.count(')')
+        codigo_sin_strings = _strip_ts_strings_and_comments(codigo)
+        llaves_abiertas = codigo_sin_strings.count('{')
+        llaves_cerradas = codigo_sin_strings.count('}')
+        parentesis_abiertos = codigo_sin_strings.count('(')
+        parentesis_cerrados = codigo_sin_strings.count(')')
         
         if llaves_abiertas != llaves_cerradas:
             return False, f"Llaves desbalanceadas: {llaves_abiertas} abiertas, {llaves_cerradas} cerradas"
@@ -142,10 +237,10 @@ def testing_node(state: AgentState) -> AgentState:
     
     if lenguaje.lower() == 'typescript':
         codigo_filename = f"{nombre_base}.ts"
-        test_filename = f"test_{nombre_base}.spec.ts"
+        test_filename = f"{nombre_base}.spec.ts"
     else:  # Python
         codigo_filename = f"{nombre_base}.py"
-        test_filename = f"test_{nombre_base}.spec.py"
+        test_filename = f"{nombre_base}.spec.py"
     
     code_path = os.path.join(settings.OUTPUT_DIR, codigo_filename)
     test_path = os.path.join(settings.OUTPUT_DIR, test_filename)
@@ -165,6 +260,15 @@ def testing_node(state: AgentState) -> AgentState:
         requisitos_formales=state['requisitos_formales'],
         lenguaje=lenguaje,
         nombre_archivo_codigo=codigo_filename
+    )
+
+    prompt_formateado = (
+        prompt_formateado
+        + "\n\nIMPORTANTE: Devuelve el CÓDIGO COMPLETO y BIEN FORMADO (sin truncar). "
+          "No uses Markdown ni fences ```; responde únicamente con código TypeScript. "
+          "Genera un archivo de tests CORTO: un solo bloque describe() y como máximo 6 tests (it/test). Evita describe anidados y evita bloques enormes. "
+          "Cierra todas las llaves `{}` y paréntesis `()` y finaliza correctamente los bloques (por ejemplo `describe(...) { ... });`). "
+          "La ÚLTIMA línea del archivo debe ser exactamente: `});`"
     )
     
     # Llamar al LLM para generar los tests
@@ -188,7 +292,12 @@ def testing_node(state: AgentState) -> AgentState:
         logger.info("🔄 Intentando regenerar tests con más tokens...")
         
         # Reintentar con instrucción de código completo
-        prompt_retry = prompt_formateado + "\n\nIMPORTANTE: Asegúrate de generar el código COMPLETO. No lo cortes. Cierra todos los bloques y funciones."
+        prompt_retry = (
+            prompt_formateado
+            + "\n\nREINTENTO: El código anterior estaba incompleto o mal cerrado. "
+              "Devuelve un archivo de tests MÁS CORTO (máximo 6 tests) y SIN describe anidados. "
+              "No incluyas explicaciones. La ÚLTIMA línea del archivo debe ser exactamente: `});`"
+        )
         tests_generados = call_gemini(prompt_retry, "")
         
         # Limpiar de nuevo
@@ -238,7 +347,7 @@ def testing_node(state: AgentState) -> AgentState:
     
     # Verificar que existe el archivo de código
     if not os.path.exists(code_path):
-        logger.warning(f"⚠️ No se encontró el archivo de código: {code_path}")
+        #logger.warning(f"⚠️ No se encontró el archivo de código: {code_path}")
         guardar_fichero_texto(codigo_filename, codigo_limpio, directorio=settings.OUTPUT_DIR)
         logger.info("✅ Código guardado desde el estado")
     
@@ -310,49 +419,42 @@ def testing_node(state: AgentState) -> AgentState:
                     logger.warning(f"⚠️ Error en operaciones de Azure DevOps: {e}")
             # === FIN: Adjuntar tests a Azure DevOps ===
             
-            # === GITHUB: Crear branch, commit y PR cuando tests pasen ===
+            # === GITHUB: Agregar tests al branch existente y crear PR ===
             if settings.GITHUB_ENABLED:
                 try:
                     from datetime import datetime
-                    import shutil
-                    
-                    # Generar nombre del branch
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    branch_name = f"feature/ai-generated-{nombre_base}-{timestamp}"
                     
                     logger.info("=" * 60)
-                    logger.info("🐙 GITHUB - Creando branch y PR")
+                    logger.info("🐙 GITHUB - Agregando tests y creando PR")
                     logger.info("-" * 60)
                     
-                    # Copiar archivos al repositorio local antes de crear el branch
+                    # 1. Copiar archivo de tests al repositorio local (GITHUB_REPO_PATH/src/test/)
                     repo_path = settings.GITHUB_REPO_PATH
-                    src_dir = os.path.join(repo_path, "src")
                     test_dir = os.path.join(repo_path, "src", "test")
-                    
-                    # Crear directorios si no existen
-                    os.makedirs(src_dir, exist_ok=True)
                     os.makedirs(test_dir, exist_ok=True)
                     
-                    # Copiar archivo de código a src/
-                    codigo_dest = os.path.join(src_dir, codigo_filename)
-                    with open(codigo_dest, 'w', encoding='utf-8') as f:
-                        f.write(codigo_limpio)
-                    logger.info(f"📄 Código copiado a: {codigo_dest}")
-                    
-                    # Copiar archivo de tests a src/test/
                     test_dest = os.path.join(test_dir, test_filename)
                     with open(test_dest, 'w', encoding='utf-8') as f:
                         f.write(tests_generados)
                     logger.info(f"🧪 Tests copiados a: {test_dest}")
                     
-                    # Preparar archivos para commit (rutas relativas en el repo)
+                    # 2. Usar el branch existente (creado por Desarrollador) o crear uno nuevo
+                    branch_name = state.get('github_branch_name')
+                    if not branch_name:
+                        # Si no hay branch previo, crear uno nuevo
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        branch_name = f"AI_TEST_{nombre_base}_{timestamp}"
+                        logger.info(f"📌 Creando nuevo branch: {branch_name}")
+                    else:
+                        logger.info(f"📌 Usando branch existente: {branch_name}")
+                    
+                    # 3. Preparar SOLO el archivo de tests para commit
                     files_to_commit = {
-                        f"src/{codigo_filename}": codigo_limpio,
                         f"src/test/{test_filename}": tests_generados
                     }
                     
-                    # Crear branch y commit
-                    commit_message = f"feat: Add {nombre_base} implementation and tests\n\nGenerated by AI Development Agent\n- Implementation: {codigo_filename}\n- Tests: {test_filename} ({stats.get('total', 0)} tests passed)"
+                    # 4. Crear commit con tests y push a remoto
+                    commit_message = f"test: Add unit tests for {nombre_base}\n\nGenerated by AI Testing Agent\n- Tests: {test_filename}\n- Total: {stats.get('total', 0)} tests passed"
                     
                     success_commit, commit_sha = github_service.create_branch_and_commit(
                         branch_name=branch_name,
@@ -362,18 +464,21 @@ def testing_node(state: AgentState) -> AgentState:
                     
                     if success_commit:
                         state['github_branch_name'] = branch_name
-                        logger.info(f"✅ Branch '{branch_name}' creado con commit {commit_sha[:7]}")
+                        logger.info(f"✅ Tests pusheados a branch '{branch_name}'")
+                        logger.info(f"   🧪 Archivo: src/test/{test_filename}")
+                        logger.info(f"   🔗 Commit SHA: {commit_sha[:7]}")
                         
-                        # Crear Pull Request
-                        pr_title = f"[AI-Generated] {nombre_base.replace('_', ' ').title()}"
-                        pr_body = f"""## 🤖 Pull Request Generada Automáticamente
+                        # 5. Crear Pull Request (solo si no existe ya)
+                        if not state.get('github_pr_number'):
+                            pr_title = f"AI_PR_{nombre_base.replace('_', ' ').title()}"
+                            pr_body = f"""## 🤖 Pull Request Generada Automáticamente
 
 ### 📋 Descripción
 Este código fue generado automáticamente por el sistema de desarrollo multiagente.
 
 ### 📁 Archivos incluidos
-- `src/{codigo_filename}` - Implementación principal
-- `src/test/{test_filename}` - Tests unitarios
+- `src/{codigo_filename}` - Implementación principal (por Desarrollador)
+- `src/test/{test_filename}` - Tests unitarios (por Testing)
 
 ### ✅ Estado de Tests
 - **Total:** {stats.get('total', 0)}
@@ -386,28 +491,30 @@ Esta PR será revisada automáticamente por el agente RevisorCodigo.
 ---
 *Generado por AI Development Agent*
 """
-                        
-                        success_pr, pr_number, pr_url = github_service.create_pull_request(
-                            branch_name=branch_name,
-                            title=pr_title,
-                            body=pr_body
-                        )
-                        
-                        if success_pr:
-                            state['github_pr_number'] = pr_number
-                            state['github_pr_url'] = pr_url
-                            logger.info(f"✅ PR #{pr_number} creada: {pr_url}")
+                            
+                            success_pr, pr_number, pr_url = github_service.create_pull_request(
+                                branch_name=branch_name,
+                                title=pr_title,
+                                body=pr_body
+                            )
+                            
+                            if success_pr:
+                                state['github_pr_number'] = pr_number
+                                state['github_pr_url'] = pr_url
+                                logger.info(f"✅ PR #{pr_number} creada: {pr_url}")
+                            else:
+                                logger.warning("⚠️ No se pudo crear la PR")
                         else:
-                            logger.warning("⚠️ No se pudo crear la PR")
+                            logger.info(f"ℹ️ PR #{state['github_pr_number']} ya existe")
                     else:
-                        logger.warning("⚠️ No se pudo crear el branch y commit")
+                        logger.warning("⚠️ No se pudo agregar tests al branch")
                     
                     logger.info("=" * 60)
                     
                 except Exception as e:
                     logger.warning(f"⚠️ Error en operaciones de GitHub: {e}")
                     logger.debug(f"Stack trace: {e}", exc_info=True)
-            # === FIN: GitHub branch y PR ===
+            # === FIN: GitHub tests y PR ===
         else:
             # Tests fallaron - incrementar contador de debug
             state['debug_attempt_count'] += 1

@@ -75,13 +75,18 @@ def create_workflow() -> StateGraph:
     )
     
     # C. Transición condicional del Revisor de Código
-    # Si aprueba el código va a Stakeholder, si no vuelve a Desarrollador
+    # Si aprueba el código va a Stakeholder, si no vuelve a Desarrollador (con límite de intentos)
     workflow.add_conditional_edges(
         "RevisorCodigo",
-        lambda x: "CODE_APPROVED" if x.get('codigo_revisado', False) else "CODE_REJECTED",
+        lambda x: (
+            "CODE_APPROVED" if x.get('codigo_revisado', False)
+            else ("REVISOR_LIMIT_EXCEEDED" if x.get('revisor_attempt_count', 0) >= x.get('max_revisor_attempts', 2)
+                  else "CODE_REJECTED")
+        ),
         {
             "CODE_APPROVED": "Stakeholder",
-            "CODE_REJECTED": "Desarrollador"
+            "CODE_REJECTED": "Desarrollador",
+            "REVISOR_LIMIT_EXCEEDED": END
         }
     )
 
@@ -123,7 +128,30 @@ def visualize_graph(app):
         from config.settings import settings
         
         output_path = os.path.join(settings.OUTPUT_DIR, "workflow_graph.png")
-        png_data = app.get_graph().draw_mermaid_png()
+        # Usar más reintentos y mayor delay para evitar errores 204 de la API de Mermaid
+        try:
+            png_data = app.get_graph().draw_mermaid_png(max_retries=5, retry_delay=2.0)
+        except Exception as e:
+            logger.warning(f"⚠️ Falló el render Mermaid remoto, reintentando con PYPPETEER: {e}")
+            download_host = os.environ.get("PYPPETEER_DOWNLOAD_HOST")
+            if download_host and download_host.startswith("httpss://"):
+                os.environ["PYPPETEER_DOWNLOAD_HOST"] = "https://" + download_host[len("httpss://"):]
+
+            if "PYPPETEER_EXECUTABLE_PATH" not in os.environ:
+                candidates = [
+                    r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                    r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+                    r"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+                    r"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+                ]
+                for candidate in candidates:
+                    if os.path.exists(candidate):
+                        os.environ["PYPPETEER_EXECUTABLE_PATH"] = candidate
+                        break
+
+            from langchain_core.runnables.graph import MermaidDrawMethod
+
+            png_data = app.get_graph().draw_mermaid_png(draw_method=MermaidDrawMethod.PYPPETEER)
         
         with open(output_path, "wb") as f:
             f.write(png_data)
@@ -132,5 +160,6 @@ def visualize_graph(app):
         logger.info(f"   Abre el archivo para visualizar el flujo de trabajo.")
     except Exception as e:
         logger.warning(f"⚠️ No se pudo guardar el grafo como imagen: {e}")
+        logger.debug("   Tip: Verifica tu conexión a internet o usa MermaidDrawMethod.PYPPETEER para renderizado local")
     # except Exception as e:
     #     print(f"⚠️ No se pudo visualizar el grafo: {e}")
