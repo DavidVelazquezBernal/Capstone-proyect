@@ -38,7 +38,10 @@ if settings.USE_LANGCHAIN_WRAPPER:
 #     print("✅ Cliente Gemini inicializado correctamente (Colab).")
 # except ImportError:
     # Entorno local - usar .env
-if settings.GEMINI_API_KEY:
+if settings.LLM_MOCK_MODE:
+    client = None
+    logger.info("🧪 LLM_MOCK_MODE=true: saltando inicialización del cliente Gemini")
+elif settings.GEMINI_API_KEY:
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     logger.info("✅ Cliente Gemini inicializado correctamente (Local).")
 else:
