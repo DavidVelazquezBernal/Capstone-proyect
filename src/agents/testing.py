@@ -348,6 +348,7 @@ def testing_node(state: AgentState) -> AgentState:
         + "\n\nIMPORTANTE: Devuelve el CÓDIGO COMPLETO y BIEN FORMADO (sin truncar). "
           "No uses Markdown ni fences ```; responde únicamente con código TypeScript. "
           "Genera un archivo de tests CORTO: un solo bloque describe() y como máximo 6 tests (it/test). Evita describe anidados y evita bloques enormes. "
+          "Evita tests innecesarios: cada test debe aportar cobertura NUEVA. Elimina/evita tests repetidos, duplicados o equivalentes. "
           "Cierra todas las llaves `{}` y paréntesis `()` y finaliza correctamente los bloques (por ejemplo `describe(...) { ... });`). "
           "La ÚLTIMA línea del archivo debe ser exactamente: `});`"
     )
@@ -383,6 +384,7 @@ def testing_node(state: AgentState) -> AgentState:
             prompt_formateado
             + "\n\nREINTENTO: El código anterior estaba incompleto o mal cerrado. "
               "Devuelve un archivo de tests MÁS CORTO (máximo 6 tests) y SIN describe anidados. "
+              "Evita tests innecesarios y elimina/evita casos repetidos o duplicados; cada test debe ser único y aportar cobertura nueva. "
               "No incluyas explicaciones. La ÚLTIMA línea del archivo debe ser exactamente: `});`"
         )
         tests_generados = call_gemini(prompt_retry, "")

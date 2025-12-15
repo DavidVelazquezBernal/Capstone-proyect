@@ -58,6 +58,22 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
 
     delete_output_folder()
 
+    prompt_inicial_str = prompt_inicial
+    if not isinstance(prompt_inicial_str, str):
+        try:
+            import json
+            if isinstance(prompt_inicial_str, set):
+                prompt_inicial_str = list(prompt_inicial_str)
+            prompt_inicial_str = json.dumps(prompt_inicial_str, ensure_ascii=False, indent=2)
+        except Exception:
+            prompt_inicial_str = str(prompt_inicial)
+
+    guardar_fichero_texto(
+        "0_petición_inicial.txt",
+        prompt_inicial_str,
+        directorio=settings.OUTPUT_DIR
+    )
+
     # Estado inicial
     initial_state = {
         "prompt_inicial": prompt_inicial,
