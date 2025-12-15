@@ -43,17 +43,24 @@ def _formatear_float_literal(value: str, max_decimals: int = 5) -> str:
     except Exception:
         return value
     v = round(v, max_decimals)
-    if abs(v) == 0.0:
-        v = 0.0
     txt = f"{v:.{max_decimals}f}".rstrip('0').rstrip('.')
-    return "0" if txt == "-0" else txt
+    return txt
 
 
 def _postprocesar_tests_typescript(code: str) -> str:
     code = re.sub(r'\btoBeCloseTo\(\s*([^,\n\)]+?)\s*,\s*[^\)\n]+\)', r'toBeCloseTo(\1)', code)
-    code = re.sub(r'\.toBe\(\s*-0\s*\)', '.toBeCloseTo(0)', code)
+
+    code = re.sub(r'\.toBe\(\s*-0(?:\.0+)?\s*\)', '.toBe(-0)', code)
+    code = re.sub(r'\.toBe\(\s*0(?:\.0+)?\s*\)', '.toBe(0)', code)
 
     def _repl_to_be_float(m: re.Match) -> str:
+        try:
+            v = float(m.group(1))
+        except Exception:
+            v = None
+        if v is not None and v == 0.0:
+            # Preservar semántica de -0 vs +0 si el autor la quería en el literal
+            return f".toBe({m.group(1).strip()})"
         return f".toBeCloseTo({_formatear_float_literal(m.group(1))})"
 
     code = re.sub(r'\.toBe\(\s*([-+]?\d+\.\d+)\s*\)', _repl_to_be_float, code)
@@ -349,6 +356,8 @@ def testing_node(state: AgentState) -> AgentState:
         prompt_formateado += (
             "\n\nRegla de decimales: si usas números en coma flotante (con decimales), usa como máximo 5 decimales en los literales. "
             "Si comparas resultados con decimales, usa siempre `toBeCloseTo(valor)` con UN SOLO argumento (no uses el segundo parámetro), y no uses `toBe()` para decimales."
+            "\nNota sobre -0: en JavaScript existe `-0` y es un valor válido. Si el resultado correcto puede ser `-0`, es válido escribir expectativas como `toBe(-0)` (no lo fuerces a `0`). "
+            "Si NO te importa distinguir entre `0` y `-0`, usa `toBeCloseTo(0)` o normaliza con `Math.abs(valor)` antes de comparar."
         )
     
     # Llamar al LLM para generar los tests
