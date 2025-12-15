@@ -40,6 +40,7 @@ class Settings:
     # Configuración de GitHub (opcional - para integración con repositorios)
     GITHUB_ENABLED: bool = os.getenv("GITHUB_ENABLED", "false").lower() == "true"
     GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")  # Personal Access Token con permisos repo
+    GITHUB_REVIEWER_TOKEN: str = os.getenv("GITHUB_REVIEWER_TOKEN", "")  # Token opcional para aprobar reviews (cuenta distinta)
     GITHUB_OWNER: str = os.getenv("GITHUB_OWNER", "")  # Usuario u organización dueña del repo
     GITHUB_REPO: str = os.getenv("GITHUB_REPO", "")  # Nombre del repositorio
     GITHUB_BASE_BRANCH: str = os.getenv("GITHUB_BASE_BRANCH", "main")  # Branch base para PRs

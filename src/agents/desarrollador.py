@@ -115,8 +115,8 @@ def desarrollador_node(state: AgentState) -> AgentState:
             logger.debug(f"Stack trace: {e}", exc_info=True)
     # === FIN: Creación de Tasks en Azure DevOps ===
     
-    # === INICIO: Crear branch en GitHub para SonarCloud ===
-    if settings.GITHUB_ENABLED and settings.SONARCLOUD_ENABLED:
+    # === INICIO: Crear branch en GitHub  ===
+    if settings.GITHUB_ENABLED:
         import os
         
         # Solo crear branch si no existe uno previo o si es una corrección de SonarQube
@@ -124,13 +124,13 @@ def desarrollador_node(state: AgentState) -> AgentState:
         es_correccion_sonarqube = state['sonarqube_attempt_count'] > 0
         
         if not branch_existente or es_correccion_sonarqube:
-            logger.info("🐙 Creando branch en GitHub para análisis SonarCloud...")
+            logger.info("🐙 Creando branch en GitHub...")
             
             try:
                 # Generar nombre del branch
                 nombre_base = extraer_nombre_archivo(state.get('requisitos_formales', ''))
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                branch_name = f"AI_DESA_{nombre_base}_{timestamp}"
+                branch_name = f"[AI_Generated][Developer]_{nombre_base}_{timestamp}"
                 
                 # 1. Copiar archivo al repositorio local (GITHUB_REPO_PATH/src/)
                 repo_path = settings.GITHUB_REPO_PATH

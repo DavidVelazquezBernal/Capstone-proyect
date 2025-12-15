@@ -581,7 +581,7 @@ def testing_node(state: AgentState) -> AgentState:
                     if not branch_name:
                         # Si no hay branch previo, crear uno nuevo
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        branch_name = f"AI_TEST_{nombre_base}_{timestamp}"
+                        branch_name = f"[AI_Generated][Tester]_{nombre_base}_{timestamp}"
                         logger.info(f"📌 Creando nuevo branch: {branch_name}")
                     else:
                         logger.info(f"📌 Usando branch existente: {branch_name}")
@@ -608,7 +608,7 @@ def testing_node(state: AgentState) -> AgentState:
                         
                         # 5. Crear Pull Request (solo si no existe ya)
                         if not state.get('github_pr_number'):
-                            pr_title = f"AI_PR_{nombre_base.replace('_', ' ').title()}"
+                            pr_title = f"[AI Generated][Tester] {nombre_base.replace('_', ' ').title()}"
                             pr_body = f"""## 🤖 Pull Request Generada Automáticamente
 
 ### 📋 Descripción

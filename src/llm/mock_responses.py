@@ -70,7 +70,7 @@ def get_mock_response(role_prompt: str, context: str = "") -> str:
 <p><em>🤖 Release Note generado automáticamente por el sistema multiagente de desarrollo ágil</em></p>"""
     
     # GENERADOR DE TESTS
-    if prompt_lower.startswith("rol:\ningeniero de test") and ("generar" in prompt_lower or "unitarios" in prompt_lower):
+    if prompt_lower.startswith("rol:\ningeniero de tdd") and ("generar" in prompt_lower or "unitarios" in prompt_lower):
         # Extraer el nombre del archivo de código del prompt (con ChatPromptTemplate está ahí)
         import re
         filename_match = re.search(r"nombre del archivo de código:\s*([^\s\n]+)", role_prompt, re.IGNORECASE)
@@ -179,6 +179,27 @@ def get_mock_response(role_prompt: str, context: str = "") -> str:
                 "    with pytest.raises(TypeError):\n"
                 "        sumar(5, None)"
             )
+
+    # REVISOR DE CÓDIGO
+    # En revisor_codigo.py el prompt no usa PromptTemplates: contiene "Eres un revisor de código senior" y pide un JSON.
+    if (
+        "revisor de código senior" in texto_completo
+        and "responde en formato json" in texto_completo
+        and '"aprobado"' in role_prompt
+    ):
+        return """{
+  \"aprobado\": true,
+  \"puntuacion\": 8,
+  \"aspectos_positivos\": [
+    \"Cumple los requisitos principales\",
+    \"Tests unitarios presentes y ejecutables\",
+    \"Código legible y con nombres razonables\"
+  ],
+  \"aspectos_mejorar\": [
+    \"Añadir algún caso límite adicional si aplica\"
+  ],
+  \"comentario_revision\": \"Revisión mock: el cambio parece correcto y mantenible. Aprobado.\"
+}"""
     
     # DESARROLLADOR - Código (debe ir PRIMERO porque su contexto también contiene "Requisitos")
     elif prompt_lower.startswith("rol:\ndesarrollador de software")  or "codifica" in prompt_lower or "generar código" in prompt_lower:

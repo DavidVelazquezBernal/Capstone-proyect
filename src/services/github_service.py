@@ -6,6 +6,7 @@ Coordina la creación de branches, commits, push y Pull Requests.
 import os
 import json
 import base64
+import time
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from config.settings import settings
@@ -33,6 +34,8 @@ class GitHubService:
         self.enabled = settings.GITHUB_ENABLED and GITHUB_AVAILABLE
         self.client = None
         self.repo = None
+        self._reviewer_client = None
+        self._reviewer_repo = None
         
         if self.enabled:
             try:
@@ -42,6 +45,25 @@ class GitHubService:
             except Exception as e:
                 logger.error(f"❌ Error al inicializar GitHub Service: {e}")
                 self.enabled = False
+
+    def _get_reviewer_repo(self):
+        reviewer_token = getattr(settings, "GITHUB_REVIEWER_TOKEN", "")
+        if not reviewer_token:
+            return None
+
+        if self._reviewer_repo is not None:
+            return self._reviewer_repo
+
+        try:
+            self._reviewer_client = Github(reviewer_token)
+            self._reviewer_repo = self._reviewer_client.get_repo(f"{settings.GITHUB_OWNER}/{settings.GITHUB_REPO}")
+            logger.info("✅ GitHub Reviewer client inicializado (cuenta distinta)")
+            return self._reviewer_repo
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo inicializar reviewer client: {e}")
+            self._reviewer_client = None
+            self._reviewer_repo = None
+            return None
     
     def create_branch_and_commit(
         self,
@@ -187,7 +209,8 @@ class GitHubService:
     def approve_pull_request(
         self,
         pr_number: int,
-        comment: str
+        comment: str,
+        use_reviewer_token: bool = False
     ) -> bool:
         """
         Aprueba una Pull Request con un comentario.
@@ -204,7 +227,9 @@ class GitHubService:
             return False
         
         try:
-            pr = self.repo.get_pull(pr_number)
+            reviewer_repo = self._get_reviewer_repo() if use_reviewer_token else None
+            target_repo = reviewer_repo or self.repo
+            pr = target_repo.get_pull(pr_number)
             
             # Crear review de aprobación
             pr.create_review(
@@ -215,7 +240,39 @@ class GitHubService:
             logger.info(f"✅ PR #{pr_number} aprobada con comentario")
             
             return True
-            
+
+        except GithubException as e:
+            # Caso típico: el mismo usuario/token que creó la PR intenta aprobarla
+            if e.status == 422:
+                data_str = str(getattr(e, "data", ""))
+                if "approve your own pull request" in data_str.lower():
+                    logger.warning(
+                        f"⚠️ No se puede aprobar la propia PR #{pr_number} (GitHub 422). "
+                        "Publicando comentario en lugar de APPROVE."
+                    )
+                    try:
+                        reviewer_repo = self._get_reviewer_repo() if use_reviewer_token else None
+                        target_repo = reviewer_repo or self.repo
+                        pr = target_repo.get_pull(pr_number)
+                        pr.create_review(body=comment, event="COMMENT")
+                        logger.info(f"💬 Comentario de revisión publicado en PR #{pr_number}")
+                        return True
+                    except Exception as e2:
+                        logger.warning(f"⚠️ No se pudo publicar review COMMENT en PR #{pr_number}: {e2}")
+                        try:
+                            reviewer_repo = self._get_reviewer_repo() if use_reviewer_token else None
+                            target_repo = reviewer_repo or self.repo
+                            pr = target_repo.get_pull(pr_number)
+                            pr.create_issue_comment(comment)
+                            logger.info(f"💬 Comentario publicado en PR #{pr_number}")
+                            return True
+                        except Exception as e3:
+                            logger.error(f"❌ Error al comentar PR #{pr_number}: {e3}")
+                            return False
+
+            logger.error(f"❌ Error GitHub al aprobar PR: {e.status} - {e.data}")
+            return False
+
         except Exception as e:
             logger.error(f"❌ Error al aprobar PR: {e}")
             return False
@@ -223,7 +280,8 @@ class GitHubService:
     def add_comment_to_pr(
         self,
         pr_number: int,
-        comment: str
+        comment: str,
+        use_reviewer_token: bool = False
     ) -> bool:
         """
         Añade un comentario a una Pull Request.
@@ -239,7 +297,9 @@ class GitHubService:
             return False
         
         try:
-            pr = self.repo.get_pull(pr_number)
+            reviewer_repo = self._get_reviewer_repo() if use_reviewer_token else None
+            target_repo = reviewer_repo or self.repo
+            pr = target_repo.get_pull(pr_number)
             pr.create_issue_comment(comment)
             logger.info(f"💬 Comentario añadido a PR #{pr_number}")
             return True
@@ -251,7 +311,8 @@ class GitHubService:
         self,
         pr_number: int,
         commit_message: Optional[str] = None,
-        merge_method: str = "squash"
+        merge_method: str = "squash",
+        use_reviewer_token: bool = False
     ) -> bool:
         """
         Hace merge de una Pull Request.
@@ -268,9 +329,18 @@ class GitHubService:
             return False
         
         try:
-            pr = self.repo.get_pull(pr_number)
-            
-            if not pr.mergeable:
+            reviewer_repo = self._get_reviewer_repo() if use_reviewer_token else None
+            target_repo = reviewer_repo or self.repo
+            pr = target_repo.get_pull(pr_number)
+
+            # GitHub puede tardar en calcular mergeable (None). Reintentar brevemente.
+            for _ in range(5):
+                if pr.mergeable is not None:
+                    break
+                time.sleep(1)
+                pr = target_repo.get_pull(pr_number)
+
+            if pr.mergeable is not True:
                 logger.warning(f"⚠️ PR #{pr_number} no es mergeable")
                 return False
             

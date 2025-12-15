@@ -154,11 +154,25 @@ IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de cal
         logger.info(f"✅ Código APROBADO con puntuación {puntuacion}/10")
         
         # Aprobar la PR
-        success = github_service.approve_pull_request(pr_number, comentario_pr)
+        success = github_service.approve_pull_request(pr_number, comentario_pr, use_reviewer_token=True)
         
         if success:
             logger.info(f"✅ PR #{pr_number} aprobada")
             state['pr_aprobada'] = True
+
+            # Squash and merge automático tras aprobación
+            merge_message = f"feat: merge PR #{pr_number} (squash)\n\nMerged by AI Code Reviewer"
+            merged = github_service.merge_pull_request(
+                pr_number,
+                commit_message=merge_message,
+                merge_method="squash",
+                use_reviewer_token=True
+            )
+            state['pr_mergeada'] = bool(merged)
+            if merged:
+                logger.info(f"✅ PR #{pr_number} mergeada (squash)")
+            else:
+                logger.warning(f"⚠️ PR #{pr_number} aprobada pero NO se pudo mergear (squash)")
         else:
             logger.warning(f"⚠️ No se pudo aprobar la PR #{pr_number}")
             state['pr_aprobada'] = False
@@ -166,7 +180,7 @@ IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de cal
         logger.warning(f"⚠️ Código RECHAZADO con puntuación {puntuacion}/10")
         
         # Añadir comentario a la PR
-        github_service.add_comment_to_pr(pr_number, comentario_pr)
+        github_service.add_comment_to_pr(pr_number, comentario_pr, use_reviewer_token=True)
         state['pr_aprobada'] = False
     
     log_agent_execution(logger, "RevisorCodigo", "completado", {
