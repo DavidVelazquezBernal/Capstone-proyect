@@ -159,20 +159,6 @@ IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de cal
         if success:
             logger.info(f"✅ PR #{pr_number} aprobada")
             state['pr_aprobada'] = True
-
-            # Squash and merge automático tras aprobación
-            merge_message = f"feat: merge PR #{pr_number} (squash)\n\nMerged by AI Code Reviewer"
-            merged = github_service.merge_pull_request(
-                pr_number,
-                commit_message=merge_message,
-                merge_method="squash",
-                use_reviewer_token=True
-            )
-            state['pr_mergeada'] = bool(merged)
-            if merged:
-                logger.info(f"✅ PR #{pr_number} mergeada (squash)")
-            else:
-                logger.warning(f"⚠️ PR #{pr_number} aprobada pero NO se pudo mergear (squash)")
         else:
             logger.warning(f"⚠️ No se pudo aprobar la PR #{pr_number}")
             state['pr_aprobada'] = False

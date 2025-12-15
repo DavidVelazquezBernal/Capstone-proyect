@@ -7,6 +7,7 @@ import os
 import json
 import base64
 import time
+import re
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from config.settings import settings
@@ -64,6 +65,27 @@ class GitHubService:
             self._reviewer_client = None
             self._reviewer_repo = None
             return None
+
+    def _sanitize_branch_name(self, branch_name: str) -> str:
+        if not branch_name:
+            return branch_name
+
+        # Git ref safety: replace common invalid characters and patterns.
+        sanitized = branch_name
+        sanitized = sanitized.replace("@{", "_")
+        sanitized = re.sub(r"[\s\[\]~^:?*\\]+", "_", sanitized)
+        sanitized = re.sub(r"/+", "/", sanitized)
+        sanitized = sanitized.strip("/.")
+        sanitized = sanitized.replace("..", "_")
+
+        # Avoid special suffix that git rejects
+        if sanitized.endswith(".lock"):
+            sanitized = sanitized[: -len(".lock")] + "_lock"
+
+        return sanitized
+
+    def sanitize_branch_name(self, branch_name: str) -> str:
+        return self._sanitize_branch_name(branch_name)
     
     def create_branch_and_commit(
         self,
@@ -85,6 +107,11 @@ class GitHubService:
         if not self.enabled:
             logger.warning("⚠️ GitHub Service no está habilitado")
             return False, None
+
+        original_branch_name = branch_name
+        branch_name = self._sanitize_branch_name(branch_name)
+        if branch_name != original_branch_name:
+            logger.warning(f"⚠️ Nombre de branch inválido ajustado: '{original_branch_name}' -> '{branch_name}'")
         
         try:
             # Obtener el SHA del branch base
@@ -102,12 +129,18 @@ class GitHubService:
                 self.repo.create_git_ref(ref=ref_name, sha=base_sha)
                 logger.info(f"🌿 Branch '{branch_name}' creado")
             except GithubException as e:
-                if e.status == 422:  # Branch ya existe
-                    branch_exists = True
-                    # Obtener el SHA actual del branch existente para usarlo como parent
-                    existing_ref = self.repo.get_git_ref(f"heads/{branch_name}")
-                    parent_sha = existing_ref.object.sha
-                    logger.info(f"📌 Branch '{branch_name}' ya existe (SHA: {parent_sha[:7]}), agregando commit...")
+                if e.status == 422:
+                    data_str = str(getattr(e, "data", ""))
+                    # 422 puede ser tanto "ref ya existe" como "ref inválida".
+                    if "reference already exists" in data_str.lower():
+                        branch_exists = True
+                        # Obtener el SHA actual del branch existente para usarlo como parent
+                        existing_ref = self.repo.get_git_ref(f"heads/{branch_name}")
+                        parent_sha = existing_ref.object.sha
+                        logger.info(f"📌 Branch '{branch_name}' ya existe (SHA: {parent_sha[:7]}), agregando commit...")
+                    else:
+                        logger.error(f"❌ Branch inválido o no aceptado por GitHub: '{branch_name}' (422). Detalles: {getattr(e, 'data', '')}")
+                        return False, None
                 else:
                     raise
             
@@ -180,7 +213,7 @@ class GitHubService:
         if not self.enabled:
             logger.warning("⚠️ GitHub Service no está habilitado")
             return False, None, None
-        
+
         try:
             pr = self.repo.create_pull(
                 title=title,
@@ -205,6 +238,29 @@ class GitHubService:
         except Exception as e:
             logger.error(f"❌ Error al crear PR: {e}")
             return False, None, None
+
+    def delete_branch(self, branch_name: str) -> bool:
+        if not self.enabled:
+            return False
+
+        try:
+            sanitized = self._sanitize_branch_name(branch_name)
+            if sanitized == settings.GITHUB_BASE_BRANCH:
+                logger.warning(f"⚠️ Se omitió borrado de branch remoto base: {sanitized}")
+                return False
+            ref = self.repo.get_git_ref(f"heads/{sanitized}")
+            ref.delete()
+            logger.info(f"🧹 Branch remoto eliminado: {sanitized}")
+            return True
+        except GithubException as e:
+            if e.status == 404:
+                logger.warning(f"⚠️ Branch remoto no encontrado para borrar: {branch_name}")
+                return False
+            logger.error(f"❌ Error GitHub al borrar branch remoto: {e.status} - {e.data}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error al borrar branch remoto: {type(e).__name__}: {e}")
+            return False
     
     def approve_pull_request(
         self,
@@ -351,9 +407,36 @@ class GitHubService:
             
             logger.info(f"✅ PR #{pr_number} mergeada con método '{merge_method}'")
             return True
-            
+
+        except GithubException as e:
+            # GitHub suele devolver 404 también cuando el token no tiene permisos suficientes.
+            if e.status == 404:
+                logger.error(
+                    "❌ Error al hacer merge (404 Not Found). Suele indicar falta de permisos del token "
+                    "(ej: Pull Requests/Contents write) o que la PR no existe/ya no es accesible. "
+                    f"Detalles: {e.data}"
+                )
+                return False
+
+            if e.status == 405:
+                logger.error(
+                    "❌ Error al hacer merge (405). Puede que el método de merge no esté permitido "
+                    f"(merge_method='{merge_method}') o la PR no sea mergeable. Detalles: {e.data}"
+                )
+                return False
+
+            if e.status == 409:
+                logger.error(
+                    "❌ Error al hacer merge (409). Normalmente hay conflictos o branch protection bloqueando el merge. "
+                    f"Detalles: {e.data}"
+                )
+                return False
+
+            logger.error(f"❌ Error GitHub al hacer merge: {e.status} - {e.data}")
+            return False
+
         except Exception as e:
-            logger.error(f"❌ Error al hacer merge: {e}")
+            logger.error(f"❌ Error al hacer merge: {type(e).__name__}: {e}")
             return False
     
     def get_pr_files(self, pr_number: int) -> Dict[str, str]:

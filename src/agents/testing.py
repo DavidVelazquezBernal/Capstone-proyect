@@ -47,6 +47,115 @@ def _formatear_float_literal(value: str, max_decimals: int = 5) -> str:
     return txt
 
 
+def tester_merge_node(state: AgentState) -> AgentState:
+    print()
+    logger.info("=" * 60)
+    logger.info("🐙 TESTER - SQUASH MERGE - INICIO")
+    logger.info("=" * 60)
+
+    log_agent_execution(logger, "Testing", "merge_iniciado", {
+        "pr_number": state.get('github_pr_number'),
+        "validado": state.get('validado'),
+        "tests_pasados": state.get('pruebas_superadas'),
+        "codigo_aprobado": state.get('codigo_revisado')
+    })
+
+    pr_number = state.get('github_pr_number')
+    if not settings.GITHUB_ENABLED or not pr_number:
+        logger.info("ℹ️ Merge omitido: GitHub no habilitado o no hay PR")
+        state['pr_mergeada'] = False
+        return state
+
+    if not state.get('pruebas_superadas'):
+        logger.info("ℹ️ Merge omitido: tests no están en PASSED")
+        state['pr_mergeada'] = False
+        return state
+
+    if not state.get('codigo_revisado'):
+        logger.info("ℹ️ Merge omitido: revisor no aprobó el código")
+        state['pr_mergeada'] = False
+        return state
+
+    merge_message = f"chore: squash merge PR #{pr_number}\n\nMerged by AI Testing Agent"
+    merged = github_service.merge_pull_request(
+        pr_number,
+        commit_message=merge_message,
+        merge_method="squash",
+        use_reviewer_token=False
+    )
+    state['pr_mergeada'] = bool(merged)
+
+    if merged:
+        logger.info(f"✅ PR #{pr_number} mergeada (squash) por Testing")
+
+        branch_name = state.get('github_branch_name')
+        if branch_name:
+            github_service.delete_branch(branch_name)
+
+            repo_path = settings.GITHUB_REPO_PATH
+            try:
+                sanitized_branch = github_service.sanitize_branch_name(branch_name)
+                if sanitized_branch == settings.GITHUB_BASE_BRANCH:
+                    raise RuntimeError(f"Se omitió borrado de branch local base: {sanitized_branch}")
+
+                git_dir = os.path.join(repo_path, ".git")
+                if os.path.isdir(git_dir):
+                    logger.info(f"🔍 Verificando branch local en: {repo_path}")
+                    
+                    current_result = subprocess.run(
+                        ["git", "-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"],
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+                    current = current_result.stdout.strip()
+                    logger.info(f"📍 Branch actual: {current}")
+
+                    if current == sanitized_branch:
+                        logger.info(f"🔄 Cambiando a {settings.GITHUB_BASE_BRANCH} antes de borrar...")
+                        checkout_result = subprocess.run(
+                            ["git", "-C", repo_path, "checkout", settings.GITHUB_BASE_BRANCH],
+                            capture_output=True,
+                            text=True,
+                            check=False
+                        )
+                        if checkout_result.returncode != 0:
+                            logger.warning(f"⚠️ Checkout falló: {checkout_result.stderr}")
+
+                    logger.info(f"🗑️ Eliminando branch local: {sanitized_branch}")
+                    delete_result = subprocess.run(
+                        ["git", "-C", repo_path, "branch", "-D", sanitized_branch],
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+                    
+                    if delete_result.returncode == 0:
+                        logger.info(f"🧹 Branch local eliminado: {sanitized_branch}")
+                    else:
+                        logger.warning(f"⚠️ No se pudo eliminar branch local: {delete_result.stderr.strip()}")
+                else:
+                    logger.warning(f"⚠️ No es un repositorio git: {repo_path}")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo borrar el branch local '{branch_name}': {e}")
+
+        for key in ("github_local_code_path", "github_local_test_path"):
+            p = state.get(key)
+            if p and isinstance(p, str) and os.path.isfile(p):
+                try:
+                    os.remove(p)
+                    logger.info(f"🧹 Archivo local eliminado: {p}")
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo borrar archivo local '{p}': {e}")
+    else:
+        logger.warning(f"⚠️ No se pudo mergear la PR #{pr_number} (squash)")
+
+    logger.info("=" * 60)
+    logger.info("🐙 TESTER - SQUASH MERGE - FIN")
+    logger.info("=" * 60)
+    return state
+
+
 def _postprocesar_tests_typescript(code: str) -> str:
     code = re.sub(r'\btoBeCloseTo\(\s*([^,\n\)]+?)\s*,\s*[^\)\n]+\)', r'toBeCloseTo(\1)', code)
 
@@ -575,13 +684,15 @@ def testing_node(state: AgentState) -> AgentState:
                     with open(test_dest, 'w', encoding='utf-8') as f:
                         f.write(tests_generados)
                     logger.info(f"🧪 Tests copiados a: {test_dest}")
+
+                    state['github_local_test_path'] = test_dest
                     
                     # 2. Usar el branch existente (creado por Desarrollador) o crear uno nuevo
                     branch_name = state.get('github_branch_name')
                     if not branch_name:
                         # Si no hay branch previo, crear uno nuevo
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        branch_name = f"[AI_Generated][Tester]_{nombre_base}_{timestamp}"
+                        branch_name = f"AI_Generated_Tester_{nombre_base}_{timestamp}"
                         logger.info(f"📌 Creando nuevo branch: {branch_name}")
                     else:
                         logger.info(f"📌 Usando branch existente: {branch_name}")
@@ -590,6 +701,8 @@ def testing_node(state: AgentState) -> AgentState:
                     files_to_commit = {
                         f"src/test/{test_filename}": tests_generados
                     }
+
+                    state['github_test_filename'] = f"src/test/{test_filename}"
                     
                     # 4. Crear commit con tests y push a remoto
                     commit_message = f"test: Add unit tests for {nombre_base}\n\nGenerated by AI Testing Agent\n- Tests: {test_filename}\n- Total: {stats.get('total', 0)} tests passed"
@@ -608,7 +721,7 @@ def testing_node(state: AgentState) -> AgentState:
                         
                         # 5. Crear Pull Request (solo si no existe ya)
                         if not state.get('github_pr_number'):
-                            pr_title = f"[AI Generated][Tester] {nombre_base.replace('_', ' ').title()}"
+                            pr_title = f"AI Generated_Tester_{nombre_base.replace('_', ' ').title()}"
                             pr_body = f"""## 🤖 Pull Request Generada Automáticamente
 
 ### 📋 Descripción

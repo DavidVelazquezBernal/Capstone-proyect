@@ -10,7 +10,7 @@ from utils.logger import setup_logger
 from agents.product_owner import product_owner_node
 from agents.desarrollador import desarrollador_node
 from agents.sonarqube import sonarqube_node
-from agents.testing import testing_node
+from agents.testing import testing_node, tester_merge_node
 from agents.revisor_codigo import revisor_codigo_node
 from agents.stakeholder import stakeholder_node
 
@@ -33,6 +33,7 @@ def create_workflow() -> StateGraph:
     workflow.add_node("Testing", testing_node)
     workflow.add_node("RevisorCodigo", revisor_codigo_node)
     workflow.add_node("Stakeholder", stakeholder_node)
+    workflow.add_node("TesterMerge", tester_merge_node)
 
     # 2. Definir Transiciones Iniciales y Lineales
     workflow.add_edge(START, "ProductOwner")
@@ -84,7 +85,7 @@ def create_workflow() -> StateGraph:
                   else "CODE_REJECTED")
         ),
         {
-            "CODE_APPROVED": "Stakeholder",
+            "CODE_APPROVED": "TesterMerge",
             "CODE_REJECTED": "Desarrollador",
             "REVISOR_LIMIT_EXCEEDED": END
         }
@@ -102,6 +103,17 @@ def create_workflow() -> StateGraph:
             "RECHAZADO": "ProductOwner",
             "VALIDADO": END,
             "FAILED_FINAL": END,
+        }
+    )
+
+    workflow.add_conditional_edges(
+        "TesterMerge",
+        lambda x: (
+            "MERGED" if x.get('pr_mergeada', False) else "MERGE_FAILED"
+        ),
+        {
+            "MERGED": "Stakeholder",
+            "MERGE_FAILED": END,
         }
     )
 
