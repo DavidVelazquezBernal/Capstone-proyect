@@ -55,6 +55,8 @@ class Settings:
     MODEL_NAME: str = "gemini-2.5-flash"
     TEMPERATURE: float = 0.1
     MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "8192"))
+
+    MAX_TEST_FIX_ATTEMPTS: int = int(os.getenv("MAX_TEST_FIX_ATTEMPTS", "2"))
     
     # Modo Testing/Mock (evita llamadas reales al LLM)
     LLM_MOCK_MODE: bool = os.getenv("LLM_MOCK_MODE", "false").lower() == "true"

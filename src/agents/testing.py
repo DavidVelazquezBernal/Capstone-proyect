@@ -30,6 +30,80 @@ def _limpiar_ansi(text: str) -> str:
     return ansi_escape.sub('', text)
 
 
+def _limpiar_codigo_tests_llm(code: str) -> str:
+    code = re.sub(r'^```(?:typescript|python|ts|py)\s*\n?', '', code, flags=re.MULTILINE)
+    code = re.sub(r'\n?```\s*$', '', code)
+    code = re.sub(r'^(?:typescript|python|ts|py)\s*\n', '', code, flags=re.MULTILINE)
+    return code.strip()
+
+
+def _formatear_float_literal(value: str, max_decimals: int = 5) -> str:
+    try:
+        v = float(value)
+    except Exception:
+        return value
+    v = round(v, max_decimals)
+    if abs(v) == 0.0:
+        v = 0.0
+    txt = f"{v:.{max_decimals}f}".rstrip('0').rstrip('.')
+    return "0" if txt == "-0" else txt
+
+
+def _postprocesar_tests_typescript(code: str) -> str:
+    code = re.sub(r'\btoBeCloseTo\(\s*([^,\n\)]+?)\s*,\s*[^\)\n]+\)', r'toBeCloseTo(\1)', code)
+    code = re.sub(r'\.toBe\(\s*-0\s*\)', '.toBeCloseTo(0)', code)
+
+    def _repl_to_be_float(m: re.Match) -> str:
+        return f".toBeCloseTo({_formatear_float_literal(m.group(1))})"
+
+    code = re.sub(r'\.toBe\(\s*([-+]?\d+\.\d+)\s*\)', _repl_to_be_float, code)
+
+    def _repl_any_float(m: re.Match) -> str:
+        return _formatear_float_literal(m.group(1))
+
+    code = re.sub(r'(?<![A-Za-z0-9_])([-+]?\d+\.\d{6,})(?![A-Za-z0-9_])', _repl_any_float, code)
+    return code
+
+
+def _es_fallo_probablemente_de_tests(lenguaje: str, output: str, traceback: str, test_filename: str) -> tuple[bool, str]:
+    combined = _limpiar_ansi((output or "") + "\n" + (traceback or ""))
+    low = combined.lower()
+
+    if lenguaje.lower() == 'typescript':
+        patterns = (
+            'syntaxerror',
+            'unexpected token',
+            'parse error',
+            'parsing error',
+            'failed to parse',
+            'transform failed',
+            'cannot find module',
+            'failed to resolve import',
+            'does not provide an export named',
+            'ts1005',
+            'ts1109',
+            'error: expected',
+        )
+        if any(p in low for p in patterns) and (test_filename.lower() in low or '.spec.' in low):
+            return True, 'Error de parsing/sintaxis en tests'
+
+        if 'expected:' in low and 'received:' in low and ('.' in low or ' -0' in low or '-0' in low):
+            if ('expected:' in low and '-0' in low) or ('received:' in low and '-0' in low):
+                return True, 'Diferencia -0 vs +0 en aserciones'
+            if re.search(r'expected:\s*[-+]?\d+\.\d+', combined, flags=re.IGNORECASE) or re.search(r'received:\s*[-+]?\d+\.\d+', combined, flags=re.IGNORECASE):
+                return True, 'Mismatch con decimales (probable expected incorrecto)'
+
+    else:
+        if ('syntaxerror' in low or 'indentationerror' in low) and test_filename.lower() in low:
+            return True, 'Error de sintaxis/indentación en tests'
+        if 'assert' in low and ('expected' in low and 'got' in low) and re.search(r'\d+\.\d+', combined):
+            return True, 'Mismatch con decimales (probable expected incorrecto)'
+        if ('-0' in low or 'negative zero' in low) and test_filename.lower() in low:
+            return True, 'Diferencia -0 vs +0 en aserciones'
+
+    return False, ''
+
+
 def _strip_ts_strings_and_comments(code: str) -> str:
     i = 0
     n = len(code)
@@ -270,6 +344,12 @@ def testing_node(state: AgentState) -> AgentState:
           "Cierra todas las llaves `{}` y paréntesis `()` y finaliza correctamente los bloques (por ejemplo `describe(...) { ... });`). "
           "La ÚLTIMA línea del archivo debe ser exactamente: `});`"
     )
+
+    if lenguaje.lower() == 'typescript':
+        prompt_formateado += (
+            "\n\nRegla de decimales: si usas números en coma flotante (con decimales), usa como máximo 5 decimales en los literales. "
+            "Si comparas resultados con decimales, usa siempre `toBeCloseTo(valor)` con UN SOLO argumento (no uses el segundo parámetro), y no uses `toBe()` para decimales."
+        )
     
     # Llamar al LLM para generar los tests
     logger.info("🤖 Llamando a LLM para generar tests...")
@@ -279,11 +359,9 @@ def testing_node(state: AgentState) -> AgentState:
     
     log_llm_call(logger, "generacion_tests", duration=duration)
     
-    # Limpiar bloques de código markdown
-    tests_generados = re.sub(r'^```(?:typescript|python|ts|py)\s*\n?', '', tests_generados, flags=re.MULTILINE)
-    tests_generados = re.sub(r'\n?```\s*$', '', tests_generados)
-    tests_generados = re.sub(r'^(?:typescript|python|ts|py)\s*\n', '', tests_generados, flags=re.MULTILINE)
-    tests_generados = tests_generados.strip()
+    tests_generados = _limpiar_codigo_tests_llm(tests_generados)
+    if lenguaje.lower() == 'typescript':
+        tests_generados = _postprocesar_tests_typescript(tests_generados)
     
     # Validar que el código de tests esté completo (no truncado)
     codigo_valido, error_validacion = _validar_codigo_tests_completo(tests_generados, lenguaje)
@@ -299,12 +377,9 @@ def testing_node(state: AgentState) -> AgentState:
               "No incluyas explicaciones. La ÚLTIMA línea del archivo debe ser exactamente: `});`"
         )
         tests_generados = call_gemini(prompt_retry, "")
-        
-        # Limpiar de nuevo
-        tests_generados = re.sub(r'^```(?:typescript|python|ts|py)\s*\n?', '', tests_generados, flags=re.MULTILINE)
-        tests_generados = re.sub(r'\n?```\s*$', '', tests_generados)
-        tests_generados = re.sub(r'^(?:typescript|python|ts|py)\s*\n', '', tests_generados, flags=re.MULTILINE)
-        tests_generados = tests_generados.strip()
+        tests_generados = _limpiar_codigo_tests_llm(tests_generados)
+        if lenguaje.lower() == 'typescript':
+            tests_generados = _postprocesar_tests_typescript(tests_generados)
         
         # Validar de nuevo
         codigo_valido2, error2 = _validar_codigo_tests_completo(tests_generados, lenguaje)
@@ -356,14 +431,66 @@ def testing_node(state: AgentState) -> AgentState:
     
     # Ejecutar tests según el lenguaje
     try:
-        if lenguaje.lower() == 'typescript':
-            result = _ejecutar_tests_typescript(test_path, code_path, state)
-        else:  # Python
-            result = _ejecutar_tests_python(test_path, state)
-        
+        max_test_fix_attempts = max(0, int(getattr(settings, 'MAX_TEST_FIX_ATTEMPTS', 0)))
+        test_fix_attempt = 0
+        result: Dict[str, Any] | None = None
+
+        while True:
+            if lenguaje.lower() == 'typescript':
+                result = _ejecutar_tests_typescript(test_path, code_path, state)
+            else:  # Python
+                result = _ejecutar_tests_python(test_path, state)
+
+            if result.get('success'):
+                break
+
+            should_fix, reason = _es_fallo_probablemente_de_tests(
+                lenguaje=lenguaje,
+                output=result.get('output', ''),
+                traceback=result.get('traceback', ''),
+                test_filename=test_filename
+            )
+            if (not should_fix) or (test_fix_attempt >= max_test_fix_attempts):
+                break
+
+            test_fix_attempt += 1
+            logger.warning(f"⚠️ Tests fallaron por causa probable de tests ({reason}). Regenerando tests {test_fix_attempt}/{max_test_fix_attempts}...")
+
+            fallo_ctx = _limpiar_ansi((result.get('traceback', '') or '') + "\n" + (result.get('output', '') or ''))
+            if len(fallo_ctx) > 3500:
+                fallo_ctx = fallo_ctx[-3500:]
+
+            prompt_fix = (
+                prompt_formateado
+                + "\n\nFALLO AL EJECUTAR TESTS. Analiza el error y REGENERA el archivo de tests corrigiendo exclusivamente el código de tests."
+                  "\nNo modifiques el código de producción. No uses Markdown. Mantén el archivo muy corto (máximo 6 tests, sin describe anidados) y bien cerrado."
+                  "\n\nSalida del runner (resumen):\n"
+                + fallo_ctx
+            )
+            tests_nuevos = call_gemini(prompt_fix, "")
+            tests_nuevos = _limpiar_codigo_tests_llm(tests_nuevos)
+            if lenguaje.lower() == 'typescript':
+                tests_nuevos = _postprocesar_tests_typescript(tests_nuevos)
+
+            codigo_valido_fix, error_fix = _validar_codigo_tests_completo(tests_nuevos, lenguaje)
+            if not codigo_valido_fix:
+                logger.warning(f"⚠️ Tests regenerados posiblemente incompletos: {error_fix}")
+
+            resultado_guardado_fix = guardar_fichero_texto(
+                test_filename,
+                tests_nuevos,
+                directorio=settings.OUTPUT_DIR
+            )
+            log_file_operation(logger, "guardar", test_path, success=resultado_guardado_fix)
+            tests_generados = tests_nuevos
+            state['tests_unitarios_generados'] = tests_generados
+
         # ============================================
         # FASE 3: EVALUACIÓN Y ACTUALIZACIÓN DE ESTADO
         # ============================================
+        if result is None:
+            raise RuntimeError('No se pudo ejecutar tests')
+
         state['pruebas_superadas'] = result['success']
         state['traceback'] = result['traceback']
         

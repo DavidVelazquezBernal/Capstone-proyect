@@ -121,18 +121,10 @@ def setup_logger(
         >>> logger.info("Iniciando proceso")
     """
     logger = logging.getLogger(name)
-    
-    # Evitar duplicar handlers si ya está configurado
-    if logger.handlers:
-        return logger
-    
+
     logger.setLevel(level)
     logger.propagate = False
-    
-    # === Handler para CONSOLA ===
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    
+
     if agent_mode:
         console_format = AgentFormatter(
             '%(asctime)s | %(levelname)-8s | %(message)s',
@@ -143,25 +135,41 @@ def setup_logger(
             '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
             datefmt='%H:%M:%S'
         )
-    
-    console_handler.setFormatter(console_format)
-    logger.addHandler(console_handler)
-    
-    # === Handler para ARCHIVO ===
+
+    existing_console_handler = None
+    for h in logger.handlers:
+        if isinstance(h, logging.StreamHandler) and getattr(h, 'stream', None) is sys.stdout:
+            existing_console_handler = h
+            break
+
+    if existing_console_handler is None:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(level)
+        console_handler.setFormatter(console_format)
+        logger.addHandler(console_handler)
+    else:
+        existing_console_handler.setLevel(level)
+        existing_console_handler.setFormatter(console_format)
+
     if log_to_file:
-        # Usar el archivo de log compartido de la sesión
         log_file = get_session_log_file()
-        
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_handler.setLevel(logging.DEBUG)  # En archivo guardamos todo
-        
-        file_format = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        file_handler.setFormatter(file_format)
-        logger.addHandler(file_handler)
-    
+        existing_file_handler = None
+        for h in logger.handlers:
+            if isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == str(log_file):
+                existing_file_handler = h
+                break
+
+        if existing_file_handler is None:
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler.setLevel(logging.DEBUG)  # En archivo guardamos todo
+
+            file_format = logging.Formatter(
+                '%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            file_handler.setFormatter(file_format)
+            logger.addHandler(file_handler)
+
     return logger
 
 
