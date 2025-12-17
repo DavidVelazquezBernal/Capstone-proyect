@@ -1,10 +1,23 @@
 # Diagrama de Flujo del Sistema Multiagente con SonarQube
 
+## 🎭 Roles de los Agentes
+
+| Agente | Rol y Funcionalidades Principales | Especialización | Integración Externa |
+|--------|-----------------------------------|----------------|---------------------|
+| **📋 ProductOwner** | **Analista de Requisitos**<br/>• Formaliza requisitos en JSON estructurado<br/>• Valida completitud y claridad<br/>• Gestiona feedback del Stakeholder<br/>🔷 **Azure DevOps:** Crea PBIs y Tasks | Análisis de requisitos | Azure DevOps (PBIs) |
+| **💻 Developer-Code** | **Desarrollador Principal**<br/>• Genera código Python/TypeScript<br/>• Corrige errores de ejecución<br/>• Corrige issues de calidad (SonarQube)<br/>🐙 **GitHub:** Crea branch y pushea código<br/>🔷 **Azure DevOps:** Actualiza Tasks | Desarrollo de código | GitHub (branches) + Azure DevOps |
+| **🔍 SonarQube** | **Analista de Calidad**<br/>• Analiza bugs, vulnerabilidades, code smells<br/>• Genera reportes detallados<br/>• Polling inteligente (hasta 5 min)<br/>☁️ **SonarCloud:** Consulta análisis del branch<br/>🔷 **Azure DevOps:** Comenta en Tasks | Calidad de código | SonarCloud API + Azure DevOps |
+| **🧪 Developer-UnitTests** | **Ingeniero de Testing**<br/>• Genera tests (vitest/pytest)<br/>• Ejecuta tests con timeout<br/>• Corrige tests fallidos (max 3 intentos)<br/>🐙 **GitHub:** Pushea tests y crea PR | Testing y QA | GitHub (tests + PR) |
+| **🔍 Developer2-Reviewer** | **Code Reviewer Senior**<br/>• Revisa legibilidad y mantenibilidad<br/>• Valida cumplimiento de requisitos<br/>• Identifica aspectos a mejorar<br/>🐙 **GitHub:** Aprueba PR automáticamente | Code review | GitHub (aprobación PR) |
+| **🔀 Developer-CompletePR** | **Integrador**<br/>• Verifica precondiciones (tests + aprobación)<br/>• Squash merge del PR<br/>• Limpia branches remotos y locales<br/>🐙 **GitHub:** Merge + cleanup branches | Integración y merge | GitHub (merge + cleanup) |
+| **✅ Stakeholder** | **Validador de Negocio**<br/>• Valida visión de negocio<br/>• Verifica alineación con requisitos<br/>• Decide completitud del proyecto<br/>🔷 **Azure DevOps:** Adjunta código final a PBI | Validación de negocio | Azure DevOps (adjuntos) |
+
 ## Flujo Completo Detallado
 
 ```mermaid
 graph TD
-    START([INICIO]) --> PO[1. Product Owner<br/>Formaliza requisitos<br/>🔷 Crea PBI en Azure DevOps]
+    START([INICIO]) --> PO[1. 📋 Product Owner<br/>Formaliza requisitos<br/>🔷 Crea PBI en Azure DevOps]
+    PO --> DEV[2. 💻 Desarrollador<br/>Genera/Corrige código<br/>🔷 Crea Tasks en Azure DevOps]
     PO --> DEV[2. Desarrollador<br/>Genera/Corrige código<br/>🔷 Crea Tasks en Azure DevOps]
     
     DEV --> SQ[3. Analizador SonarQube<br/>Análisis de calidad]
@@ -16,10 +29,18 @@ graph TD
     
     GUT --> PROB[5. Ejecutor de Pruebas<br/>Ejecuta tests unitarios<br/>📎 Adjunta tests a Azure DevOps]
     
-    PROB -->|✅ Tests pasan| SH[6. Stakeholder<br/>Validación negocio<br/>📎 Adjunta código a Azure DevOps]
+    PROB -->|✅ Tests pasan| REV[6. Developer2-Reviewer<br/>Code Reviewer Senior<br/>🐙 Aprueba PR en GitHub]
     PROB -->|❌ Tests fallan| DEBUGCHECK{Intentos Debug<br/>< MAX?}
     DEBUGCHECK -->|Sí| DEV
     DEBUGCHECK -->|No| ENDLIMIT2[❌ FIN<br/>Límite debug excedido]
+    
+    REV -->|✅ Código aprobado| MERGE[7. Developer-CompletePR<br/>Integrador<br/>🐙 Squash merge PR<br/>🐙 Limpia branches]
+    REV -->|❌ Código rechazado| REVCHECK{Intentos Revisor<br/>< MAX?}
+    REVCHECK -->|Sí| DEV
+    REVCHECK -->|No| ENDLIMIT3[❌ FIN<br/>Límite revisor excedido]
+    
+    MERGE -->|✅ PR mergeado| SH[8. Stakeholder<br/>Validador de Negocio<br/>📎 Adjunta código a Azure DevOps]
+    MERGE -->|❌ Merge falló| ENDLIMIT4[❌ FIN<br/>Merge fallido]
     
     SH -->|✅ VALIDADO| ENDSUCCESS[✅ FIN<br/>Código aprobado]
     SH -->|❌ RECHAZADO| ATTEMPTCHECK{Intentos Totales<br/>< MAX?}
@@ -30,31 +51,36 @@ graph TD
     style ENDSUCCESS fill:#90EE90
     style ENDLIMIT1 fill:#FFB6C1
     style ENDLIMIT2 fill:#FFB6C1
+    style ENDLIMIT3 fill:#FFB6C1
+    style ENDLIMIT4 fill:#FFB6C1
     style ENDFINAL fill:#FFB6C1
     style SQ fill:#87CEEB
     style GUT fill:#98FB98
     style DEV fill:#FFD700
     style PROB fill:#FFA500
-    style SH fill:#DDA0DD
-    style PO fill:#B0E0E6
+    style REV fill:#DDA0DD
+    style MERGE fill:#87CEEB
+    style SH fill:#B0E0E6
+    style PO fill:#FFE4B5
 ```
 
-## Los Tres Bucles de Corrección
+## Los Cuatro Bucles de Corrección
 
 ### Bucle A: Calidad de Código
 ```
 Desarrollador → SonarQube → [Issues?] → Desarrollador
                   ↓
-              [OK] → Generador Unit Tests → Ejecutor Pruebas → Continúa
+              [OK] → Generador Unit Tests → Continúa
 ```
 - **Límite**: 3 intentos (configurable)
 - **Salida límite**: `QUALITY_LIMIT_EXCEEDED`
 - **Verifica**: Bugs, vulnerabilidades, code smells
 - **Genera**: Tests unitarios con vitest (TypeScript) o pytest (Python)
 - **Ejecuta**: Tests directamente sin sandbox (mejora de performance)
+
 ### Bucle B: Depuración Funcional
 ```
-Generador Unit Tests → Ejecutor Pruebas → [Falla?] → Codificador
+Generador Unit Tests → Ejecutor de Pruebas → [Falla?] → Codificador
                             ↓
                         [Pasa] → Continúa
 ```
@@ -63,9 +89,19 @@ Generador Unit Tests → Ejecutor Pruebas → [Falla?] → Codificador
 - **Verifica**: Ejecución correcta de tests unitarios
 - **Frameworks**: vitest para TypeScript, pytest para Python
 - **Reportes**: Estadísticas detalladas (total, pasados, fallidos)
-- **Verifica**: Ejecución correcta, tests funcionales
 
-### Bucle C: Validación de Negocio
+### Bucle C: Revisión de Código
+```
+Developer2-Reviewer → [Rechaza?] → Developer-Code
+                ↓
+            [Aprueba] → Developer-CompletePR
+```
+- **Límite**: 2 intentos (configurable)
+- **Salida límite**: `REVISOR_LIMIT_EXCEEDED`
+- **Verifica**: Legibilidad, mantenibilidad, buenas prácticas
+- **GitHub**: Aprueba PR automáticamente con token de revisor
+
+### Bucle D: Validación de Negocio
 ```
 Product Owner → ... → Stakeholder → [Rechaza?] → Product Owner
                             ↓
@@ -74,36 +110,6 @@ Product Owner → ... → Stakeholder → [Rechaza?] → Product Owner
 - **Límite**: 1 ciclo completo (configurable)
 - **Salida límite**: `FAILED_FINAL`
 - **Verifica**: Cumplimiento de visión de negocio
-### Secuencia Normal (Todo OK)
-1. Product Owner → formaliza requisitos + 🔷 crea PBI
-2. Desarrollador → genera código + 🔷 crea Tasks
-3. **SonarQube** → ✅ calidad OK
-4. **Generador Unit Tests** → genera tests (vitest/pytest)
-5. **Ejecutor Pruebas** → ✅ tests pasan (estadísticas: 40/40) + 📎 adjunta tests
-6. Stakeholder → ✅ valida + 📎 adjunta código final
-7. ✅ **FIN EXITOSO**
-### Escenario con Correcciones de Calidad
-1. Product Owner → formaliza
-2. Desarrollador → genera código (intento 1)
-3. **SonarQube** → ❌ 3 CRITICAL issues
-4. **Vuelve a Desarrollador** (intento 2, SQ=1)
-5. Desarrollador → corrige issues
-6. **SonarQube** → ✅ 1 CRITICAL issue (aceptable)
-7. **Generador Unit Tests** → genera tests
-8. **Ejecutor Pruebas** → ✅ tests pasan
-9. Stakeholder → ✅ valida
-10. ✅ **FIN EXITOSO**
-### Escenario Límite de Calidad Excedido
-1. Product Owner → formaliza
-2. Desarrollador → genera código
-3. **SonarQube** → ❌ issues
-4. Desarrollador → corrige (SQ=1)
-5. **SonarQube** → ❌ issues persistentes
-6. Desarrollador → corrige (SQ=2)
-7. **SonarQube** → ❌ issues persistentes
-8. Desarrollador → corrige (SQ=3)
-9. **SonarQube** → ❌ aún hay issues
-10. ❌ **FIN - QUALITY_LIMIT_EXCEEDED**
 
 ## Contadores de Estado
 
