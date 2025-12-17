@@ -1,5 +1,5 @@
 """
-Agente: Revisor de Código
+Agente: Developer2-Reviewer
 Responsable de revisar el código generado en la PR y aprobarla si cumple los estándares.
 """
 
@@ -16,15 +16,15 @@ from utils.agent_decorators import agent_execution_context
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
-def revisor_codigo_node(state: AgentState) -> AgentState:
+def developer2_reviewer_node(state: AgentState) -> AgentState:
     """
-    Nodo del Revisor de Código.
+    Nodo del Developer2-Reviewer.
     Revisa el código en la PR y decide si aprobarlo o solicitar cambios.
     """
 
 
-    with agent_execution_context("🔍 REVISOR DE CÓDIGO", logger):
-        log_agent_execution(logger, "RevisorCodigo", "iniciado", {
+    with agent_execution_context("🔍 DEVELOPER2-REVIEWER", logger):
+        log_agent_execution(logger, "Developer2-Reviewer", "iniciado", {
             "pr_number": state.get('github_pr_number'),
             "branch": state.get('github_branch_name')
         })
@@ -51,7 +51,7 @@ def revisor_codigo_node(state: AgentState) -> AgentState:
         requisitos_formales = state.get('requisitos_formales', '')
         
         # Construir prompt para revisión de código
-        prompt_revision = f"""Eres un revisor de código senior. Analiza el siguiente código y tests generados automáticamente.
+        prompt_revision = f"""Eres un developer reviewer senior. Analiza el siguiente código y tests generados automáticamente.
 
 ## Requisitos del proyecto:
 {requisitos_formales}
@@ -168,7 +168,7 @@ IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de cal
             github_service.add_comment_to_pr(pr_number, comentario_pr, use_reviewer_token=True)
             state['pr_aprobada'] = False
         
-        log_agent_execution(logger, "RevisorCodigo", "completado", {
+        log_agent_execution(logger, "Developer2-Reviewer", "completado", {
             "aprobado": aprobado,
             "puntuacion": puntuacion,
             "pr_number": pr_number

@@ -11,7 +11,7 @@ from agents.product_owner import product_owner_node
 from agents.developer import developer_node
 from agents.sonarqube import sonarqube_node
 from agents.unit_test import unit_test_node, tester_merge_node
-from agents.revisor_codigo import revisor_codigo_node
+from agents.developer2_reviewer import developer2_reviewer_node
 from agents.stakeholder import stakeholder_node
 
 logger = setup_logger(__name__, level=settings.get_log_level())
@@ -31,7 +31,7 @@ def create_workflow() -> StateGraph:
     workflow.add_node("Developer", developer_node)
     workflow.add_node("SonarQube", sonarqube_node)
     workflow.add_node("UnitTest", unit_test_node)
-    workflow.add_node("RevisorCodigo", revisor_codigo_node)
+    workflow.add_node("Developer2-Reviewer", developer2_reviewer_node)
     workflow.add_node("Stakeholder", stakeholder_node)
     workflow.add_node("TesterMerge", tester_merge_node)
 
@@ -60,7 +60,7 @@ def create_workflow() -> StateGraph:
 
     # B. Bucle de Depuración (UnitTest: Corrección de Código)
     # Incluye control de límite de intentos
-    # Cuando pasa los tests siempre va a RevisorCodigo (que decide si va a Stakeholder o vuelve a Developer)
+    # Cuando pasa los tests siempre va a Developer2-Reviewer (que decide si va a Stakeholder o vuelve a Developer)
     workflow.add_conditional_edges(
         "UnitTest",
         lambda x: (
@@ -70,15 +70,15 @@ def create_workflow() -> StateGraph:
         ),
         {
             "FAILED": "Developer",
-            "PASSED": "RevisorCodigo",
+            "PASSED": "Developer2-Reviewer",
             "DEBUG_LIMIT_EXCEEDED": END
         }
     )
     
-    # C. Transición condicional del Revisor de Código
+    # C. Transición condicional del Developer2-Reviewer
     # Si aprueba el código va a Stakeholder, si no vuelve a Developer (con límite de intentos)
     workflow.add_conditional_edges(
-        "RevisorCodigo",
+        "Developer2-Reviewer",
         lambda x: (
             "CODE_APPROVED" if x.get('codigo_revisado', False)
             else ("REVISOR_LIMIT_EXCEEDED" if x.get('revisor_attempt_count', 0) >= x.get('max_revisor_attempts', 2)
