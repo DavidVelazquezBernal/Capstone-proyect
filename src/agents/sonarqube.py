@@ -14,6 +14,7 @@ from tools.file_utils import detectar_lenguaje_y_extension, limpiar_codigo_markd
 from tools.sonarqube_mcp import analizar_codigo_con_sonarqube, formatear_reporte_sonarqube, es_codigo_aceptable
 from services.azure_devops_service import azure_service
 from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
+from utils.agent_decorators import agent_execution_context
 
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
@@ -24,198 +25,190 @@ def sonarqube_node(state: AgentState) -> AgentState:
     Nodo de SonarQube.
     Analiza la calidad del código generado y determina si cumple los estándares.
     """
-    print()  # Línea en blanco para separación visual
-    logger.info("=" * 60)
-    logger.info("SONARQUBE - INICIO")
-    logger.info("=" * 60)
+    with agent_execution_context("🔍 SONARQUBE", logger):
+        if not settings.SONARCLOUD_ENABLED:
+            logger.warning("⚠️ SONARCLOUD_ENABLED=false: omitiendo análisis de calidad (SonarQube/SonarCloud) y continuando el flujo")
+            state['sonarqube_passed'] = True
+            state['sonarqube_issues'] = ""
+            state['sonarqube_attempt_count'] = 0
 
-    if not settings.SONARCLOUD_ENABLED:
-        logger.warning("⚠️ SONARCLOUD_ENABLED=false: omitiendo análisis de calidad (SonarQube/SonarCloud) y continuando el flujo")
-        state['sonarqube_passed'] = True
-        state['sonarqube_issues'] = ""
-        state['sonarqube_attempt_count'] = 0
+            log_agent_execution(logger, "SonarQube", "omitido", {
+                "motivo": "SONARCLOUD_ENABLED=false",
+                "resultado": "aprobado"
+            })
+            return state
 
-        log_agent_execution(logger, "SonarQube", "omitido", {
-            "motivo": "SONARCLOUD_ENABLED=false",
-            "resultado": "aprobado"
+        log_agent_execution(logger, "SonarQube", "iniciado", {
+            "requisito_id": state['attempt_count'],
+            "validacion_numero": state['sonarqube_attempt_count'] + 1,
+            "intento_sonarqube": state['sonarqube_attempt_count']
         })
-        logger.info("SONARQUBE - FIN")
-        logger.info("=" * 60)
-        return state
-
-    log_agent_execution(logger, "SonarQube", "iniciado", {
-        "requisito_id": state['attempt_count'],
-        "validacion_numero": state['sonarqube_attempt_count'] + 1,
-        "intento_sonarqube": state['sonarqube_attempt_count']
-    })
-    
-    # === INICIO: Actualizar estado del Work Item de Implementación a "In Progress" ===
-    if (settings.AZURE_DEVOPS_ENABLED and 
-        state.get('azure_implementation_task_id') and 
-        state['sonarqube_attempt_count'] == 0):  # Solo en el primer análisis
         
-        try:
-            task_id = state['azure_implementation_task_id']
-            logger.info(f"🔄 Actualizando estado de Task de Implementación #{task_id} a 'In Progress'...")
+        # === INICIO: Actualizar estado del Work Item de Implementación a "In Progress" ===
+        if (settings.AZURE_DEVOPS_ENABLED and 
+            state.get('azure_implementation_task_id') and 
+            state['sonarqube_attempt_count'] == 0):  # Solo en el primer análisis
             
-            # Usar servicio centralizado
-            success = azure_service.update_implementation_task_to_in_progress(task_id)
-            
-            if success:
-                logger.info(f"✅ Task #{task_id} actualizada a 'In Progress'")
-            else:
-                logger.warning(f"⚠️ No se pudo actualizar el estado de la Task #{task_id}")
-                
-        except Exception as e:
-            logger.warning(f"⚠️ Error al actualizar estado del work item: {e}")
-            logger.debug(f"Stack trace: {e}", exc_info=True)
-    # === FIN: Actualización de estado en Azure DevOps ===
-    
-    # Obtener información del código
-    lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
-        state.get('requisitos_formales', '')
-    )
-    codigo_limpio = limpiar_codigo_markdown(state['codigo_generado'])
-    
-    # Generar nombre de archivo para análisis
-    # Usar el contador actual para esta validación (antes de incrementar)
-    intento_actual = state['sonarqube_attempt_count']
-    nombre_archivo = f"analisis_sonarqube_req{state['attempt_count']}_sq{intento_actual}{extension}"
-    
-    logger.info(f"🔍 Analizando código con SonarQube - Validación #{intento_actual + 1} - Archivo: {nombre_archivo}")
-    
-    # Obtener branch del estado (creado por el Desarrollador)
-    branch_name = state.get('github_branch_name')
-    
-    if branch_name and settings.SONARCLOUD_ENABLED:
-        logger.info(f"☁️ Usando branch '{branch_name}' para análisis SonarCloud")
-        # Esperar para dar tiempo a SonarCloud de analizar el branch
-        wait_time = 10  # 10 segundos de espera
-        logger.info(f"⏳ Esperando {wait_time}s para que SonarCloud procese el branch...")
-        time.sleep(wait_time)
-        logger.info("✅ Espera completada, consultando SonarCloud...")
-    elif settings.SONARCLOUD_ENABLED:
-        logger.warning("⚠️ No hay branch disponible para SonarCloud, usando análisis local")
-    
-    # Analizar código con SonarQube (usa SonarCloud si hay branch, sino análisis local)
-    resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, branch_name)
-    
-    # Formatear reporte
-    reporte_formateado = formatear_reporte_sonarqube(resultado_analisis)
-    logger.debug(f"Reporte generado:\n{reporte_formateado[:500]}...")
-    
-    # Guardar reporte SIEMPRE (tanto si pasa como si falla)
-    nombre_reporte = f"3_sonarqube_report_req{state['attempt_count']}_sq{intento_actual}.txt"
-    guardar_fichero_texto(
-        nombre_reporte,
-        reporte_formateado,
-        directorio=settings.OUTPUT_DIR
-    )
-    
-    # Determinar si el código pasa el análisis
-    codigo_aceptable = es_codigo_aceptable(resultado_analisis)
-    
-    # Obtener contadores para logging detallado
-    summary = resultado_analisis.get("summary", {})
-    by_severity = summary.get("by_severity", {})
-    by_type = summary.get("by_type", {})
-    
-    blocker_count = by_severity.get("BLOCKER", 0)
-    critical_count = by_severity.get("CRITICAL", 0)
-    bug_count = by_type.get("BUG", 0)
-    
-    if codigo_aceptable:
-        logger.info("✅ Código aprobado por SonarQube")
-        logger.info(f"   📊 Issues encontrados: {blocker_count} BLOCKER, {critical_count} CRITICAL, {bug_count} BUGS")
-        state['sonarqube_passed'] = True
-        state['sonarqube_issues'] = ""
-        # Resetear contador cuando pasa
-        state['sonarqube_attempt_count'] = 0
-        
-        # === INICIO: Agregar comentario de aprobación en Azure DevOps ===
-        if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
             try:
                 task_id = state['azure_implementation_task_id']
-                azure_service.add_sonarqube_approval_comment(task_id, nombre_reporte)
-                logger.info(f"📝 Comentario de aprobación agregado a Task #{task_id}")
+                logger.info(f"🔄 Actualizando estado de Task de Implementación #{task_id} a 'In Progress'...")
+                
+                # Usar servicio centralizado
+                success = azure_service.update_implementation_task_to_in_progress(task_id)
+                
+                if success:
+                    logger.info(f"✅ Task #{task_id} actualizada a 'In Progress'")
+                else:
+                    logger.warning(f"⚠️ No se pudo actualizar el estado de la Task #{task_id}")
+                    
             except Exception as e:
-                logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+                logger.warning(f"⚠️ Error al actualizar estado del work item: {e}")
                 logger.debug(f"Stack trace: {e}", exc_info=True)
-        # === FIN: Comentario en Azure DevOps ===
+        # === FIN: Actualización de estado en Azure DevOps ===
         
-        log_agent_execution(logger, "SonarQube", "completado", {
-            "resultado": "aprobado",
-            "reporte": nombre_reporte
-        })
-        
-    else:
-        # Código no pasa los criterios de calidad
-        logger.warning("❌ Código rechazado por SonarQube - requiere correcciones")
-        logger.warning(f"   📊 Razones de rechazo:")
-        
-        if blocker_count > 0:
-            logger.warning(f"      🔴 {blocker_count} BLOCKER (máximo permitido: 0)")
-        if critical_count > 2:
-            logger.warning(f"      🟠 {critical_count} CRITICAL (máximo permitido: 2)")
-        if bug_count > 0:
-            logger.warning(f"      🐛 {bug_count} BUGS (máximo permitido: 0)")
-        
-        state['sonarqube_passed'] = False
-        
-        # Generar instrucciones de corrección usando el LLM
-        # Usar ChatPromptTemplate
-        logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
-        prompt_formateado = PromptTemplates.format_sonarqube(
-            reporte_sonarqube=reporte_formateado,
-            codigo_actual=state['codigo_generado']
+        # Obtener información del código
+        lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
+            state.get('requisitos_formales', '')
         )
+        codigo_limpio = limpiar_codigo_markdown(state['codigo_generado'])
         
-        logger.info("🤖 Generando instrucciones de corrección con LLM...")
-        start_time = time.time()
-        instrucciones_correccion = call_gemini(prompt_formateado, "")
-        duration = time.time() - start_time
+        # Generar nombre de archivo para análisis
+        # Usar el contador actual para esta validación (antes de incrementar)
+        intento_actual = state['sonarqube_attempt_count']
+        nombre_archivo = f"analisis_sonarqube_req{state['attempt_count']}_sq{intento_actual}{extension}"
         
-        log_llm_call(logger, "analisis_sonarqube", duration=duration)
+        logger.info(f"🔍 Analizando código con SonarQube - Validación #{intento_actual + 1} - Archivo: {nombre_archivo}")
         
-        state['sonarqube_issues'] = instrucciones_correccion
+        # Obtener branch del estado (creado por el Desarrollador)
+        branch_name = state.get('github_branch_name')
         
-        # Incrementar contador después de generar instrucciones
-        state['sonarqube_attempt_count'] += 1
+        if branch_name and settings.SONARCLOUD_ENABLED:
+            logger.info(f"☁️ Usando branch '{branch_name}' para análisis SonarCloud")
+            # Esperar para dar tiempo a SonarCloud de analizar el branch
+            wait_time = 10  # 10 segundos de espera
+            logger.info(f"⏳ Esperando {wait_time}s para que SonarCloud procese el branch...")
+            time.sleep(wait_time)
+            logger.info("✅ Espera completada, consultando SonarCloud...")
+        elif settings.SONARCLOUD_ENABLED:
+            logger.warning("⚠️ No hay branch disponible para SonarCloud, usando análisis local")
         
-        # Guardar instrucciones de corrección (con el contador ya incrementado para el siguiente intento)
-        nombre_instrucciones = f"3_sonarqube_instrucciones_req{state['attempt_count']}_sq{intento_actual}.txt"
+        # Analizar código con SonarQube (usa SonarCloud si hay branch, sino análisis local)
+        resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, branch_name)
+        
+        # Formatear reporte
+        reporte_formateado = formatear_reporte_sonarqube(resultado_analisis)
+        logger.debug(f"Reporte generado:\n{reporte_formateado[:500]}...")
+        
+        # Guardar reporte SIEMPRE (tanto si pasa como si falla)
+        nombre_reporte = f"3_sonarqube_report_req{state['attempt_count']}_sq{intento_actual}.txt"
         guardar_fichero_texto(
-            nombre_instrucciones,
-            instrucciones_correccion,
+            nombre_reporte,
+            reporte_formateado,
             directorio=settings.OUTPUT_DIR
         )
         
-        logger.info(f"➡️ Instrucciones de corrección generadas - Intento {intento_actual + 1}/{state['max_sonarqube_attempts']}")
+        # Determinar si el código pasa el análisis
+        codigo_aceptable = es_codigo_aceptable(resultado_analisis)
         
-        # === INICIO: Agregar comentario de rechazo en Azure DevOps ===
-        if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
-            try:
-                task_id = state['azure_implementation_task_id']
-                azure_service.add_sonarqube_issues_comment(
-                    task_id, 
-                    state['sonarqube_attempt_count'], 
-                    state['max_sonarqube_attempts'],
-                    nombre_reporte,
-                    nombre_instrucciones
-                )
-                logger.info(f"📝 Comentario de issues agregado a Task #{task_id}")
-            except Exception as e:
-                logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
-                logger.debug(f"Stack trace: {e}", exc_info=True)
-        # === FIN: Comentario en Azure DevOps ===
+        # Obtener contadores para logging detallado
+        summary = resultado_analisis.get("summary", {})
+        by_severity = summary.get("by_severity", {})
+        by_type = summary.get("by_type", {})
         
-        log_agent_execution(logger, "SonarQube", "completado", {
-            "resultado": "rechazado",
-            "intento": f"{state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}",
-            "reporte": nombre_reporte,
-            "instrucciones": nombre_instrucciones
-        })
-    
-    logger.info("SONARQUBE - FIN")
-    logger.info("=" * 60)
-    return state
+        blocker_count = by_severity.get("BLOCKER", 0)
+        critical_count = by_severity.get("CRITICAL", 0)
+        bug_count = by_type.get("BUG", 0)
+        
+        if codigo_aceptable:
+            logger.info("✅ Código aprobado por SonarQube")
+            logger.info(f"   📊 Issues encontrados: {blocker_count} BLOCKER, {critical_count} CRITICAL, {bug_count} BUGS")
+            state['sonarqube_passed'] = True
+            state['sonarqube_issues'] = ""
+            # Resetear contador cuando pasa
+            state['sonarqube_attempt_count'] = 0
+            
+            # === INICIO: Agregar comentario de aprobación en Azure DevOps ===
+            if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
+                try:
+                    task_id = state['azure_implementation_task_id']
+                    azure_service.add_sonarqube_approval_comment(task_id, nombre_reporte)
+                    logger.info(f"📝 Comentario de aprobación agregado a Task #{task_id}")
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+                    logger.debug(f"Stack trace: {e}", exc_info=True)
+            # === FIN: Comentario en Azure DevOps ===
+            
+            log_agent_execution(logger, "SonarQube", "completado", {
+                "resultado": "aprobado",
+                "reporte": nombre_reporte
+            })
+            
+        else:
+            # Código no pasa los criterios de calidad
+            logger.warning("❌ Código rechazado por SonarQube - requiere correcciones")
+            logger.warning(f"   📊 Razones de rechazo:")
+            
+            if blocker_count > 0:
+                logger.warning(f"      🔴 {blocker_count} BLOCKER (máximo permitido: 0)")
+            if critical_count > 2:
+                logger.warning(f"      🟠 {critical_count} CRITICAL (máximo permitido: 2)")
+            if bug_count > 0:
+                logger.warning(f"      🐛 {bug_count} BUGS (máximo permitido: 0)")
+            
+            state['sonarqube_passed'] = False
+            
+            # Generar instrucciones de corrección usando el LLM
+            # Usar ChatPromptTemplate
+            logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
+            prompt_formateado = PromptTemplates.format_sonarqube(
+                reporte_sonarqube=reporte_formateado,
+                codigo_actual=state['codigo_generado']
+            )
+            
+            logger.info("🤖 Generando instrucciones de corrección con LLM...")
+            start_time = time.time()
+            instrucciones_correccion = call_gemini(prompt_formateado, "")
+            duration = time.time() - start_time
+            
+            log_llm_call(logger, "analisis_sonarqube", duration=duration)
+            
+            state['sonarqube_issues'] = instrucciones_correccion
+            
+            # Incrementar contador después de generar instrucciones
+            state['sonarqube_attempt_count'] += 1
+            
+            # Guardar instrucciones de corrección (con el contador ya incrementado para el siguiente intento)
+            nombre_instrucciones = f"3_sonarqube_instrucciones_req{state['attempt_count']}_sq{intento_actual}.txt"
+            guardar_fichero_texto(
+                nombre_instrucciones,
+                instrucciones_correccion,
+                directorio=settings.OUTPUT_DIR
+            )
+            
+            logger.info(f"➡️ Instrucciones de corrección generadas - Intento {intento_actual + 1}/{state['max_sonarqube_attempts']}")
+            
+            # === INICIO: Agregar comentario de rechazo en Azure DevOps ===
+            if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
+                try:
+                    task_id = state['azure_implementation_task_id']
+                    azure_service.add_sonarqube_issues_comment(
+                        task_id, 
+                        state['sonarqube_attempt_count'], 
+                        state['max_sonarqube_attempts'],
+                        nombre_reporte,
+                        nombre_instrucciones
+                    )
+                    logger.info(f"📝 Comentario de issues agregado a Task #{task_id}")
+                except Exception as e:
+                    logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+                    logger.debug(f"Stack trace: {e}", exc_info=True)
+            # === FIN: Comentario en Azure DevOps ===
+            
+            log_agent_execution(logger, "SonarQube", "completado", {
+                "resultado": "rechazado",
+                "intento": f"{state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}",
+                "reporte": nombre_reporte,
+                "instrucciones": nombre_instrucciones
+            })
+        
+        return state

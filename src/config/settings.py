@@ -69,7 +69,7 @@ class Settings:
     MAX_API_RETRIES: int = 3  # Número de reintentos si el servicio está sobrecargado
     RETRY_BASE_DELAY: int = 2  # Segundos base para backoff exponencial (2, 4, 8...)
     
-    # Configuración del flujo de trabajo
+    # Configuración del flujo de trabajo (DEPRECATED - usar RetryConfig)
     MAX_ATTEMPTS: int = 1  # Máximo de ciclos completos antes de fallo
     MAX_DEBUG_ATTEMPTS: int = 3 # Máximo de intentos en el bucle de depuración (Probador-Codificador)
     MAX_SONARQUBE_ATTEMPTS: int = 3  # Máximo de intentos en el bucle de calidad (SonarQube-Desarrollador)
@@ -99,6 +99,74 @@ class Settings:
             print("⚠️ WARNING: GEMINI_API_KEY no está configurada")
             return False
         return True
+
+
+class RetryConfig:
+    """
+    Configuración consolidada de reintentos y límites para el flujo de trabajo.
+    Centraliza todos los contadores y límites de reintentos en un solo lugar.
+    """
+    
+    def __init__(
+        self,
+        max_attempts: int | None = None,
+        max_debug_attempts: int | None = None,
+        max_sonarqube_attempts: int | None = None,
+        max_revisor_attempts: int | None = None
+    ):
+        """
+        Inicializa la configuración de reintentos.
+        
+        Args:
+            max_attempts: Máximo de ciclos completos antes de fallo (Stakeholder loop)
+            max_debug_attempts: Máximo de intentos en el bucle de depuración (Testing-Desarrollador)
+            max_sonarqube_attempts: Máximo de intentos en el bucle de calidad (SonarQube-Desarrollador)
+            max_revisor_attempts: Máximo de intentos de revisión de código antes de fallo
+        """
+        self.max_attempts = max_attempts if max_attempts is not None else Settings.MAX_ATTEMPTS
+        self.max_debug_attempts = max_debug_attempts if max_debug_attempts is not None else Settings.MAX_DEBUG_ATTEMPTS
+        self.max_sonarqube_attempts = max_sonarqube_attempts if max_sonarqube_attempts is not None else Settings.MAX_SONARQUBE_ATTEMPTS
+        self.max_revisor_attempts = max_revisor_attempts if max_revisor_attempts is not None else Settings.MAX_REVISOR_ATTEMPTS
+    
+    def to_state_dict(self) -> dict:
+        """
+        Convierte la configuración a un diccionario compatible con AgentState.
+        Incluye tanto los límites (max_*) como los contadores inicializados a 0.
+        
+        Returns:
+            dict: Diccionario con límites y contadores para inicializar el estado
+        """
+        return {
+            # Límites
+            "max_attempts": self.max_attempts,
+            "max_debug_attempts": self.max_debug_attempts,
+            "max_sonarqube_attempts": self.max_sonarqube_attempts,
+            "max_revisor_attempts": self.max_revisor_attempts,
+            # Contadores (inicializados a 0)
+            "attempt_count": 0,
+            "debug_attempt_count": 0,
+            "sonarqube_attempt_count": 0,
+            "revisor_attempt_count": 0
+        }
+    
+    @classmethod
+    def from_settings(cls) -> 'RetryConfig':
+        """
+        Crea una configuración de reintentos usando los valores por defecto de Settings.
+        
+        Returns:
+            RetryConfig: Instancia con valores por defecto
+        """
+        return cls()
+    
+    def __repr__(self) -> str:
+        return (
+            f"RetryConfig("
+            f"max_attempts={self.max_attempts}, "
+            f"max_debug_attempts={self.max_debug_attempts}, "
+            f"max_sonarqube_attempts={self.max_sonarqube_attempts}, "
+            f"max_revisor_attempts={self.max_revisor_attempts})"
+        )
 
 
 # Instancia global de configuración

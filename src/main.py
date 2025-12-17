@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 import time
-from config.settings import settings
+from config.settings import settings, RetryConfig
 from workflow.graph import create_workflow, visualize_graph
 from tools.file_utils import guardar_fichero_texto, detectar_lenguaje_y_extension, extraer_nombre_archivo, limpiar_codigo_markdown
 from utils.logger import setup_logger, log_agent_execution
@@ -43,13 +43,19 @@ def delete_output_folder():
         logger.info(f"📁 Directorio '{settings.OUTPUT_DIR}' creado")
 
 
-def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
+def run_development_workflow(
+    prompt_inicial: str, 
+    max_attempts: int = None,
+    retry_config: RetryConfig = None
+):
     """
     Ejecuta el flujo completo de desarrollo multiagente.
     
     Args:
         prompt_inicial (str): La descripción inicial del requisito del usuario
-        max_attempts (int, optional): Máximo de ciclos completos. Por defecto usa settings.MAX_ATTEMPTS
+        max_attempts (int, optional): Máximo de ciclos completos. DEPRECATED - usar retry_config
+        retry_config (RetryConfig, optional): Configuración consolidada de reintentos. 
+                                              Por defecto usa RetryConfig.from_settings()
     """
     # Validar configuración
     if not settings.validate():
@@ -74,16 +80,18 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         directorio=settings.OUTPUT_DIR
     )
 
-    # Estado inicial
+    # Crear configuración de reintentos
+    if retry_config is None:
+        # Si se proporciona max_attempts (deprecated), usarlo
+        if max_attempts is not None:
+            retry_config = RetryConfig(max_attempts=max_attempts)
+        else:
+            retry_config = RetryConfig.from_settings()
+    
+    # Estado inicial usando RetryConfig
     initial_state = {
         "prompt_inicial": prompt_inicial,
         "feedback_stakeholder": "",
-        "max_attempts": max_attempts or settings.MAX_ATTEMPTS,
-        "attempt_count": 0,
-        "debug_attempt_count": 0,
-        "max_debug_attempts": settings.MAX_DEBUG_ATTEMPTS,
-        "sonarqube_attempt_count": 0,
-        "max_sonarqube_attempts": settings.MAX_SONARQUBE_ATTEMPTS,
         "pruebas_superadas": False,
         "validado": False,
         "traceback": "",
@@ -104,10 +112,10 @@ def run_development_workflow(prompt_inicial: str, max_attempts: int = None):
         "revision_comentario": "",
         "revision_puntuacion": None,
         "pr_aprobada": False,
-        # Code Review Limits
-        "revisor_attempt_count": 0,
-        "max_revisor_attempts": settings.MAX_REVISOR_ATTEMPTS
     }
+    
+    # Agregar configuración de reintentos al estado
+    initial_state.update(retry_config.to_state_dict())
 
     print()  # Línea en blanco para separación visual
     logger.info("=" * 55)
@@ -214,6 +222,32 @@ def main():
     logger.info("🚀 Iniciando sistema multiagente de desarrollo")
     
     # Ejemplos de uso - Descomentar el prompt que quieras usar
+    
+    # ============================================
+    # EJEMPLO 1: Uso básico (configuración por defecto)
+    # ============================================
+    # prompt = "Crea una función para calcular el factorial de un número"
+    # final_state = run_development_workflow(prompt)
+    
+    # ============================================
+    # EJEMPLO 2: Uso con RetryConfig personalizado
+    # ============================================
+    # from config.settings import RetryConfig
+    # 
+    # prompt = "Implementa una clase Calculator con operaciones básicas"
+    # retry_config = RetryConfig(
+    #     max_attempts=2,              # Máximo de ciclos completos
+    #     max_debug_attempts=5,        # Máximo de intentos Testing-Desarrollador
+    #     max_sonarqube_attempts=2,    # Máximo de intentos SonarQube-Desarrollador
+    #     max_revisor_attempts=3       # Máximo de intentos de revisión
+    # )
+    # final_state = run_development_workflow(prompt, retry_config=retry_config)
+    
+    # ============================================
+    # EJEMPLO 3: Uso con max_attempts (DEPRECATED - usar retry_config)
+    # ============================================
+    # prompt = "Crea una función para validar emails"
+    # final_state = run_development_workflow(prompt, max_attempts=3)
     
     # Opción 1: Python
     # prompt = (

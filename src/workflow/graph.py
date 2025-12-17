@@ -10,7 +10,7 @@ from utils.logger import setup_logger
 from agents.product_owner import product_owner_node
 from agents.desarrollador import desarrollador_node
 from agents.sonarqube import sonarqube_node
-from agents.testing import testing_node, tester_merge_node
+from agents.unit_test import unit_test_node, tester_merge_node
 from agents.revisor_codigo import revisor_codigo_node
 from agents.stakeholder import stakeholder_node
 
@@ -30,7 +30,7 @@ def create_workflow() -> StateGraph:
     workflow.add_node("ProductOwner", product_owner_node)
     workflow.add_node("Desarrollador", desarrollador_node)
     workflow.add_node("SonarQube", sonarqube_node)
-    workflow.add_node("Testing", testing_node)
+    workflow.add_node("UnitTest", unit_test_node)
     workflow.add_node("RevisorCodigo", revisor_codigo_node)
     workflow.add_node("Stakeholder", stakeholder_node)
     workflow.add_node("TesterMerge", tester_merge_node)
@@ -53,16 +53,16 @@ def create_workflow() -> StateGraph:
         ),
         {
             "QUALITY_FAILED": "Desarrollador",
-            "QUALITY_PASSED": "Testing",
+            "QUALITY_PASSED": "UnitTest",
             "QUALITY_LIMIT_EXCEEDED": END
         }
     )
 
-    # B. Bucle de Depuración (Testing: Corrección de Código)
+    # B. Bucle de Depuración (UnitTest: Corrección de Código)
     # Incluye control de límite de intentos
     # Cuando pasa los tests siempre va a RevisorCodigo (que decide si va a Stakeholder o vuelve a Desarrollador)
     workflow.add_conditional_edges(
-        "Testing",
+        "UnitTest",
         lambda x: (
             "PASSED" if x['pruebas_superadas']
             else ("DEBUG_LIMIT_EXCEEDED" if x['debug_attempt_count'] >= x['max_debug_attempts']

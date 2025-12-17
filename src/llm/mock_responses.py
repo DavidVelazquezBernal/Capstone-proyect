@@ -647,21 +647,25 @@ def get_mock_response(role_prompt: str, context: str = "") -> str:
     
         
     # STAKEHOLDER - Validación
-    elif prompt_lower.startswith("rol:\neres un stakeholder") or "validar" in prompt_lower:
+    elif "stakeholder" in prompt_lower and ("validar" in prompt_lower or "validación" in prompt_lower or "requisitos_formales" in prompt_lower):
         # Detectar si es la primera validación (attempt_count = 1)
-        # Buscar "intento" o "attempt_count" en el contexto
+        # Buscar "intento" o "attempt_count" en el prompt (con ChatPromptTemplate todo está en role_prompt)
         import re
         
-        # Buscar indicadores de primera iteración
+        # Buscar indicadores de primera iteración en role_prompt (no en context que está deprecated)
         es_primera_iteracion = False
         
-        # Buscar "Intento 1" o similar en el contexto
-        if re.search(r'intento[:\s]+1\b|attempt[:\s]+1\b', context_lower):
+        # Buscar "Intento 1" o similar en el texto completo (role_prompt + context para compatibilidad)
+        if re.search(r'intento[:\s]+1\b|attempt[:\s]+1\b', texto_completo):
             es_primera_iteracion = True
         
         # También buscar en el código si tiene el comentario que indica primera versión
-        if "intento 1" in context_lower or "iteración 1" in context_lower:
+        if "intento 1" in texto_completo or "iteración 1" in texto_completo:
             es_primera_iteracion = True
+        
+        # IMPORTANTE: En modo MOCK, siempre validar (no rechazar) para permitir que el flujo complete
+        # Si queremos probar el bucle de reintentos, cambiar esta línea a True
+        es_primera_iteracion = False  # Forzar validación en modo MOCK
         
         if es_primera_iteracion:
             # Primera vez: Rechazar para forzar reingeniería de requisitos

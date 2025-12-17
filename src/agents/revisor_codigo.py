@@ -11,6 +11,7 @@ from config.prompt_templates import PromptTemplates
 from llm.gemini_client import call_gemini
 from services.github_service import github_service
 from utils.logger import setup_logger, log_agent_execution, log_llm_call
+from utils.agent_decorators import agent_execution_context
 
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
@@ -20,39 +21,37 @@ def revisor_codigo_node(state: AgentState) -> AgentState:
     Nodo del Revisor de Código.
     Revisa el código en la PR y decide si aprobarlo o solicitar cambios.
     """
-    print()  # Línea en blanco para separación visual
-    logger.info("=" * 60)
-    logger.info("🔍 REVISOR DE CÓDIGO - INICIO")
-    logger.info("=" * 60)
-    
-    log_agent_execution(logger, "RevisorCodigo", "iniciado", {
-        "pr_number": state.get('github_pr_number'),
-        "branch": state.get('github_branch_name')
-    })
-    
-    # Verificar que GitHub está habilitado y hay una PR
-    if not settings.GITHUB_ENABLED:
-        logger.info("ℹ️ GitHub no está habilitado, saltando revisión de código")
-        state['codigo_revisado'] = True
-        state['revision_comentario'] = "Revisión omitida - GitHub no habilitado"
-        return state
-    
-    pr_number = state.get('github_pr_number')
-    if not pr_number:
-        logger.warning("⚠️ No hay PR para revisar")
-        state['codigo_revisado'] = True
-        state['revision_comentario'] = "No hay PR para revisar"
-        return state
-    
-    logger.info(f"📋 Revisando PR #{pr_number}")
-    
-    # Obtener el código y tests de la PR
-    codigo_generado = state.get('codigo_generado', '')
-    tests_generados = state.get('tests_unitarios_generados', '')
-    requisitos_formales = state.get('requisitos_formales', '')
-    
-    # Construir prompt para revisión de código
-    prompt_revision = f"""Eres un revisor de código senior. Analiza el siguiente código y tests generados automáticamente.
+
+
+    with agent_execution_context("🔍 REVISOR DE CÓDIGO", logger):
+        log_agent_execution(logger, "RevisorCodigo", "iniciado", {
+            "pr_number": state.get('github_pr_number'),
+            "branch": state.get('github_branch_name')
+        })
+        
+        # Verificar que GitHub está habilitado y hay una PR
+        if not settings.GITHUB_ENABLED:
+            logger.info("ℹ️ GitHub no está habilitado, saltando revisión de código")
+            state['codigo_revisado'] = True
+            state['revision_comentario'] = "Revisión omitida - GitHub no habilitado"
+            return state
+        
+        pr_number = state.get('github_pr_number')
+        if not pr_number:
+            logger.warning("⚠️ No hay PR para revisar")
+            state['codigo_revisado'] = True
+            state['revision_comentario'] = "No hay PR para revisar"
+            return state
+        
+        logger.info(f"📋 Revisando PR #{pr_number}")
+        
+        # Obtener el código y tests de la PR
+        codigo_generado = state.get('codigo_generado', '')
+        tests_generados = state.get('tests_unitarios_generados', '')
+        requisitos_formales = state.get('requisitos_formales', '')
+        
+        # Construir prompt para revisión de código
+        prompt_revision = f"""Eres un revisor de código senior. Analiza el siguiente código y tests generados automáticamente.
 
 ## Requisitos del proyecto:
 {requisitos_formales}
@@ -84,44 +83,44 @@ def revisor_codigo_node(state: AgentState) -> AgentState:
 
 IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de calidad aceptable.
 """
-    
-    # Llamar al LLM para revisión
-    logger.info("🤖 Analizando código con LLM...")
-    start_time = time.time()
-    respuesta_llm = call_gemini(prompt_revision, "")
-    duration = time.time() - start_time
-    
-    log_llm_call(logger, "revision_codigo", duration=duration)
-    
-    # Parsear respuesta
-    try:
-        # Limpiar respuesta de marcadores markdown
-        respuesta_limpia = respuesta_llm.strip()
-        if respuesta_limpia.startswith('```'):
-            respuesta_limpia = respuesta_limpia.split('\n', 1)[1]
-        if respuesta_limpia.endswith('```'):
-            respuesta_limpia = respuesta_limpia.rsplit('```', 1)[0]
-        respuesta_limpia = respuesta_limpia.strip()
         
-        resultado = json.loads(respuesta_limpia)
+        # Llamar al LLM para revisión
+        logger.info("🤖 Analizando código con LLM...")
+        start_time = time.time()
+        respuesta_llm = call_gemini(prompt_revision, "")
+        duration = time.time() - start_time
         
-        aprobado = resultado.get('aprobado', False)
-        puntuacion = resultado.get('puntuacion', 0)
-        aspectos_positivos = resultado.get('aspectos_positivos', [])
-        aspectos_mejorar = resultado.get('aspectos_mejorar', [])
-        comentario = resultado.get('comentario_revision', '')
+        log_llm_call(logger, "revision_codigo", duration=duration)
         
-    except (json.JSONDecodeError, KeyError) as e:
-        logger.warning(f"⚠️ Error al parsear respuesta del LLM: {e}")
-        # Asumir aprobado si no se puede parsear
-        aprobado = True
-        puntuacion = 7
-        comentario = "Revisión automática completada. El código parece cumplir los requisitos básicos."
-        aspectos_positivos = ["Código generado correctamente"]
-        aspectos_mejorar = []
-    
-    # Construir comentario para la PR
-    comentario_pr = f"""## 🔍 Revisión Automática de Código
+        # Parsear respuesta
+        try:
+            # Limpiar respuesta de marcadores markdown
+            respuesta_limpia = respuesta_llm.strip()
+            if respuesta_limpia.startswith('```'):
+                respuesta_limpia = respuesta_limpia.split('\n', 1)[1]
+            if respuesta_limpia.endswith('```'):
+                respuesta_limpia = respuesta_limpia.rsplit('```', 1)[0]
+            respuesta_limpia = respuesta_limpia.strip()
+            
+            resultado = json.loads(respuesta_limpia)
+            
+            aprobado = resultado.get('aprobado', False)
+            puntuacion = resultado.get('puntuacion', 0)
+            aspectos_positivos = resultado.get('aspectos_positivos', [])
+            aspectos_mejorar = resultado.get('aspectos_mejorar', [])
+            comentario = resultado.get('comentario_revision', '')
+            
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"⚠️ Error al parsear respuesta del LLM: {e}")
+            # Asumir aprobado si no se puede parsear
+            aprobado = True
+            puntuacion = 7
+            comentario = "Revisión automática completada. El código parece cumplir los requisitos básicos."
+            aspectos_positivos = ["Código generado correctamente"]
+            aspectos_mejorar = []
+        
+        # Construir comentario para la PR
+        comentario_pr = f"""## 🔍 Revisión Automática de Código
 
 **Puntuación:** {puntuacion}/10
 **Estado:** {'✅ APROBADO' if aprobado else '⚠️ REQUIERE CAMBIOS'}
@@ -138,45 +137,42 @@ IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de cal
 ---
 *Revisión realizada por AI Code Reviewer*
 """
-    
-    # Actualizar estado
-    state['codigo_revisado'] = aprobado
-    state['revision_comentario'] = comentario
-    state['revision_puntuacion'] = puntuacion
-    
-    # Incrementar contador de intentos si rechaza
-    if not aprobado:
-        state['revisor_attempt_count'] = state.get('revisor_attempt_count', 0) + 1
-        logger.info(f"📊 Intento de revisión: {state['revisor_attempt_count']}/{state.get('max_revisor_attempts', 2)}")
-    
-    # Aprobar o comentar en la PR
-    if aprobado:
-        logger.info(f"✅ Código APROBADO con puntuación {puntuacion}/10")
         
-        # Aprobar la PR
-        success = github_service.approve_pull_request(pr_number, comentario_pr, use_reviewer_token=True)
+        # Actualizar estado
+        state['codigo_revisado'] = aprobado
+        state['revision_comentario'] = comentario
+        state['revision_puntuacion'] = puntuacion
         
-        if success:
-            logger.info(f"✅ PR #{pr_number} aprobada")
-            state['pr_aprobada'] = True
+        # Incrementar contador de intentos si rechaza
+        if not aprobado:
+            state['revisor_attempt_count'] = state.get('revisor_attempt_count', 0) + 1
+            logger.info(f"📊 Intento de revisión: {state['revisor_attempt_count']}/{state.get('max_revisor_attempts', 2)}")
+        
+        # Aprobar o comentar en la PR
+        if aprobado:
+            logger.info(f"✅ Código APROBADO con puntuación {puntuacion}/10")
+            
+            # Aprobar la PR
+            success = github_service.approve_pull_request(pr_number, comentario_pr, use_reviewer_token=True)
+            
+            if success:
+                logger.info(f"✅ PR #{pr_number} aprobada")
+                state['pr_aprobada'] = True
+            else:
+                logger.warning(f"⚠️ No se pudo aprobar la PR #{pr_number}")
+                state['pr_aprobada'] = False
         else:
-            logger.warning(f"⚠️ No se pudo aprobar la PR #{pr_number}")
+            logger.warning(f"⚠️ Código RECHAZADO con puntuación {puntuacion}/10")
+            
+            # Añadir comentario a la PR
+            github_service.add_comment_to_pr(pr_number, comentario_pr, use_reviewer_token=True)
             state['pr_aprobada'] = False
-    else:
-        logger.warning(f"⚠️ Código RECHAZADO con puntuación {puntuacion}/10")
         
-        # Añadir comentario a la PR
-        github_service.add_comment_to_pr(pr_number, comentario_pr, use_reviewer_token=True)
-        state['pr_aprobada'] = False
-    
-    log_agent_execution(logger, "RevisorCodigo", "completado", {
-        "aprobado": aprobado,
-        "puntuacion": puntuacion,
-        "pr_number": pr_number
-    })
-    
-    logger.info("=" * 60)
-    logger.info("🔍 REVISOR DE CÓDIGO - FIN")
-    logger.info("=" * 60)
+        log_agent_execution(logger, "RevisorCodigo", "completado", {
+            "aprobado": aprobado,
+            "puntuacion": puntuacion,
+            "pr_number": pr_number
+        })
+        
     
     return state
