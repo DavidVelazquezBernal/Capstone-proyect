@@ -19,15 +19,15 @@ def delete_output_folder():
     """
     Limpia el contenido del directorio output/ al inicio de cada ejecución.
     Elimina todos los archivos y subdirectorios pero mantiene la carpeta.
-    Preserva package.json y node_modules si existen para vitest/pytest.
+    Preserva package.json, node_modules y logs (que contiene el archivo de log activo).
     """
     if os.path.exists(settings.OUTPUT_DIR):
-        # Archivos a preservar
-        preserve_files = ['package.json', 'package-lock.json', 'node_modules']
+        # Archivos y directorios a preservar
+        preserve_items = ['package.json', 'package-lock.json', 'node_modules', 'logs']
         
         for filename in os.listdir(settings.OUTPUT_DIR):
-            if filename in preserve_files:
-                continue  # No eliminar estos archivos
+            if filename in preserve_items:
+                continue  # No eliminar estos archivos/directorios
                 
             file_path = os.path.join(settings.OUTPUT_DIR, filename)
             try:
@@ -37,7 +37,7 @@ def delete_output_folder():
                     shutil.rmtree(file_path)
             except Exception as e:
                 logger.warning(f"⚠️ No se pudo eliminar {file_path}: {e}")
-        logger.info(f"🗑️ Directorio '{settings.OUTPUT_DIR}' limpiado")
+        logger.info(f"🗑️ Directorio '{settings.OUTPUT_DIR}' limpiado (preservando logs)")
     else:
         os.makedirs(settings.OUTPUT_DIR, exist_ok=True)
         logger.info(f"📁 Directorio '{settings.OUTPUT_DIR}' creado")
