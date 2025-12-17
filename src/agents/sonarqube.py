@@ -83,17 +83,63 @@ def sonarqube_node(state: AgentState) -> AgentState:
         branch_name = state.get('github_branch_name')
         
         if branch_name and settings.SONARCLOUD_ENABLED:
-            logger.info(f"☁️ Usando branch '{branch_name}' para análisis SonarCloud")
-            # Esperar para dar tiempo a SonarCloud de analizar el branch
-            wait_time = 10  # 10 segundos de espera
-            logger.info(f"⏳ Esperando {wait_time}s para que SonarCloud procese el branch...")
-            time.sleep(wait_time)
-            logger.info("✅ Espera completada, consultando SonarCloud...")
+            from services.sonarcloud_service import sonarcloud_service
+            
+            logger.info("=" * 60)
+            logger.info("☁️  ANÁLISIS SONARCLOUD")
+            logger.info("=" * 60)
+            logger.info(f"Branch: {branch_name}")
+            logger.info(f"Proyecto: {settings.SONARCLOUD_PROJECT_KEY}")
+            logger.info(f"Organización: {settings.SONARCLOUD_ORGANIZATION}")
+            logger.info(f"Timeout configurado: {settings.SONARCLOUD_ANALYSIS_TIMEOUT}s")
+            logger.info("=" * 60)
+            
+            # Verificar integración GitHub-SonarCloud (solo en primer análisis)
+            if state['sonarqube_attempt_count'] == 0:
+                logger.info("🔍 Verificando integración GitHub-SonarCloud...")
+                integration_check = sonarcloud_service.verify_github_integration()
+                
+                if not integration_check.get("success"):
+                    logger.warning(f"⚠️ Problema con integración SonarCloud-GitHub:")
+                    logger.warning(f"   {integration_check.get('error')}")
+                    if integration_check.get('hint'):
+                        logger.info(f"   💡 {integration_check.get('hint')}")
+                    logger.info("🔄 Usando análisis local como fallback...")
+                    branch_name = None
+                else:
+                    logger.info(f"✅ Integración verificada - {integration_check.get('branches_count', 0)} branches disponibles")
+            
+            # Si aún tenemos branch después de verificación, esperar análisis
+            if branch_name:
+                logger.info("⏳ Esperando a que SonarCloud complete el análisis del branch...")
+                logger.info(f"   Máximo {settings.SONARCLOUD_ANALYSIS_MAX_ATTEMPTS} intentos x {settings.SONARCLOUD_ANALYSIS_WAIT_SECONDS}s")
+                
+                result = sonarcloud_service.wait_for_analysis(
+                    branch_name=branch_name,
+                    max_attempts=settings.SONARCLOUD_ANALYSIS_MAX_ATTEMPTS,
+                    wait_seconds=settings.SONARCLOUD_ANALYSIS_WAIT_SECONDS
+                )
+                
+                if result.get("success"):
+                    logger.info("✅ Análisis SonarCloud disponible")
+                    logger.info(f"   Issues encontrados: {result.get('issues', {}).get('total', 0)}")
+                    logger.info(f"   Quality Gate: {result.get('quality_gate', {}).get('status', 'N/A')}")
+                    resultado_analisis = result
+                else:
+                    logger.warning(f"⚠️ Timeout esperando análisis de SonarCloud: {result.get('error')}")
+                    logger.info("🔄 Fallback a análisis local...")
+                    resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, None)
+            else:
+                # Sin branch o integración fallida
+                resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, None)
+                
         elif settings.SONARCLOUD_ENABLED:
-            logger.warning("⚠️ No hay branch disponible para SonarCloud, usando análisis local")
-        
-        # Analizar código con SonarQube (usa SonarCloud si hay branch, sino análisis local)
-        resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, branch_name)
+            logger.warning("⚠️ No hay branch de GitHub disponible para SonarCloud")
+            logger.info("🔄 Usando análisis local...")
+            resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, None)
+        else:
+            # SonarCloud deshabilitado, análisis local
+            resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, None)
         
         # Formatear reporte
         reporte_formateado = formatear_reporte_sonarqube(resultado_analisis)

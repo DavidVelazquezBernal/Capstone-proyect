@@ -75,13 +75,14 @@ class SonarCloudService:
             logger.warning(f"⚠️ Error de conexión con SonarCloud: {e}")
             return False
     
-    def _make_request(self, endpoint: str, params: Dict[str, Any] = None) -> Optional[Dict]:
+    def _make_request(self, endpoint: str, params: Dict[str, Any] = None, max_retries: int = 3) -> Optional[Dict]:
         """
-        Realiza una petición GET a la API de SonarCloud.
+        Realiza una petición GET a la API de SonarCloud con retry automático.
         
         Args:
             endpoint: Endpoint de la API (sin base URL)
             params: Parámetros de la petición
+            max_retries: Número máximo de reintentos
             
         Returns:
             Dict con la respuesta JSON o None si hay error
@@ -89,14 +90,78 @@ class SonarCloudService:
         if not self.enabled:
             return None
         
+        import time
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                url = f"{self.BASE_URL}/{endpoint}"
+                response = requests.get(url, headers=self.headers, params=params, timeout=30)
+                response.raise_for_status()
+                return response.json()
+                
+            except requests.exceptions.Timeout as e:
+                if attempt == max_retries:
+                    logger.error(f"❌ Timeout en petición a SonarCloud después de {max_retries} intentos")
+                    return None
+                logger.warning(f"⚠️ Timeout en intento {attempt}/{max_retries}, reintentando...")
+                time.sleep(2 ** attempt)
+                
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code in [503, 504]:
+                    if attempt == max_retries:
+                        logger.error(f"❌ SonarCloud no disponible después de {max_retries} intentos")
+                        return None
+                    logger.warning(f"⚠️ SonarCloud no disponible (intento {attempt}/{max_retries}), reintentando...")
+                    time.sleep(2 ** attempt)
+                else:
+                    logger.error(f"❌ Error HTTP en petición a SonarCloud: {e}")
+                    return None
+                    
+            except requests.exceptions.RequestException as e:
+                logger.error(f"❌ Error en petición a SonarCloud: {e}")
+                return None
+        
+        return None
+    
+    def verify_github_integration(self) -> Dict[str, Any]:
+        """
+        Verifica que SonarCloud esté configurado para analizar el repositorio de GitHub.
+        
+        Returns:
+            Dict con resultado de verificación
+        """
+        if not self.enabled:
+            return {"success": False, "error": "SonarCloud no está habilitado"}
+        
         try:
-            url = f"{self.BASE_URL}/{endpoint}"
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ Error en petición a SonarCloud: {e}")
-            return None
+            # Verificar que el proyecto existe
+            params = {"component": self.project_key}
+            result = self._make_request("components/show", params)
+            
+            if not result:
+                return {"success": False, "error": "Proyecto no encontrado en SonarCloud"}
+            
+            # Verificar que hay branches (indica que está conectado a GitHub)
+            branches_result = self._make_request("project_branches/list", {"project": self.project_key})
+            
+            if not branches_result or not branches_result.get("branches"):
+                return {
+                    "success": False,
+                    "error": "No hay branches en SonarCloud. Verifica la integración con GitHub.",
+                    "hint": "Configura GitHub App en SonarCloud: https://sonarcloud.io/projects"
+                }
+            
+            branches = branches_result.get("branches", [])
+            logger.info(f"✅ SonarCloud integrado con GitHub - {len(branches)} branches encontrados")
+            
+            return {
+                "success": True,
+                "branches_count": len(branches),
+                "branches": [b.get("name") for b in branches[:5]]
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
     
     def get_issues(self, branch: str = None, severities: str = None) -> Dict[str, Any]:
         """
@@ -219,7 +284,7 @@ class SonarCloudService:
             "name": component.get("name")
         }
     
-    def analyze_branch(self, branch_name: str, use_main_if_branch_not_found: bool = True) -> Dict[str, Any]:
+    def analyze_branch(self, branch_name: str, use_main_if_branch_not_found: bool = False) -> Dict[str, Any]:
         """
         Analiza un branch específico y retorna un reporte completo.
         

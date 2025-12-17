@@ -60,6 +60,11 @@ class Settings:
     MAX_TEST_FIX_ATTEMPTS: int = int(os.getenv("MAX_TEST_FIX_ATTEMPTS", "2"))
     TEST_EXECUTION_TIMEOUT: int = int(os.getenv("TEST_EXECUTION_TIMEOUT", "60"))  # Timeout en segundos para ejecución de tests
     
+    # SonarCloud Analysis Timing
+    SONARCLOUD_ANALYSIS_TIMEOUT: int = int(os.getenv("SONARCLOUD_ANALYSIS_TIMEOUT", "300"))  # Timeout total en segundos (5 minutos)
+    SONARCLOUD_ANALYSIS_MAX_ATTEMPTS: int = int(os.getenv("SONARCLOUD_ANALYSIS_MAX_ATTEMPTS", "10"))  # Número máximo de intentos
+    SONARCLOUD_ANALYSIS_WAIT_SECONDS: int = int(os.getenv("SONARCLOUD_ANALYSIS_WAIT_SECONDS", "30"))  # Segundos entre intentos
+    
     # Modo Testing/Mock (evita llamadas reales al LLM)
     LLM_MOCK_MODE: bool = os.getenv("LLM_MOCK_MODE", "false").lower() == "true"
     
