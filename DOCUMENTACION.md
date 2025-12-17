@@ -116,7 +116,7 @@ Este sistema multiagente automatiza el proceso de formalización de requisitos, 
 | Agente | Función Principal | Rol en el Ciclo | Condición de Salida |
 | :--- | :--- | :--- | :--- |
 | **Agente 1: 💼 Product Owner (PO)** | Genera un conjunto de **requisitos funcionales formales** y crea PBIs en Azure DevOps (opcional). | **Formalización.** | Requisitos **formales** y **aceptados** por el PO. |
-| **Agente 2: 💻 Desarrollador** | Genera el código Python/TypeScript y corrige errores. Crea Tasks en Azure DevOps (opcional). | **Desarrollo.** | Código **generado** y listo para análisis. |
+| **Agente 2: 💻 Desarrollador** | Genera el código Python/TypeScript, corrige errores y crea Tasks en Azure DevOps (opcional). | **Desarrollo.** | Código **generado** y listo para análisis. |
 | **Agente 3: 🔍 Analizador SonarQube** | Analiza calidad del código (bugs, vulnerabilidades, code smells). | **Control de Calidad.** | **Calidad OK** o **Requiere Corrección**. |
 | **Agente 4: 🧪 Generador Unit Tests** | Genera tests unitarios profesionales con vitest/pytest. | **Generación de Tests.** | Tests **generados** y listos para ejecución. |
 | **Agente 5: 🧪 Ejecutor de Pruebas** | Ejecuta tests unitarios y adjunta resultados a Azure DevOps (opcional). | **Ejecución de Tests.** | **Pasa Pruebas** o **Falla Pruebas**. |

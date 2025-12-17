@@ -277,8 +277,8 @@ START → ProductOwner → Desarrollador → SonarQube
 
 ### Agentes
 
-1. **ProductOwner**: Formaliza especificaciones técnicas en JSON estructurado + 🔷 crea PBIs y Tasks en Azure DevOps (opcional)
-2. **Desarrollador**: Genera y corrige código Python/TypeScript + 🐙 crea branch y commit en GitHub (opcional)
+1. **ProductOwner**: Formaliza especificaciones técnicas en JSON estructurado + 🔷 crea PBIs en Azure DevOps (opcional)
+2. **Desarrollador**: Genera y corrige código Python/TypeScript + 🐙 crea branch y commit en GitHub (opcional) + 🔷 crea Tasks en Azure DevOps (opcional)
 3. **SonarQube**: Verifica calidad del código (bugs, vulnerabilidades, code smells)
 4. **Testing**: Genera y ejecuta tests unitarios con vitest/pytest + 🐙 pushea tests a GitHub (opcional)
 5. **RevisorCodigo**: Revisa código con LLM y aprueba/rechaza PR + 🐙 aprueba PR en GitHub (opcional)
