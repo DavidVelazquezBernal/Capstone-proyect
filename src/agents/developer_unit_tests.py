@@ -10,6 +10,7 @@ import json
 import time
 import subprocess
 import logging
+from datetime import datetime
 from typing import Dict, Any
 from models.state import AgentState
 from config.prompts import Prompts
@@ -621,7 +622,8 @@ def developer_unit_tests_node(state: AgentState) -> AgentState:
                             
                             # 5. Crear Pull Request (solo si no existe ya)
                             if not state.get('github_pr_number'):
-                                pr_title = f"AI Generated Tests: {nombre_base.replace('_', ' ').title()}"
+                                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                pr_title = f"AI Generated Tests: {nombre_base.replace('_', ' ').title()} [{timestamp}]"
                                 pr_body = f"""## 🤖 Pull Request Generada Automáticamente
 
         ### 📋 Descripción

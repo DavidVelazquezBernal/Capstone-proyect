@@ -181,11 +181,12 @@ def get_mock_response(role_prompt: str, context: str = "") -> str:
             )
 
     # REVISOR DE CÓDIGO
-    # En revisor_codigo.py el prompt no usa PromptTemplates: contiene "Eres un revisor de código senior" y pide un JSON.
+    # En developer2_reviewer.py el prompt contiene "Eres un developer reviewer senior" y pide un JSON.
     if (
-        "revisor de código senior" in texto_completo
-        and "responde en formato json" in texto_completo
-        and '"aprobado"' in role_prompt
+        "developer reviewer senior" in texto_completo
+        or ("revisor de código senior" in texto_completo
+            and "responde en formato json" in texto_completo
+            and '"aprobado"' in role_prompt)
     ):
         return """{
   \"aprobado\": true,
