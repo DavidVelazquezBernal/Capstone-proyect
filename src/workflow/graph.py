@@ -8,7 +8,7 @@ from models.state import AgentState
 from config.settings import settings
 from utils.logger import setup_logger
 from agents.product_owner import product_owner_node
-from agents.desarrollador import desarrollador_node
+from agents.developer import developer_node
 from agents.sonarqube import sonarqube_node
 from agents.unit_test import unit_test_node, tester_merge_node
 from agents.revisor_codigo import revisor_codigo_node
@@ -28,7 +28,7 @@ def create_workflow() -> StateGraph:
 
     # 1. Añadir Nodos (Agentes)
     workflow.add_node("ProductOwner", product_owner_node)
-    workflow.add_node("Desarrollador", desarrollador_node)
+    workflow.add_node("Developer", developer_node)
     workflow.add_node("SonarQube", sonarqube_node)
     workflow.add_node("UnitTest", unit_test_node)
     workflow.add_node("RevisorCodigo", revisor_codigo_node)
@@ -37,8 +37,8 @@ def create_workflow() -> StateGraph:
 
     # 2. Definir Transiciones Iniciales y Lineales
     workflow.add_edge(START, "ProductOwner")
-    workflow.add_edge("ProductOwner", "Desarrollador")
-    workflow.add_edge("Desarrollador", "SonarQube")
+    workflow.add_edge("ProductOwner", "Developer")
+    workflow.add_edge("Developer", "SonarQube")
 
     # 3. Transiciones Condicionales
 
@@ -52,7 +52,7 @@ def create_workflow() -> StateGraph:
                   else "QUALITY_FAILED")
         ),
         {
-            "QUALITY_FAILED": "Desarrollador",
+            "QUALITY_FAILED": "Developer",
             "QUALITY_PASSED": "UnitTest",
             "QUALITY_LIMIT_EXCEEDED": END
         }
@@ -60,7 +60,7 @@ def create_workflow() -> StateGraph:
 
     # B. Bucle de Depuración (UnitTest: Corrección de Código)
     # Incluye control de límite de intentos
-    # Cuando pasa los tests siempre va a RevisorCodigo (que decide si va a Stakeholder o vuelve a Desarrollador)
+    # Cuando pasa los tests siempre va a RevisorCodigo (que decide si va a Stakeholder o vuelve a Developer)
     workflow.add_conditional_edges(
         "UnitTest",
         lambda x: (
@@ -69,14 +69,14 @@ def create_workflow() -> StateGraph:
                   else "FAILED")
         ),
         {
-            "FAILED": "Desarrollador",
+            "FAILED": "Developer",
             "PASSED": "RevisorCodigo",
             "DEBUG_LIMIT_EXCEEDED": END
         }
     )
     
     # C. Transición condicional del Revisor de Código
-    # Si aprueba el código va a Stakeholder, si no vuelve a Desarrollador (con límite de intentos)
+    # Si aprueba el código va a Stakeholder, si no vuelve a Developer (con límite de intentos)
     workflow.add_conditional_edges(
         "RevisorCodigo",
         lambda x: (
@@ -86,7 +86,7 @@ def create_workflow() -> StateGraph:
         ),
         {
             "CODE_APPROVED": "TesterMerge",
-            "CODE_REJECTED": "Desarrollador",
+            "CODE_REJECTED": "Developer",
             "REVISOR_LIMIT_EXCEEDED": END
         }
     )

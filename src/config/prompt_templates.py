@@ -68,12 +68,12 @@ Genera los requisitos formales en formato JSON.""")
     ])
     
     # ============================================================
-    # DESARROLLADOR - Codificador
+    # DEVELOPER - Codificador
     # ============================================================
     
-    DESARROLLADOR = ChatPromptTemplate.from_messages([
+    DEVELOPER = ChatPromptTemplate.from_messages([
         ("system", """Rol:
-Desarrollador de Software Sénior en Python y TypeScript.
+Developer de Software Sénior en Python y TypeScript.
 
 Objetivo:
 Generar código que satisfaga los requisitos formales y, si se proporciona un traceback, corregir los errores del código anterior.
@@ -434,9 +434,9 @@ Genera la Release Note en formato HTML.""")
         return cls._messages_to_string(messages)
     
     @classmethod
-    def format_desarrollador(cls, requisitos_formales: str, contexto_adicional: str = "") -> str:
+    def format_developer(cls, requisitos_formales: str, contexto_adicional: str = "") -> str:
         """
-        Formatea el template del Desarrollador con las variables proporcionadas.
+        Formatea el template del Developer con las variables proporcionadas.
         
         Args:
             requisitos_formales: Requisitos formales en JSON
@@ -448,7 +448,7 @@ Genera la Release Note en formato HTML.""")
         if not contexto_adicional:
             contexto_adicional = ""
         
-        messages = cls.DESARROLLADOR.format_messages(
+        messages = cls.DEVELOPER.format_messages(
             requisitos_formales=requisitos_formales,
             contexto_adicional=contexto_adicional
         )
@@ -584,7 +584,7 @@ def get_prompt_template(agent_name: str) -> ChatPromptTemplate:
     Obtiene el template de un agente específico.
     
     Args:
-        agent_name: Nombre del agente (product_owner, desarrollador, sonarqube, generador_uts, stakeholder)
+        agent_name: Nombre del agente (product_owner, developer, sonarqube, generador_uts, stakeholder)
         
     Returns:
         ChatPromptTemplate del agente
@@ -594,7 +594,7 @@ def get_prompt_template(agent_name: str) -> ChatPromptTemplate:
     """
     templates = {
         "product_owner": PromptTemplates.PRODUCT_OWNER,
-        "desarrollador": PromptTemplates.DESARROLLADOR,
+        "developer": PromptTemplates.DEVELOPER,
         "sonarqube": PromptTemplates.SONARQUBE,
         "generador_uts": PromptTemplates.GENERADOR_UTS,
         "stakeholder": PromptTemplates.STAKEHOLDER

@@ -1,4 +1,4 @@
-"""Agente: Desarrollador
+"""Agente: Developer
 Responsable de generar código según requisitos formales y corregir errores.
 Corrige tanto errores de ejecución (traceback) como problemas de calidad (SonarQube).
 Crea Tasks en Azure DevOps para implementación y testing.
@@ -23,15 +23,15 @@ from utils.agent_decorators import agent_execution_context
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
-def desarrollador_node(state: AgentState) -> AgentState:
+def developer_node(state: AgentState) -> AgentState:
     """
-    Nodo del Desarrollador.
+    Nodo del Developer.
     Genera código que satisface los requisitos formales o corrige errores.
     Puede corregir errores de ejecución (traceback) o issues de calidad (sonarqube_issues).
     """
 
-    with agent_execution_context("💻 DESARROLLADOR", logger):
-        log_agent_execution(logger, "Desarrollador", "iniciado", {
+    with agent_execution_context("💻 DEVELOPER", logger):
+        log_agent_execution(logger, "Developer", "iniciado", {
             "requisito_id": state['attempt_count'],
             "debug_attempt": state['debug_attempt_count'],
             "sonarqube_attempt": state['sonarqube_attempt_count']
@@ -57,7 +57,7 @@ def desarrollador_node(state: AgentState) -> AgentState:
 
         # Usar ChatPromptTemplate
         logger.debug("🔗 Usando ChatPromptTemplate de LangChain")
-        prompt_formateado = PromptTemplates.format_desarrollador(
+        prompt_formateado = PromptTemplates.format_developer(
             requisitos_formales=state['requisitos_formales'],
             contexto_adicional=contexto_adicional
         )
@@ -82,7 +82,7 @@ def desarrollador_node(state: AgentState) -> AgentState:
         codigo_limpio = limpiar_codigo_markdown(state['codigo_generado'])
         
         # Incluir intento de requisito, de debug y de sonarqube
-        nombre_archivo = f"2_desarrollador_req{state['attempt_count']}_debug{state['debug_attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
+        nombre_archivo = f"2_developer_req{state['attempt_count']}_debug{state['debug_attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
         resultado = guardar_fichero_texto(
             nombre_archivo,
             codigo_limpio,
@@ -174,7 +174,7 @@ def desarrollador_node(state: AgentState) -> AgentState:
                     logger.debug(f"Stack trace: {e}", exc_info=True)
         # === FIN: Crear branch en GitHub ===
         
-        log_agent_execution(logger, "Desarrollador", "completado", {
+        log_agent_execution(logger, "Developer", "completado", {
             "archivo": nombre_archivo,
             "lenguaje": lenguaje,
             "guardado": resultado
