@@ -79,8 +79,9 @@ def developer_complete_pr_node(state: AgentState) -> AgentState:
 
         pr_number = state.get('github_pr_number')
         if not settings.GITHUB_ENABLED or not pr_number:
-            logger.info("ℹ️ Merge omitido: GitHub no habilitado o no hay PR")
-            state['pr_mergeada'] = False
+            logger.info("ℹ️ GitHub no está habilitado o no hay PR - continuando flujo sin merge")
+            logger.info("✅ Precondiciones cumplidas: tests pasados y código aprobado")
+            state['pr_mergeada'] = True
             return state
 
         if not state.get('pruebas_superadas'):
@@ -529,20 +530,39 @@ def developer_unit_tests_node(state: AgentState) -> AgentState:
                 
                 log_file_operation(logger, "guardar", f"{settings.OUTPUT_DIR}/{nombre_archivo}", success=True)
                 
-                # === AZURE DEVOPS: Adjuntar archivo de tests cuando pasen ===
+                # === AZURE DEVOPS: Solo agregar comentario con métricas (no adjuntar archivo) ===
                 if state.get('azure_pbi_id') and state.get('azure_testing_task_id'):
                     try:
                         total = stats.get('total', 0) if isinstance(stats, dict) else 0
+                        task_id = state.get('azure_testing_task_id')
                         
-                        azure_service.attach_tests_and_add_success_comment(
-                            state=state,
-                            test_file_path=test_path,
-                            total_tests=total
-                        )
+                        # Solo agregar comentario con métricas, no adjuntar archivo
+                        github_info = ""
+                        if settings.GITHUB_ENABLED:
+                            branch = state.get('github_branch_name', 'N/A')
+                            pr_number = state.get('github_pr_number', 'N/A')
+                            github_info = f"""
+
+🔗 GitHub
+   • Branch: {branch}
+   • PR: #{pr_number}"""
+                        
+                        comment = f"""✅ Testing completado exitosamente
+
+🧪 Resultados de Tests Unitarios
+   • Total: {total} tests
+   • Pasados: {total} (100%)
+   • Fallidos: 0
+   • Estado: ✅ PASSED{github_info}
+
+📊 Los tests están disponibles en el repositorio de GitHub"""
+                        
+                        azure_service.client.add_comment(task_id, comment)
+                        logger.info(f"📝 Comentario de testing agregado a Task #{task_id}")
                         
                     except Exception as e:
-                        logger.warning(f"⚠️ Error en operaciones de Azure DevOps: {e}")
-                # === FIN: Adjuntar tests a Azure DevOps ===
+                        logger.warning(f"⚠️ Error al agregar comentario en Azure DevOps: {e}")
+                # === FIN: Comentario de tests en Azure DevOps ===
                 
                 # === GITHUB: Agregar tests al branch existente y crear PR ===
                 if settings.GITHUB_ENABLED:

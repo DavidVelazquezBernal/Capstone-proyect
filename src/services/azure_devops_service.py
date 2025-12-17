@@ -332,13 +332,14 @@ class AzureDevOpsService:
             logger.debug(f"Stack trace: {e}", exc_info=True)
             return False
     
-    def add_sonarqube_approval_comment(self, task_id: int, report_file: str) -> bool:
+    def add_sonarqube_approval_comment(self, task_id: int, report_file: str, state: AgentState = None) -> bool:
         """
         Agrega comentario de aprobación de SonarQube a la Task de Implementación.
         
         Args:
             task_id: ID de la Task de Implementación
             report_file: Nombre del archivo de reporte
+            state: Estado compartido (opcional, para información de GitHub)
             
         Returns:
             True si se agregó el comentario
@@ -347,12 +348,24 @@ class AzureDevOpsService:
             return False
         
         try:
-            comment = f"""✅ Análisis de SonarQube completado exitosamente
+            # Obtener información de GitHub si está disponible
+            github_info = ""
+            if settings.GITHUB_ENABLED and state:
+                branch = state.get('github_branch_name', 'N/A')
+                pr_number = state.get('github_pr_number', 'N/A')
+                github_info = f"""
+🔗 GitHub
+   • Branch: {branch}
+   • PR: #{pr_number}"""
+            
+            comment = f"""✅ Análisis de calidad completado exitosamente
 
-El código ha pasado el análisis de calidad sin issues bloqueantes.
+🔍 SonarQube/SonarCloud
+   • Quality Gate: ✅ PASSED
+   • Issues bloqueantes: 0
+   • Estado: Aprobado para testing{github_info}
 
-📊 Reporte guardado: {report_file}
-🎯 Estado: Aprobado para continuar con testing"""
+📊 Reporte detallado: {report_file}"""
             
             success = self.client.add_comment(task_id, comment)
             if success:
@@ -388,14 +401,17 @@ El código ha pasado el análisis de calidad sin issues bloqueantes.
             return False
         
         try:
-            comment = f"""⚠️ Issues de calidad detectados por SonarQube (Intento {attempt}/{max_attempts})
+            comment = f"""⚠️ Issues de calidad detectados (Intento {attempt}/{max_attempts})
 
-El código requiere correcciones antes de continuar.
+🔍 Análisis de Calidad
+   • Estado: Requiere correcciones
+   • Issues encontrados: Ver reporte
 
-📊 Reporte: {report_file}
-📝 Instrucciones: {instructions_file}
+📊 Reportes
+   • Análisis: {report_file}
+   • Instrucciones: {instructions_file}
 
-El código será corregido automáticamente por el Desarrollador."""
+🔄 El código será corregido automáticamente por el Desarrollador."""
             
             success = self.client.add_comment(task_id, comment)
             if success:
@@ -510,16 +526,25 @@ El código será corregido automáticamente por el Desarrollador."""
             if success_pbi and success_task:
                 logger.info("🎉 Tests unitarios adjuntados exitosamente a ambos work items")
                 
-                # Agregar comentario de éxito
-                comment = f"""✅ Tests unitarios ejecutados exitosamente
+                # Agregar comentario de éxito con métricas
+                github_info = ""
+                if settings.GITHUB_ENABLED:
+                    branch = state.get('github_branch_name', 'N/A')
+                    pr_number = state.get('github_pr_number', 'N/A')
+                    github_info = f"""
+🔗 GitHub
+   • Branch: {branch}
+   • PR: #{pr_number}"""
+                
+                comment = f"""✅ Testing completado exitosamente
 
-Todos los tests han pasado correctamente.
+🧪 Resultados de Tests Unitarios
+   • Total: {total_tests} tests
+   • Pasados: {total_tests} (100%)
+   • Fallidos: 0
+   • Estado: ✅ PASSED{github_info}
 
-📊 Resultados:
-  • Total de tests: {total_tests}
-  • Estado: PASSED ✅
-
-📎 Tests adjuntados al work item"""
+📎 Suite de tests adjuntada al work item"""
                 
                 self.client.add_comment(task_id, comment)
                 logger.info(f"📝 Comentario de éxito agregado a Task #{task_id}")
@@ -562,18 +587,18 @@ Todos los tests han pasado correctamente.
             return False
         
         try:
+            pass_rate = (passed / total * 100) if total > 0 else 0
             comment = f"""❌ Tests fallidos (Intento {attempt}/{max_attempts})
 
-Los tests no han pasado y requieren corrección del código.
+🧪 Resultados de Tests
+   • Total: {total} tests
+   • Pasados: {passed} ({pass_rate:.1f}%)
+   • Fallidos: {failed}
+   • Estado: ❌ FAILED
 
-📊 Estadísticas:
-  • Total: {total}
-  • Pasados: {passed}
-  • Fallidos: {failed}
+📁 Reporte detallado: {report_file}
 
-📁 Reporte: {report_file}
-
-El código será corregido automáticamente por el Desarrollador."""
+🔄 El código será corregido automáticamente por el Desarrollador."""
             
             success = self.client.add_comment(task_id, comment)
             if success:
@@ -708,9 +733,28 @@ El código será corregido automáticamente por el Desarrollador."""
                 )
                 if result:
                     logger.info(f"✅ Task de Implementación #{impl_task_id} marcada como 'Done'")
+                    # Agregar comentario con información de GitHub si está disponible
+                    github_info = ""
+                    if settings.GITHUB_ENABLED:
+                        branch = state.get('github_branch_name', 'N/A')
+                        pr_number = state.get('github_pr_number', 'N/A')
+                        commit = state.get('github_commit_sha', 'N/A')[:7] if state.get('github_commit_sha') else 'N/A'
+                        github_info = f"""
+🔗 GitHub
+   • Branch: {branch}
+   • PR: #{pr_number} (merged)
+   • Commit: {commit}"""
+                    
                     self.client.add_comment(
                         impl_task_id,
-                        "✅ Implementación completada y validada por el Stakeholder. Código listo para producción."
+                        f"""✅ Implementación completada y validada
+
+🎯 Estado
+   • Desarrollo: ✅ Completado
+   • Calidad: ✅ Aprobada
+   • Validación: ✅ Stakeholder aprobó{github_info}
+
+🚀 Código listo para producción"""
                     )
                 else:
                     logger.warning(f"⚠️ No se pudo actualizar Task #{impl_task_id}")
@@ -725,9 +769,23 @@ El código será corregido automáticamente por el Desarrollador."""
                 )
                 if result:
                     logger.info(f"✅ Task de Testing #{test_task_id} marcada como 'Done'")
+                    # Obtener métricas de tests del estado
+                    total_tests = state.get('total_tests', 'N/A')
+                    github_info = ""
+                    if settings.GITHUB_ENABLED:
+                        pr_number = state.get('github_pr_number', 'N/A')
+                        github_info = f" | PR: #{pr_number}"
+                    
                     self.client.add_comment(
                         test_task_id,
-                        "✅ Todos los tests pasaron exitosamente. Testing completado."
+                        f"""✅ Testing completado exitosamente
+
+🧪 Resultados Finales
+   • Tests ejecutados: {total_tests}
+   • Tasa de éxito: 100%
+   • Estado: ✅ PASSED{github_info}
+
+🎯 Todos los tests pasaron correctamente"""
                     )
                 else:
                     logger.warning(f"⚠️ No se pudo actualizar Task #{test_task_id}")
@@ -742,17 +800,38 @@ El código será corregido automáticamente por el Desarrollador."""
             if result:
                 logger.info(f"✅ PBI #{pbi_id} marcado como 'Done'")
                 
-                # Agregar comentario final con resumen
-                summary_comment = f"""🎉 Proyecto completado exitosamente
+                # Agregar comentario final con resumen ejecutivo y métricas
+                total_tests = state.get('total_tests', 'N/A')
+                attempts = state.get('attempt_count', 1)
+                duration = state.get('duracion_total', 'N/A')
+                
+                github_info = ""
+                if settings.GITHUB_ENABLED:
+                    branch = state.get('github_branch_name', 'N/A')
+                    pr_number = state.get('github_pr_number', 'N/A')
+                    repo = f"{settings.GITHUB_OWNER}/{settings.GITHUB_REPO}" if settings.GITHUB_OWNER else 'N/A'
+                    github_info = f"""
+🔗 GitHub
+   • Repositorio: {repo}
+   • Branch: {branch}
+   • PR: #{pr_number} (merged to main)"""
+                
+                summary_comment = f"""🎉 PBI completado exitosamente
 
-El código ha sido:
-✅ Implementado y generado automáticamente
-✅ Aprobado por análisis de SonarQube
-✅ Validado con tests unitarios
-✅ Aprobado por el Stakeholder
+📊 Resumen del Flujo
+   ✅ Product Owner: Requisitos validados
+   ✅ Developer-Code: Implementación completada
+   ✅ SonarQube: Quality Gate PASSED
+   ✅ Developer-UnitTests: {total_tests} tests pasados (100%)
+   ✅ Developer2-Reviewer: Código aprobado
+   ✅ Stakeholder: Validación final aprobada{github_info}
 
-📊 Estado final: DONE
-🚀 Listo para producción"""
+⏱️ Métricas
+   • Duración total: {duration}
+   • Iteraciones: {attempts}
+   • Estado final: ✅ DONE
+
+🚀 Código listo para producción"""
                 
                 self.client.add_comment(pbi_id, summary_comment)
                 logger.info(f"📝 Comentario de cierre agregado al PBI #{pbi_id}")

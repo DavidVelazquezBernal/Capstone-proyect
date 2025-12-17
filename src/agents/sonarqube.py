@@ -176,7 +176,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
             if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
                 try:
                     task_id = state['azure_implementation_task_id']
-                    azure_service.add_sonarqube_approval_comment(task_id, nombre_reporte)
+                    azure_service.add_sonarqube_approval_comment(task_id, nombre_reporte, state)
                     logger.info(f"📝 Comentario de aprobación agregado a Task #{task_id}")
                 except Exception as e:
                     logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")

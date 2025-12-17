@@ -6,7 +6,6 @@ Proporciona integración con el ecosistema LangChain manteniendo compatibilidad 
 from typing import Optional, List, Dict, Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.callbacks import CallbackManager
 from langchain_core.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from config.settings import settings
 from utils.logger import setup_logger
@@ -33,11 +32,8 @@ def create_langchain_llm(
         raise ValueError("GEMINI_API_KEY no está configurada en settings")
     
     # Configurar callbacks si se solicita streaming
-    callback_manager = None
-    if streaming:
-        if callbacks is None:
-            callbacks = [StreamingStdOutCallbackHandler()]
-        callback_manager = CallbackManager(callbacks)
+    if streaming and callbacks is None:
+        callbacks = [StreamingStdOutCallbackHandler()]
     
     llm = ChatGoogleGenerativeAI(
         model=settings.MODEL_NAME,
@@ -45,7 +41,7 @@ def create_langchain_llm(
         temperature=settings.TEMPERATURE,
         max_output_tokens=settings.MAX_OUTPUT_TOKENS,
         streaming=streaming,
-        callback_manager=callback_manager,
+        callbacks=callbacks,
         convert_system_message_to_human=True  # Gemini requiere esto
     )
     

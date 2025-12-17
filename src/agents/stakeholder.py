@@ -71,13 +71,8 @@ def stakeholder_node(state: AgentState) -> AgentState:
                 directorio=settings.OUTPUT_DIR
             )
             
-            # === AZURE DEVOPS: Adjuntar código final cuando se valida ===
-            if state.get('azure_pbi_id') and state.get('azure_implementation_task_id'):
-                try:
-                    azure_service.attach_final_code_to_work_items(state)
-                except Exception as e:
-                    logger.warning(f"⚠️ Error al adjuntar código final: {e}")
-            # === FIN: Adjuntar código final a Azure DevOps ===
+            # === AZURE DEVOPS: Ya no se adjunta código - solo métricas y comentarios ===
+            # El código está disponible en GitHub, no es necesario duplicarlo en Azure DevOps
             
             # === INICIO: Actualizar estados a "Done" en Azure DevOps ===
             if settings.AZURE_DEVOPS_ENABLED:
