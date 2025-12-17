@@ -49,9 +49,9 @@ def _formatear_float_literal(value: str, max_decimals: int = 5) -> str:
     return txt
 
 
-def tester_merge_node(state: AgentState) -> AgentState:
-    with agent_execution_context("🐙 TESTER - SQUASH MERGE", logger):
-        log_agent_execution(logger, "Developer-UnitTests", "merge_iniciado", {
+def developer_complete_pr_node(state: AgentState) -> AgentState:
+    with agent_execution_context("🔀 DEVELOPER - COMPLETE PR", logger):
+        log_agent_execution(logger, "Developer-CompletePR", "merge_iniciado", {
             "pr_number": state.get('github_pr_number'),
             "validado": state.get('validado'),
             "tests_pasados": state.get('pruebas_superadas'),
@@ -572,7 +572,7 @@ def developer_unit_tests_node(state: AgentState) -> AgentState:
                             # Sanitizar nombre_base para evitar caracteres inválidos en el branch
                             nombre_base_sanitizado = github_service.sanitize_branch_name(nombre_base)
                             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            branch_name = f"AI_Generated_Tester_{nombre_base_sanitizado}_{timestamp}"
+                            branch_name = f"AI_Generated_Tests_{nombre_base_sanitizado}_{timestamp}"
                             logger.info(f"📌 Creando nuevo branch: {branch_name}")
                         else:
                             logger.info(f"📌 Usando branch existente: {branch_name}")
@@ -601,7 +601,7 @@ def developer_unit_tests_node(state: AgentState) -> AgentState:
                             
                             # 5. Crear Pull Request (solo si no existe ya)
                             if not state.get('github_pr_number'):
-                                pr_title = f"AI Generated_Tester_{nombre_base.replace('_', ' ').title()}"
+                                pr_title = f"AI Generated Tests: {nombre_base.replace('_', ' ').title()}"
                                 pr_body = f"""## 🤖 Pull Request Generada Automáticamente
 
         ### 📋 Descripción

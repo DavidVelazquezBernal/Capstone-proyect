@@ -35,9 +35,9 @@ He analizado el flujo completo del sistema multiagente de desarrollo ágil. El p
 │         │                                └──────────────┘  │
 │         │                                        │         │
 │         │                                        ▼         │
-│         │                                ┌──────────────┐  │
-│         │                                │ TesterMerge  │  │
-│         │                                └──────────────┘  │
+│         │                                ┌──────────────────────┐  │
+│         │                                │ Developer-CompletePR │  │
+│         │                                └──────────────────────┘  │
 │         │                                        │         │
 │         │                                        ▼         │
 │         │                                ┌──────────────┐  │

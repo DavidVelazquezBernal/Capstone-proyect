@@ -262,7 +262,7 @@ START → ProductOwner → Desarrollador → SonarQube
            |                           ¿Aprobado?
            |                ←──────── NO (max 2 intentos)
            |                                ↓
-           |                          TesterMerge
+           |                    Developer-CompletePR
            |                                ↓
            |                      Squash & Merge PR
            |                      Cleanup branches
@@ -282,7 +282,7 @@ START → ProductOwner → Desarrollador → SonarQube
 3. **SonarQube**: Verifica calidad del código (bugs, vulnerabilidades, code smells)
 4. **Testing**: Genera y ejecuta tests unitarios con vitest/pytest + 🐙 pushea tests a GitHub (opcional)
 5. **RevisorCodigo**: Revisa código con LLM y aprueba/rechaza PR + 🐙 aprueba PR en GitHub (opcional)
-6. **TesterMerge**: Hace squash merge de PR + 🐙 limpia branches remotos y locales (opcional)
+6. **Developer-CompletePR**: Hace squash merge de PR + 🐙 limpia branches remotos y locales (opcional)
 7. **Stakeholder**: Valida cumplimiento de visión de negocio + 📎 adjunta código final a Azure DevOps (opcional)
 
 ### Bucles de Corrección
