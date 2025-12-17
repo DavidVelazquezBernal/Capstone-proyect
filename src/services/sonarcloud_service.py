@@ -475,17 +475,19 @@ class SonarCloudService:
         
         return "\n".join(lines)
     
-    def wait_for_analysis(self, branch_name: str, max_attempts: int = 10, wait_seconds: int = 30) -> Dict[str, Any]:
+    def wait_for_analysis(self, branch_name: str, max_attempts: int = 10, wait_seconds: int = 30, timeout: int = None) -> Dict[str, Any]:
         """
         Espera a que el análisis de SonarCloud termine para un branch.
+        Usa polling exponencial adaptativo para optimizar tiempos de espera.
         
         SonarCloud analiza automáticamente cuando se hace push a GitHub.
         Esta función espera y verifica que el análisis esté disponible.
         
         Args:
             branch_name: Nombre del branch
-            max_attempts: Número máximo de intentos
-            wait_seconds: Segundos entre intentos
+            max_attempts: Número máximo de intentos (usado si timeout es None)
+            wait_seconds: Segundos base entre intentos (usado si timeout es None)
+            timeout: Timeout total en segundos (si se especifica, usa polling adaptativo)
             
         Returns:
             Dict con resultado del análisis
@@ -495,6 +497,11 @@ class SonarCloudService:
         if not self.enabled:
             return {"success": False, "error": "SonarCloud no está habilitado"}
         
+        # Si se especifica timeout, usar polling exponencial adaptativo
+        if timeout:
+            return self._wait_with_adaptive_polling(branch_name, timeout)
+        
+        # Fallback a comportamiento original (para compatibilidad)
         logger.info(f"⏳ Esperando análisis de SonarCloud para branch '{branch_name}'...")
         
         for attempt in range(1, max_attempts + 1):
@@ -517,6 +524,76 @@ class SonarCloudService:
         return {
             "success": False,
             "error": f"Timeout después de {max_attempts * wait_seconds}s esperando análisis"
+        }
+    
+    def _wait_with_adaptive_polling(self, branch_name: str, timeout: int) -> Dict[str, Any]:
+        """
+        Polling con backoff exponencial adaptativo.
+        Empieza con intervalos cortos (5s) y los aumenta gradualmente hasta 30s.
+        
+        Args:
+            branch_name: Nombre del branch
+            timeout: Timeout total en segundos
+            
+        Returns:
+            Dict con resultado del análisis
+        """
+        import time
+        
+        start_time = time.time()
+        # Intervalos adaptativos: empieza rápido, luego más lento
+        intervals = [5, 10, 15, 20, 30, 30, 30, 30, 30, 30]  # Segundos
+        attempt = 0
+        
+        logger.info(f"⏳ Esperando análisis con polling adaptativo (timeout: {timeout}s)...")
+        logger.info(f"   Estrategia: intervalos de {intervals[0]}s → {intervals[-1]}s")
+        
+        while time.time() - start_time < timeout:
+            attempt += 1
+            elapsed = time.time() - start_time
+            remaining = timeout - elapsed
+            
+            # Determinar intervalo de espera para este intento
+            wait_time = intervals[min(attempt - 1, len(intervals) - 1)]
+            
+            logger.info(f"   🔍 Intento {attempt} (transcurrido: {elapsed:.1f}s, restante: {remaining:.1f}s)")
+            
+            # Intentar obtener análisis
+            result = self.analyze_branch(branch_name)
+            
+            if result.get("success"):
+                issues = result.get("issues", {})
+                total_issues = issues.get("total", 0)
+                qg_available = result.get("quality_gate", {}).get("success")
+                
+                # Análisis disponible si hay issues o quality gate
+                if total_issues > 0 or qg_available:
+                    logger.info(f"✅ Análisis disponible en {elapsed:.1f}s ({attempt} intentos)")
+                    logger.info(f"   📊 Issues encontrados: {total_issues}")
+                    if qg_available:
+                        qg_status = result.get("quality_gate", {}).get("status", "N/A")
+                        logger.info(f"   🚦 Quality Gate: {qg_status}")
+                    return result
+                else:
+                    logger.debug(f"   ⏸️ Análisis aún no disponible (sin issues ni QG)")
+            else:
+                logger.debug(f"   ⏸️ Branch aún no analizado")
+            
+            # Verificar si hay tiempo para otro intento
+            if time.time() - start_time + wait_time > timeout:
+                logger.info(f"   ⏱️ No hay tiempo para otro intento ({wait_time}s)")
+                break
+            
+            logger.info(f"   ⏳ Esperando {wait_time}s antes del próximo intento...")
+            time.sleep(wait_time)
+        
+        elapsed = time.time() - start_time
+        logger.warning(f"⚠️ Timeout después de {elapsed:.1f}s ({attempt} intentos)")
+        return {
+            "success": False,
+            "error": f"Timeout después de {elapsed:.1f}s esperando análisis",
+            "elapsed_seconds": elapsed,
+            "attempts": attempt
         }
 
 

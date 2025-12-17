@@ -112,12 +112,11 @@ def sonarqube_node(state: AgentState) -> AgentState:
             # Si aún tenemos branch después de verificación, esperar análisis
             if branch_name:
                 logger.info("⏳ Esperando a que SonarCloud complete el análisis del branch...")
-                logger.info(f"   Máximo {settings.SONARCLOUD_ANALYSIS_MAX_ATTEMPTS} intentos x {settings.SONARCLOUD_ANALYSIS_WAIT_SECONDS}s")
+                logger.info(f"   Timeout total: {settings.SONARCLOUD_ANALYSIS_TIMEOUT}s con polling adaptativo")
                 
                 result = sonarcloud_service.wait_for_analysis(
                     branch_name=branch_name,
-                    max_attempts=settings.SONARCLOUD_ANALYSIS_MAX_ATTEMPTS,
-                    wait_seconds=settings.SONARCLOUD_ANALYSIS_WAIT_SECONDS
+                    timeout=settings.SONARCLOUD_ANALYSIS_TIMEOUT
                 )
                 
                 if result.get("success"):
