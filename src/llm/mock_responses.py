@@ -647,53 +647,18 @@ def get_mock_response(role_prompt: str, context: str = "") -> str:
     
         
     # STAKEHOLDER - Validación
-    elif "stakeholder" in prompt_lower and ("validar" in prompt_lower or "validación" in prompt_lower or "requisitos_formales" in prompt_lower):
-        # Detectar si es la primera validación (attempt_count = 1)
-        # Buscar "intento" o "attempt_count" en el prompt (con ChatPromptTemplate todo está en role_prompt)
-        import re
-        
-        # Buscar indicadores de primera iteración en role_prompt (no en context que está deprecated)
-        es_primera_iteracion = False
-        
-        # Buscar "Intento 1" o similar en el texto completo (role_prompt + context para compatibilidad)
-        if re.search(r'intento[:\s]+1\b|attempt[:\s]+1\b', texto_completo):
-            es_primera_iteracion = True
-        
-        # También buscar en el código si tiene el comentario que indica primera versión
-        if "intento 1" in texto_completo or "iteración 1" in texto_completo:
-            es_primera_iteracion = True
-        
-        # IMPORTANTE: En modo MOCK, siempre validar (no rechazar) para permitir que el flujo complete
-        # Si queremos probar el bucle de reintentos, cambiar esta línea a True
-        es_primera_iteracion = False  # Forzar validación en modo MOCK
-        
-        if es_primera_iteracion:
-            # Primera vez: Rechazar para forzar reingeniería de requisitos
-            return (
-                "VALIDACIÓN FINAL: RECHAZADO\n\n"
-                "Motivo: El código técnicamente funciona, pero no cumple completamente con la visión de negocio. "
-                "La función implementada es demasiado básica y limitada. Se requiere una solución más versátil que:\n\n"
-                "1. Soporte para más de dos números (suma de cantidad variable de argumentos)\n"
-                "2. Manejo de arrays/listas de números\n"
-                "3. Documentación más detallada de casos de uso\n"
-                "4. Validaciones robustas para cada elemento\n\n"
-                "La implementación actual solo acepta exactamente 2 parámetros, lo cual no es suficientemente flexible "
-                "para las necesidades del negocio. Se necesita reingeniería de requisitos para incluir soporte de "
-                "parámetros variables usando spread operators (*args en Python, ...args en TypeScript)."
-            )
-        else:
-            # Segunda vez o posteriores: Validar
-            return (
-                "VALIDACIÓN FINAL: VALIDADO\n\n"
-                "El código cumple con los requisitos funcionales especificados y la visión de negocio. "
-                "La implementación ahora soporta:\n"
-                "- Número variable de argumentos\n"
-                "- Validaciones exhaustivas\n"
-                "- Documentación completa\n"
-                "- Manejo robusto de casos edge\n\n"
-                "Aprobado para producción."
-            )
-    
+    elif "stakeholder" in prompt_lower and ("validar" in prompt_lower or "validación" in prompt_lower or "requisitos_formales" in prompt_lower):     
+        return (
+            "VALIDACIÓN FINAL: VALIDADO\n\n"
+            "El código cumple con los requisitos funcionales especificados y la visión de negocio. "
+            "La implementación ahora soporta:\n"
+            "- Número variable de argumentos\n"
+            "- Validaciones exhaustivas\n"
+            "- Documentación completa\n"
+            "- Manejo robusto de casos edge\n\n"
+            "Aprobado para producción."
+        )
+
     # RESPUESTA POR DEFECTO
     else:
         return "Respuesta mockeada por defecto. El sistema está en modo de pruebas (LLM_MOCK_MODE=true)."
