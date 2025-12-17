@@ -12,6 +12,7 @@ from google import genai
 from google.genai.errors import APIError
 from config.settings import settings
 from utils.logger import setup_logger
+from utils.logging_helpers import log_section
 from tools.code_executor import CodeExecutionToolWithInterpreterPY, CodeExecutionToolWithInterpreterTS
 from llm.mock_responses import get_mock_response
 
@@ -30,26 +31,15 @@ if settings.USE_LANGCHAIN_WRAPPER:
         _langchain_available = False
 
 # Inicialización del cliente Gemini
-# try:
-#     # Intentar usar userdata de Colab
-#     from google.colab import userdata
-#     os.environ["GEMINI_API_KEY"] = userdata.get('gen-lang-client-0440601098')
-#     client = genai.Client()
-#     print("✅ Cliente Gemini inicializado correctamente (Colab).")
-# except ImportError:
-    # Entorno local - usar .env
 if settings.LLM_MOCK_MODE:
     client = None
     logger.info("🧪 LLM_MOCK_MODE=true: saltando inicialización del cliente Gemini")
 elif settings.GEMINI_API_KEY:
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    logger.info("✅ Cliente Gemini inicializado correctamente (Local).")
+    logger.info("✅ Cliente Gemini inicializado correctamente.")
 else:
     logger.warning("⚠️ WARNING: GEMINI_API_KEY no configurada. El cliente puede fallar.")
     client = None
-# except Exception as e:
-#     print(f"❌ ERROR: Fallo al inicializar el cliente Gemini. {e}")
-#     client = None
 
 
 def _log_warning_if_truncated(response, max_output_tokens: int) -> None:
@@ -157,9 +147,8 @@ def call_gemini(
         )
         _log_warning_if_truncated(response, config.get("max_output_tokens", settings.MAX_OUTPUT_TOKENS))
         if not response.text or response.text == "None" or response.text.lower() == "none":
-            logger.error(f"\n{'='*60}")
-            logger.error("❌ ERROR: EL LLM NO DEVOLVIÓ RESPUESTA VÁLIDA")
-            logger.error(f"{'='*60}")
+            logger.error("")
+            log_section(logger, "❌ ERROR: EL LLM NO DEVOLVIÓ RESPUESTA VÁLIDA", level="error")
             logger.error(f"📋 Información de diagnóstico:")
             logger.error(f"   • Modelo usado: {settings.MODEL_NAME}")
             logger.error(f"   • Respuesta vacía: {response.text is None or response.text == ''}")
@@ -177,9 +166,8 @@ def call_gemini(
                         
                         # Diagnóstico específico para MALFORMED_FUNCTION_CALL
                         if "MALFORMED_FUNCTION_CALL" in finish_reason:
-                            logger.error(f"\n{'='*60}")
-                            logger.error("🔧 DIAGNÓSTICO: MALFORMED_FUNCTION_CALL")
-                            logger.error(f"{'='*60}")
+                            logger.error("")
+                            log_section(logger, "🔧 DIAGNÓSTICO: MALFORMED_FUNCTION_CALL", level="error")
                             logger.error(f"El modelo intentó llamar a una herramienta pero la llamada está mal formada.")
                             logger.error(f"\n📊 Detalles del candidato:")
                             
@@ -213,7 +201,6 @@ def call_gemini(
                             logger.error(f"   2. Los argumentos no coinciden con el schema de la herramienta")
                             logger.error(f"   3. Falta algún argumento requerido por la herramienta")
                             logger.error(f"   4. El nombre de la función es incorrecto")
-                            logger.error(f"{'='*60}\n")
                     
                     if hasattr(candidate, 'safety_ratings'):
                         logger.error(f"     - Safety ratings: {candidate.safety_ratings}")
@@ -225,8 +212,7 @@ def call_gemini(
             # Verificar bloqueos de seguridad
             if hasattr(response, 'prompt_feedback'):
                 logger.error(f"   • Prompt feedback: {response.prompt_feedback}")
-            
-            logger.error(f"{'='*60}\n")
+            logger.error("")
             raise APIError("El LLM devolvió None o respuesta vacía.")
         return response.text
 
@@ -235,13 +221,12 @@ def call_gemini(
         error_message = str(e)
         
         if "503" in error_message or "UNAVAILABLE" in error_message or "overloaded" in error_message.lower():
-            logger.error(f"\n{'='*60}")
-            logger.error("⚠️ ERROR 503: SERVICIO SOBRECARGADO")
-            logger.error(f"{'='*60}")
+            logger.error("")
+            log_section(logger, "⚠️ ERROR 503: SERVICIO SOBRECARGADO", level="error")
             logger.error(f"❌ El modelo de Gemini está sobrecargado")
             logger.error(f"📊 Detalles: {e}")
             logger.error(f"\n🔄 REINTENTANDO con espera exponencial...")
-            logger.error(f"{'='*60}\n")
+            logger.error("")
             
             # Reintentar con backoff exponencial
             max_retries = settings.MAX_API_RETRIES
@@ -261,17 +246,19 @@ def call_gemini(
                     return response.text
                 except APIError as retry_error:
                     if attempt == max_retries:
-                        logger.error(f"\n{'='*60}")
-                        logger.error("❌ TODOS LOS REINTENTOS FALLARON")
-                        logger.error(f"{'='*60}")
+                        logger.error("")
+                        log_section(logger, "❌ TODOS LOS REINTENTOS FALLARON", level="error")
                         logger.error(f"El servicio de Gemini sigue no disponible después de {max_retries} intentos")
                         logger.error(f"Última error: {retry_error}")
                         logger.error(f"\n💡 RECOMENDACIONES:")
                         logger.error(f"   1. Espera 5-10 minutos e intenta de nuevo")
                         logger.error(f"   2. Verifica el estado de Google AI: https://status.cloud.google.com/")
                         logger.error(f"   3. Considera usar otro modelo si está disponible")
-                        logger.error(f"{'='*60}\n")
-                        raise SystemExit(f"PROCESO CANCELADO: Servicio de Gemini no disponible después de {max_retries} reintentos.")
+                        logger.error(f"   4. Activa LLM_MOCK_MODE=true en .env para testing sin API")
+                        logger.error("")
+                        
+                        # Retornar error estructurado en lugar de SystemExit
+                        return f"ERROR_503_MAX_RETRIES: Servicio no disponible después de {max_retries} intentos. {retry_error}"
                     else:
                         logger.warning(f"   ❌ Intento {attempt} falló: {retry_error}")
                         continue

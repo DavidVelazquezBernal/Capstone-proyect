@@ -15,7 +15,7 @@ from utils.logger import setup_logger, log_agent_execution
 logger = setup_logger(__name__, level=settings.get_log_level())
 
 
-def delete_output_folder():
+def delete_output_folder() -> None:
     """
     Limpia el contenido del directorio output/ al inicio de cada ejecución.
     Elimina todos los archivos y subdirectorios pero mantiene la carpeta.
@@ -47,7 +47,7 @@ def run_development_workflow(
     prompt_inicial: str, 
     max_attempts: int = None,
     retry_config: RetryConfig = None
-):
+) -> dict:
     """
     Ejecuta el flujo completo de desarrollo multiagente.
     

@@ -58,6 +58,25 @@ def tester_merge_node(state: AgentState) -> AgentState:
             "codigo_aprobado": state.get('codigo_revisado')
         })
 
+        # En modo MOCK, simular merge exitoso solo si se cumplen precondiciones
+        if settings.LLM_MOCK_MODE:
+            logger.info("🧪 MOCK MODE: Validando precondiciones para merge")
+            
+            # Verificar que se cumplan las precondiciones
+            tests_pasados = state.get('pruebas_superadas', False)
+            codigo_aprobado = state.get('codigo_revisado', False)
+            
+            if tests_pasados and codigo_aprobado:
+                state['pr_mergeada'] = True
+                state['validado'] = True
+                logger.info("✅ MOCK: Merge y validación exitosos (precondiciones cumplidas)")
+            else:
+                state['pr_mergeada'] = False
+                state['validado'] = False
+                logger.warning(f"⚠️ MOCK: Merge omitido - tests_pasados={tests_pasados}, codigo_aprobado={codigo_aprobado}")
+            
+            return state
+
         pr_number = state.get('github_pr_number')
         if not settings.GITHUB_ENABLED or not pr_number:
             logger.info("ℹ️ Merge omitido: GitHub no habilitado o no hay PR")
@@ -750,7 +769,7 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
             text=True,
             encoding='utf-8',
             errors='replace',
-            timeout=60,
+            timeout=settings.TEST_EXECUTION_TIMEOUT,
             shell=True,
             env=env
         )
@@ -774,8 +793,8 @@ def _ejecutar_tests_typescript(test_path: str, code_path: str, state: AgentState
         os.chdir(original_dir)
         return {
             'success': False,
-            'output': "Timeout: Los tests tardaron más de 60 segundos",
-            'traceback': "TimeoutError: Test execution exceeded 60 seconds",
+            'output': f"Timeout: Los tests tardaron más de {settings.TEST_EXECUTION_TIMEOUT} segundos",
+            'traceback': f"TimeoutError: Test execution exceeded {settings.TEST_EXECUTION_TIMEOUT} seconds",
             'tests_run': {'total': 0, 'passed': 0, 'failed': 0}
         }
     except FileNotFoundError as e:
@@ -817,7 +836,7 @@ def _ejecutar_tests_python(test_path: str, state: AgentState) -> Dict[str, Any]:
             text=True,
             encoding='utf-8',
             errors='replace',
-            timeout=60
+            timeout=settings.TEST_EXECUTION_TIMEOUT
         )
         
         success = result.returncode == 0

@@ -53,11 +53,12 @@ class Settings:
     SONARCLOUD_PROJECT_KEY: str = os.getenv("SONARCLOUD_PROJECT_KEY", "")  # Project key en SonarCloud
     
     # Configuración del modelo LLM
-    MODEL_NAME: str = "gemini-2.5-flash"
-    TEMPERATURE: float = 0.1
+    MODEL_NAME: str = os.getenv("MODEL_NAME", "gemini-2.5-flash")
+    TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.1"))
     MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "8192"))
 
     MAX_TEST_FIX_ATTEMPTS: int = int(os.getenv("MAX_TEST_FIX_ATTEMPTS", "2"))
+    TEST_EXECUTION_TIMEOUT: int = int(os.getenv("TEST_EXECUTION_TIMEOUT", "60"))  # Timeout en segundos para ejecución de tests
     
     # Modo Testing/Mock (evita llamadas reales al LLM)
     LLM_MOCK_MODE: bool = os.getenv("LLM_MOCK_MODE", "false").lower() == "true"
@@ -89,15 +90,46 @@ class Settings:
     
     @classmethod
     def validate(cls) -> bool:
-        """Valida que las configuraciones críticas estén presentes"""
-        # En modo mock, no se requiere API key
+        """Valida configuraciones críticas según servicios habilitados"""
         if cls.LLM_MOCK_MODE:
             print("🧪 INFO: LLM_MOCK_MODE activado - usando respuestas mockeadas")
             return True
-            
+        
+        errors = []
+        
+        # Validar LLM
         if not cls.GEMINI_API_KEY:
-            print("⚠️ WARNING: GEMINI_API_KEY no está configurada")
+            errors.append("GEMINI_API_KEY no configurada")
+        
+        # Validar Azure DevOps si está habilitado
+        if cls.AZURE_DEVOPS_ENABLED:
+            if not cls.AZURE_DEVOPS_ORG:
+                errors.append("AZURE_DEVOPS_ORG requerido cuando AZURE_DEVOPS_ENABLED=true")
+            if not cls.AZURE_DEVOPS_PROJECT:
+                errors.append("AZURE_DEVOPS_PROJECT requerido cuando AZURE_DEVOPS_ENABLED=true")
+            if not cls.AZURE_DEVOPS_PAT:
+                errors.append("AZURE_DEVOPS_PAT requerido cuando AZURE_DEVOPS_ENABLED=true")
+        
+        # Validar GitHub si está habilitado
+        if cls.GITHUB_ENABLED:
+            if not cls.GITHUB_TOKEN:
+                errors.append("GITHUB_TOKEN requerido cuando GITHUB_ENABLED=true")
+            if not cls.GITHUB_OWNER or not cls.GITHUB_REPO:
+                errors.append("GITHUB_OWNER y GITHUB_REPO requeridos cuando GITHUB_ENABLED=true")
+        
+        # Validar SonarCloud si está habilitado
+        if cls.SONARCLOUD_ENABLED:
+            if not cls.SONARCLOUD_TOKEN:
+                errors.append("SONARCLOUD_TOKEN requerido cuando SONARCLOUD_ENABLED=true")
+            if not cls.SONARCLOUD_ORGANIZATION or not cls.SONARCLOUD_PROJECT_KEY:
+                errors.append("SONARCLOUD_ORGANIZATION y SONARCLOUD_PROJECT_KEY requeridos cuando SONARCLOUD_ENABLED=true")
+        
+        if errors:
+            print("⚠️ ERRORES DE CONFIGURACIÓN:")
+            for error in errors:
+                print(f"   - {error}")
             return False
+        
         return True
 
 
