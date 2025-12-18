@@ -23,10 +23,15 @@ class Settings:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     E2B_API_KEY: str = os.getenv("E2B_API_KEY", "")
     
+    # Configuración de SonarScanner CLI (opcional - para análisis local)
+    SONARSCANNER_ENABLED: bool = os.getenv("SONARSCANNER_ENABLED", "false").lower() == "true"
+    SONARSCANNER_PATH: str = os.getenv("SONARSCANNER_PATH", "sonar-scanner.bat")  # Ruta al ejecutable o comando si está en PATH
+    
     # Configuración de SonarQube (opcional - para análisis real)
-    SONARQUBE_URL: str = os.getenv("SONARQUBE_URL", "")
+    SONARQUBE_URL: str = os.getenv("SONARQUBE_URL", "http://localhost:9000")
     SONARQUBE_TOKEN: str = os.getenv("SONARQUBE_TOKEN", "")
     SONARQUBE_PROJECT_KEY: str = os.getenv("SONARQUBE_PROJECT_KEY", "")
+    SONARQUBE_PROJECT_NAME: str = os.getenv("SONARQUBE_PROJECT_NAME", "")
     
     # Configuración de Azure DevOps (opcional - para integración con ADO)
     AZURE_DEVOPS_ENABLED: bool = os.getenv("AZURE_DEVOPS_ENABLED", "false").lower() == "true"
@@ -76,10 +81,10 @@ class Settings:
     RETRY_BASE_DELAY: int = 2  # Segundos base para backoff exponencial (2, 4, 8...)
     
     # Configuración del flujo de trabajo (DEPRECATED - usar RetryConfig)
-    MAX_ATTEMPTS: int = 1  # Máximo de ciclos completos antes de fallo
-    MAX_DEBUG_ATTEMPTS: int = 3 # Máximo de intentos en el bucle de depuración (Probador-Codificador)
-    MAX_SONARQUBE_ATTEMPTS: int = 3  # Máximo de intentos en el bucle de calidad (SonarQube-Desarrollador)
-    MAX_REVISOR_ATTEMPTS: int = 2  # Máximo de intentos de revisión de código antes de fallo
+    MAX_ATTEMPTS: int = int(os.getenv("MAX_ATTEMPTS", "3"))  # Máximo de ciclos completos antes de fallo
+    MAX_DEBUG_ATTEMPTS: int = int(os.getenv("MAX_DEBUG_ATTEMPTS", "3"))  # Máximo de intentos en el bucle de depuración (Probador-Codificador)
+    MAX_SONARQUBE_ATTEMPTS: int = int(os.getenv("MAX_SONARQUBE_ATTEMPTS", "3"))  # Máximo de intentos en el bucle de calidad (SonarQube-Desarrollador)
+    MAX_REVISOR_ATTEMPTS: int = int(os.getenv("MAX_REVISOR_ATTEMPTS", "3"))  # Máximo de intentos de revisión de código antes de fallo
     
     # Directorios
     OUTPUT_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "output")

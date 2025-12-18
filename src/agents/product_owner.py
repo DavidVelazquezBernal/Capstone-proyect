@@ -106,6 +106,11 @@ def product_owner_node(state: AgentState) -> AgentState:
             state['debug_attempt_count'] = 0
             state['sonarqube_attempt_count'] = 0
             
+            # Limpiar variables de GitHub para crear nueva PR en cada ciclo
+            state['github_pr_number'] = None
+            state['github_pr_url'] = None
+            state['github_branch_name'] = None
+            
             logger.info(f"✅ Requisitos procesados exitosamente")
             logger.info(f"Intento: {state['attempt_count']}/{state['max_attempts']}")
             
@@ -140,6 +145,11 @@ def product_owner_node(state: AgentState) -> AgentState:
                 state['attempt_count'] += 1
                 state['debug_attempt_count'] = 0
                 state['sonarqube_attempt_count'] = 0
+                
+                # Limpiar variables de GitHub para crear nueva PR en cada ciclo
+                state['github_pr_number'] = None
+                state['github_pr_url'] = None
+                state['github_branch_name'] = None
             except Exception as e2:
                 logger.error(f"❌ Fallback también falló: {e2}")
                 state['requisitos_formales'] = (

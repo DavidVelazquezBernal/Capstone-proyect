@@ -2,16 +2,21 @@
 Tool para integración con SonarQube via MCP (Model Context Protocol).
 Utiliza las herramientas de SonarQube disponibles en VS Code.
 También soporta SonarCloud API cuando está habilitado.
+Ahora incluye soporte para SonarScanner CLI para análisis local real.
 
 Herramientas MCP disponibles:
 - sonarqube_analyze_file: Analiza un archivo y devuelve problemas
 - sonarqube_list_potential_security_issues: Lista problemas de seguridad
+- sonar-scanner CLI: Ejecuta análisis local con SonarScanner
 """
 
 import os
 import re
 import json
+import subprocess
+import tempfile
 from typing import Dict, List, Any, Optional
+from pathlib import Path
 from config.settings import settings
 from utils.logger import setup_logger
 
@@ -85,6 +90,18 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str, branch_name:
         except Exception as e:
             logger.warning(f"⚠️ Error consultando SonarCloud, usando análisis local: {e}")
     
+    # Intentar usar SonarScanner CLI si está habilitado
+    if settings.SONARSCANNER_ENABLED:
+        logger.info("🔍 Usando SonarScanner CLI para análisis local...")
+        try:
+            result = _ejecutar_sonarscanner_cli(codigo, nombre_archivo)
+            if result.get("success"):
+                return result
+            else:
+                logger.warning(f"⚠️ SonarScanner CLI falló: {result.get('error')}, usando análisis estático")
+        except Exception as e:
+            logger.warning(f"⚠️ Error ejecutando SonarScanner CLI: {e}, usando análisis estático")
+    
     # Fallback: Análisis estático local
     temp_file = None
     try:
@@ -104,7 +121,7 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str, branch_name:
             "issues": issues,
             "summary": summary,
             "file_path": temp_file,
-            "source": "local"
+            "source": "local-static"
         }
         
         return resultado
@@ -115,7 +132,7 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str, branch_name:
             "issues": [],
             "summary": {},
             "error": str(e),
-            "source": "local"
+            "source": "local-static"
         }
     finally:
         # Limpiar archivo temporal después del análisis
@@ -125,6 +142,314 @@ def analizar_codigo_con_sonarqube(codigo: str, nombre_archivo: str, branch_name:
                 logger.debug(f"🗑️ Archivo temporal eliminado: {temp_file}")
             except Exception as e:
                 logger.warning(f"⚠️ No se pudo eliminar archivo temporal {temp_file}: {e}")
+
+
+def _ejecutar_sonarscanner_cli(codigo: str, nombre_archivo: str) -> Dict[str, Any]:
+    """
+    Ejecuta SonarScanner CLI para análisis real del código.
+    
+    Args:
+        codigo: Código fuente a analizar (NO USADO - se lee del archivo existente)
+        nombre_archivo: Nombre del archivo a analizar (debe existir en OUTPUT_DIR)
+        
+    Returns:
+        Dict con:
+            - success: bool
+            - issues: List[Dict] con los problemas encontrados
+            - summary: Dict con resumen de issues por severidad
+            - error: str (solo si success=False)
+            - source: str ('sonarscanner-cli')
+    """
+    temp_properties_dir = None
+    try:
+        # Verificar que el archivo existe en OUTPUT_DIR
+        file_path = os.path.join(settings.OUTPUT_DIR, nombre_archivo)
+        if not os.path.exists(file_path):
+            error_msg = f"Archivo no encontrado: {file_path}"
+            logger.error(f"❌ {error_msg}")
+            return {
+                "success": False,
+                "issues": [],
+                "summary": {},
+                "error": error_msg,
+                "source": "sonarscanner-cli"
+            }
+        
+        logger.debug(f"📄 Archivo a analizar: {file_path}")
+        
+        # Crear directorio temporal SOLO para sonar-project.properties
+        temp_properties_dir = tempfile.mkdtemp(prefix="sonar_props_")
+        logger.debug(f"📁 Directorio temporal para properties: {temp_properties_dir}")
+        
+        # Verificar si hay servidor SonarQube configurado
+        # SONARQUBE_TOKEN vacío indica que no está configurado (URL tiene default)
+        if not settings.SONARQUBE_TOKEN:
+            logger.warning("⚠️ SonarScanner CLI requiere un servidor SonarQube para funcionar")
+            logger.info("   Configure SONARQUBE_URL y SONARQUBE_TOKEN en .env")
+            logger.info("   Alternativa: Use SonarCloud (SONARCLOUD_ENABLED=true)")
+            logger.info("   Usando análisis estático como fallback...")
+            return {
+                "success": False,
+                "issues": [],
+                "summary": {},
+                "error": "SonarScanner CLI requiere servidor SonarQube (SONARQUBE_TOKEN no configurado)",
+                "source": "sonarscanner-cli"
+            }
+        
+        # Logging detallado de configuración para diagnóstico
+        logger.info("=" * 60)
+        logger.info("🔍 DIAGNÓSTICO DE CONFIGURACIÓN SONARSCANNER CLI")
+        logger.info("=" * 60)
+        logger.info(f"📍 SONARQUBE_URL: {settings.SONARQUBE_URL}")
+        logger.info(f"🔑 SONARQUBE_TOKEN: {'✅ Configurado' if settings.SONARQUBE_TOKEN else '❌ NO configurado'}")
+        logger.info(f"🔑 Token (primeros 10 chars): {settings.SONARQUBE_TOKEN[:10]}..." if settings.SONARQUBE_TOKEN else "")
+        logger.info(f"📦 SONARQUBE_PROJECT_KEY: {settings.SONARQUBE_PROJECT_KEY if settings.SONARQUBE_PROJECT_KEY else '❌ NO configurado (usando temporal)'}")
+        logger.info(f"📝 SONARQUBE_PROJECT_NAME: {settings.SONARQUBE_PROJECT_NAME if settings.SONARQUBE_PROJECT_NAME else '❌ NO configurado (se derivará del key)'}")
+        logger.info("=" * 60)
+        
+        # Crear archivo sonar-project.properties temporal
+        # Usar SONARQUBE_PROJECT_KEY si está configurado, sino usar temporal
+        if settings.SONARQUBE_PROJECT_KEY:
+            project_key = settings.SONARQUBE_PROJECT_KEY
+            # Usar SONARQUBE_PROJECT_NAME si está configurado, sino derivar del key
+            project_name = settings.SONARQUBE_PROJECT_NAME if settings.SONARQUBE_PROJECT_NAME else settings.SONARQUBE_PROJECT_KEY.replace('-', ' ').title()
+        else:
+            project_key = f"temp-analysis-{os.getpid()}"
+            project_name = "Temp Analysis"
+        
+        # Configurar sonar.sources para apuntar al directorio output
+        # Convertir ruta a formato absoluto con forward slashes para compatibilidad
+        output_dir_normalized = os.path.abspath(settings.OUTPUT_DIR).replace('\\', '/')
+        
+        # y sonar.inclusions para analizar solo el archivo específico
+        properties_content = f"""# Configuración para SonarScanner CLI
+sonar.projectKey={project_key}
+sonar.projectName={project_name}
+sonar.projectVersion=1.0
+sonar.sources={output_dir_normalized}
+sonar.inclusions={nombre_archivo}
+sonar.sourceEncoding=UTF-8
+sonar.host.url={settings.SONARQUBE_URL}
+sonar.token={settings.SONARQUBE_TOKEN}
+"""
+        
+        properties_path = os.path.join(temp_properties_dir, "sonar-project.properties")
+        with open(properties_path, 'w', encoding='utf-8') as f:
+            f.write(properties_content)
+        logger.debug(f"⚙️ Configuración creada: {properties_path}")
+        
+        # Ejecutar SonarScanner CLI
+        scanner_cmd = settings.SONARSCANNER_PATH
+        cmd = [scanner_cmd]
+        
+        logger.info(f"🚀 Ejecutando: {scanner_cmd}")
+        logger.debug(f"   Directorio de trabajo: {temp_properties_dir}")
+        logger.debug(f"   Analizando: {file_path}")
+        
+        # Ejecutar comando desde el directorio temporal (donde está el properties)
+        process = subprocess.Popen(
+            cmd,
+            cwd=temp_properties_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            shell=True
+        )
+        
+        stdout, stderr = process.communicate(timeout=120)  # 2 minutos timeout
+        
+        logger.debug(f"📤 Salida del scanner:\n{stdout}")
+        if stderr:
+            logger.debug(f"⚠️ Errores del scanner:\n{stderr}")
+        
+        if process.returncode != 0:
+            error_msg = f"SonarScanner CLI falló con código {process.returncode}"
+            logger.warning(f"❌ {error_msg}")
+            
+            # Mostrar output completo para diagnóstico (incluso en nivel INFO)
+            if stdout:
+                logger.warning(f"📤 STDOUT del scanner:")
+                for line in stdout.split('\n')[-20:]:  # Últimas 20 líneas
+                    if line.strip():
+                        logger.warning(f"   {line}")
+            
+            if stderr:
+                logger.warning(f"⚠️ STDERR del scanner:")
+                for line in stderr.split('\n')[-20:]:  # Últimas 20 líneas
+                    if line.strip():
+                        logger.warning(f"   {line}")
+            
+            return {
+                "success": False,
+                "issues": [],
+                "summary": {},
+                "error": error_msg,
+                "stdout": stdout,
+                "stderr": stderr,
+                "source": "sonarscanner-cli"
+            }
+        
+        # Parsear resultados del análisis
+        # SonarScanner CLI envía los resultados al servidor SonarQube
+        # Si no hay servidor, necesitamos parsear el output o usar análisis estático
+        
+        if settings.SONARQUBE_URL and settings.SONARQUBE_TOKEN:
+            # Intentar obtener issues del servidor SonarQube
+            logger.info("📊 Obteniendo resultados del servidor SonarQube...")
+            issues = _obtener_issues_desde_sonarqube(project_key)
+            summary = _generar_resumen_issues(issues)
+            
+            logger.info(f"✅ SonarScanner CLI: {len(issues)} issues encontrados")
+            
+            return {
+                "success": True,
+                "issues": issues,
+                "summary": summary,
+                "source": "sonarscanner-cli"
+            }
+        else:
+            # Sin servidor SonarQube, parsear output del scanner
+            logger.warning("⚠️ No hay servidor SonarQube configurado")
+            logger.info("   Para análisis completo, configure SONARQUBE_URL y SONARQUBE_TOKEN")
+            
+            # Parsear issues del output (limitado)
+            issues = _parsear_output_sonarscanner(stdout)
+            summary = _generar_resumen_issues(issues)
+            
+            return {
+                "success": True,
+                "issues": issues,
+                "summary": summary,
+                "source": "sonarscanner-cli-local"
+            }
+        
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Timeout ejecutando SonarScanner CLI (>120s)")
+        return {
+            "success": False,
+            "issues": [],
+            "summary": {},
+            "error": "Timeout ejecutando SonarScanner CLI",
+            "source": "sonarscanner-cli"
+        }
+    except FileNotFoundError:
+        logger.error(f"❌ SonarScanner CLI no encontrado: {settings.SONARSCANNER_PATH}")
+        logger.info("   Asegúrese de que SonarScanner CLI está instalado y en el PATH")
+        logger.info("   O configure SONARSCANNER_PATH con la ruta completa al ejecutable")
+        return {
+            "success": False,
+            "issues": [],
+            "summary": {},
+            "error": f"SonarScanner CLI no encontrado: {settings.SONARSCANNER_PATH}",
+            "source": "sonarscanner-cli"
+        }
+    except Exception as e:
+        logger.error(f"❌ Error ejecutando SonarScanner CLI: {e}")
+        logger.debug(f"Stack trace:", exc_info=True)
+        return {
+            "success": False,
+            "issues": [],
+            "summary": {},
+            "error": str(e),
+            "source": "sonarscanner-cli"
+        }
+    finally:
+        # Limpiar directorio temporal de properties
+        if temp_properties_dir and os.path.exists(temp_properties_dir):
+            try:
+                import shutil
+                shutil.rmtree(temp_properties_dir)
+                logger.debug(f"🗑️ Directorio temporal de properties eliminado: {temp_properties_dir}")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo eliminar directorio temporal {temp_properties_dir}: {e}")
+
+
+def _obtener_issues_desde_sonarqube(project_key: str) -> List[Dict[str, Any]]:
+    """
+    Obtiene issues desde el servidor SonarQube usando la API.
+    
+    Args:
+        project_key: Clave del proyecto en SonarQube
+        
+    Returns:
+        Lista de issues encontrados
+    """
+    import requests
+    
+    try:
+        url = f"{settings.SONARQUBE_URL}/api/issues/search"
+        params = {
+            "componentKeys": project_key,
+            "resolved": "false"
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.SONARQUBE_TOKEN}"
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        issues_data = data.get("issues", [])
+        
+        # Convertir formato de SonarQube a formato interno
+        issues = []
+        for issue in issues_data:
+            issues.append({
+                "rule": issue.get("rule", "UNKNOWN"),
+                "severity": issue.get("severity", "INFO"),
+                "type": issue.get("type", "CODE_SMELL"),
+                "message": issue.get("message", ""),
+                "line": issue.get("line", 0),
+                "component": issue.get("component", "")
+            })
+        
+        return issues
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Error obteniendo issues de SonarQube: {e}")
+        return []
+
+
+def _parsear_output_sonarscanner(output: str) -> List[Dict[str, Any]]:
+    """
+    Parsea el output de SonarScanner CLI para extraer issues básicos.
+    Esto es limitado ya que el scanner normalmente envía resultados al servidor.
+    
+    Args:
+        output: Output del comando sonar-scanner
+        
+    Returns:
+        Lista de issues encontrados (puede estar vacía)
+    """
+    issues = []
+    
+    # Buscar líneas que indiquen issues en el output
+    # El formato varía, pero generalmente incluye palabras clave como:
+    # "WARN", "ERROR", "issue", "violation"
+    
+    lines = output.split('\n')
+    for i, line in enumerate(lines):
+        line_lower = line.lower()
+        
+        if any(keyword in line_lower for keyword in ['error', 'critical', 'blocker']):
+            issues.append({
+                "rule": "SCANNER_ERROR",
+                "severity": "CRITICAL",
+                "type": "BUG",
+                "message": line.strip(),
+                "line": i + 1
+            })
+        elif 'warn' in line_lower or 'warning' in line_lower:
+            issues.append({
+                "rule": "SCANNER_WARNING",
+                "severity": "MAJOR",
+                "type": "CODE_SMELL",
+                "message": line.strip(),
+                "line": i + 1
+            })
+    
+    return issues
 
 
 def _analizar_archivo_sonarqube(file_path: str) -> List[Dict[str, Any]]:

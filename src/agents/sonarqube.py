@@ -26,14 +26,15 @@ def sonarqube_node(state: AgentState) -> AgentState:
     Analiza la calidad del código generado y determina si cumple los estándares.
     """
     with agent_execution_context("🔍 SONARQUBE", logger):
-        if not settings.SONARCLOUD_ENABLED:
-            logger.warning("⚠️ SONARCLOUD_ENABLED=false: omitiendo análisis de calidad (SonarQube/SonarCloud) y continuando el flujo")
+        # Verificar si hay algún método de análisis habilitado
+        if not settings.SONARCLOUD_ENABLED and not settings.SONARSCANNER_ENABLED:
+            logger.warning("⚠️ SONARCLOUD_ENABLED=false y SONARSCANNER_ENABLED=false: omitiendo análisis de calidad y continuando el flujo")
             state['sonarqube_passed'] = True
             state['sonarqube_issues'] = ""
             state['sonarqube_attempt_count'] = 0
 
             log_agent_execution(logger, "SonarQube", "omitido", {
-                "motivo": "SONARCLOUD_ENABLED=false",
+                "motivo": "Análisis de calidad deshabilitado (SONARCLOUD_ENABLED=false, SONARSCANNER_ENABLED=false)",
                 "resultado": "aprobado"
             })
             return state
@@ -70,14 +71,27 @@ def sonarqube_node(state: AgentState) -> AgentState:
         lenguaje, extension, patron_limpieza = detectar_lenguaje_y_extension(
             state.get('requisitos_formales', '')
         )
-        codigo_limpio = limpiar_codigo_markdown(state['codigo_generado'])
         
-        # Generar nombre de archivo para análisis
-        # Usar el contador actual para esta validación (antes de incrementar)
-        intento_actual = state['sonarqube_attempt_count']
-        nombre_archivo = f"analisis_sonarqube_req{state['attempt_count']}_sq{intento_actual}{extension}"
+        # Construir nombre del archivo que YA FUE GUARDADO por developer_code
+        # IMPORTANTE: Debe coincidir con el patrón usado en developer_code.py
+        # Patrón: 2_developer_req{N}_debug{M}_sq{K}.{ext}
+        nombre_archivo = f"2_developer_req{state['attempt_count']}_debug{state['debug_attempt_count']}_sq{state['sonarqube_attempt_count']}{extension}"
         
-        logger.info(f"🔍 Analizando código con SonarQube - Validación #{intento_actual + 1} - Archivo: {nombre_archivo}")
+        # Verificar que el archivo existe
+        import os
+        ruta_archivo = os.path.join(settings.OUTPUT_DIR, nombre_archivo)
+        if not os.path.exists(ruta_archivo):
+            logger.error(f"❌ El archivo {nombre_archivo} no existe en {settings.OUTPUT_DIR}")
+            logger.error("   El agente developer-code debería haberlo guardado antes")
+            raise FileNotFoundError(f"Archivo no encontrado: {ruta_archivo}")
+        
+        logger.info(f"🔍 Analizando código con SonarQube - Validación #{state['sonarqube_attempt_count'] + 1}")
+        logger.info(f"📄 Archivo a analizar: {nombre_archivo}")
+        logger.info(f"📁 Ruta completa: {ruta_archivo}")
+        
+        # Leer el contenido del archivo para análisis
+        with open(ruta_archivo, 'r', encoding='utf-8') as f:
+            codigo_limpio = f.read()
         
         # Obtener branch del estado (creado por el Desarrollador)
         branch_name = state.get('github_branch_name')
@@ -137,7 +151,17 @@ def sonarqube_node(state: AgentState) -> AgentState:
             logger.info("🔄 Usando análisis local...")
             resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, None)
         else:
-            # SonarCloud deshabilitado, análisis local
+            # SonarCloud deshabilitado, usar análisis local (SonarScanner CLI o estático)
+            if settings.SONARSCANNER_ENABLED:
+                logger.info("=" * 60)
+                logger.info("🔧 ANÁLISIS CON SONARSCANNER CLI")
+                logger.info("=" * 60)
+                logger.info("SonarCloud deshabilitado, usando SonarScanner CLI local")
+                logger.info(f"Archivo a analizar: {nombre_archivo}")
+                logger.info("=" * 60)
+            else:
+                logger.info("🔍 Usando análisis estático local (SonarScanner CLI deshabilitado)")
+            
             resultado_analisis = analizar_codigo_con_sonarqube(codigo_limpio, nombre_archivo, None)
         
         # Formatear reporte
@@ -145,7 +169,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
         logger.debug(f"Reporte generado:\n{reporte_formateado[:500]}...")
         
         # Guardar reporte SIEMPRE (tanto si pasa como si falla)
-        nombre_reporte = f"3_sonarqube_report_req{state['attempt_count']}_sq{intento_actual}.txt"
+        nombre_reporte = f"3_sonarqube_report_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}.txt"
         guardar_fichero_texto(
             nombre_reporte,
             reporte_formateado,
@@ -222,7 +246,8 @@ def sonarqube_node(state: AgentState) -> AgentState:
             # Incrementar contador después de generar instrucciones
             state['sonarqube_attempt_count'] += 1
             
-            # Guardar instrucciones de corrección (con el contador ya incrementado para el siguiente intento)
+            # Guardar instrucciones de corrección (usar el contador ANTES de incrementar)
+            intento_actual = state['sonarqube_attempt_count'] - 1  # Ya fue incrementado en línea 243
             nombre_instrucciones = f"3_sonarqube_instrucciones_req{state['attempt_count']}_sq{intento_actual}.txt"
             guardar_fichero_texto(
                 nombre_instrucciones,
@@ -230,7 +255,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
                 directorio=settings.OUTPUT_DIR
             )
             
-            logger.info(f"➡️ Instrucciones de corrección generadas - Intento {intento_actual + 1}/{state['max_sonarqube_attempts']}")
+            logger.info(f"➡️ Instrucciones de corrección generadas - Intento {state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}")
             
             # === INICIO: Agregar comentario de rechazo en Azure DevOps ===
             if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):

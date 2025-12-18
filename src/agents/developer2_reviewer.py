@@ -9,8 +9,9 @@ from models.state import AgentState
 from config.settings import settings
 from config.prompt_templates import PromptTemplates
 from llm.gemini_client import call_gemini
+from tools.file_utils import guardar_fichero_texto
 from services.github_service import github_service
-from utils.logger import setup_logger, log_agent_execution, log_llm_call
+from utils.logger import setup_logger, log_agent_execution, log_llm_call, log_file_operation
 from utils.agent_decorators import agent_execution_context
 
 logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
@@ -142,6 +143,33 @@ IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de cal
         state['codigo_revisado'] = aprobado
         state['revision_comentario'] = comentario
         state['revision_puntuacion'] = puntuacion
+        
+        # Guardar resultado de la revisión en archivo
+        estado_revision = "APROBADO" if aprobado else "RECHAZADO"
+        nombre_archivo = f"4.5_reviewer_req{state['attempt_count']}_revisor{state.get('revisor_attempt_count', 0)}_{estado_revision}.txt"
+        contenido_archivo = f"""Estado: {estado_revision}
+Puntuación: {puntuacion}/10
+
+{'='*60}
+{comentario_pr}
+{'='*60}
+
+Respuesta LLM completa:
+{respuesta_llm}
+"""
+        
+        success = guardar_fichero_texto(
+            nombre_archivo,
+            contenido_archivo,
+            directorio=settings.OUTPUT_DIR
+        )
+        
+        log_file_operation(
+            logger,
+            "guardar",
+            f"{settings.OUTPUT_DIR}/{nombre_archivo}",
+            success=success
+        )
         
         # Incrementar contador de intentos si rechaza
         if not aprobado:

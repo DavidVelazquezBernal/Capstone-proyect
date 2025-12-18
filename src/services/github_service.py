@@ -398,6 +398,26 @@ class GitHubService:
 
             if pr.mergeable is not True:
                 logger.warning(f"⚠️ PR #{pr_number} no es mergeable")
+                logger.info(f"   Estado de la PR:")
+                logger.info(f"   - mergeable: {pr.mergeable}")
+                logger.info(f"   - mergeable_state: {pr.mergeable_state}")
+                logger.info(f"   - state: {pr.state}")
+                logger.info(f"   - merged: {pr.merged}")
+                
+                # Diagnóstico de causas comunes
+                if pr.mergeable_state == "dirty":
+                    logger.warning(f"   ⚠️ Causa: Conflictos de merge detectados")
+                elif pr.mergeable_state == "blocked":
+                    logger.warning(f"   ⚠️ Causa: PR bloqueada por branch protection rules o checks requeridos")
+                elif pr.mergeable_state == "behind":
+                    logger.warning(f"   ⚠️ Causa: Branch está desactualizado respecto a la base")
+                elif pr.mergeable_state == "unstable":
+                    logger.warning(f"   ⚠️ Causa: Checks de CI/CD fallaron")
+                elif pr.mergeable_state == "draft":
+                    logger.warning(f"   ⚠️ Causa: PR está en modo draft")
+                else:
+                    logger.warning(f"   ⚠️ Estado desconocido: {pr.mergeable_state}")
+                
                 return False
             
             pr.merge(

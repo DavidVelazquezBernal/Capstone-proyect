@@ -285,13 +285,38 @@ def main():
     #      "Quiero una función simple en TypeScript que capitalice la primera letra de cada palabra "        
     # )
 
+
+    
+
+
+    # prompt = {
+    #     "Implementa una clase BinarySearchTree en TypeScript con métodos insert, search, delete, "
+    #     "inorder traversal y balance check. Incluye manejo de casos edge como árboles vacíos, "
+    #     "nodos duplicados y eliminación de nodos con dos hijos. Añade validación de tipos y "
+    #     "documentación JSDoc completa."
+    # }
+
+    #Básicas
     # prompt = {
     #     "Quiero una función simple en TypeScript que valide si un correo electrónico es válido, "
     #     "y quiero que la salida sea un string con una frase descriptiva."
     # }
-    
+
+    # prompt = {
+    #     "Implementa una clase Stack (pila) en TypeScript con métodos push, pop, peek, isEmpty y size"
+    # }
+
+    # prompt = {
+    #     "Implementa una clase Calculator en typescript con las operaciones básicas (+, -, *, /)  y manejo de división por cero"
+    # }
+
+    #Intermedias
+    # prompt = {
+    #     "Implementa un algoritmo de ordenamiento QuickSort en TypeScript con análisis de complejidad"
+    # }
+
     prompt = {
-        "Implementa una clase Calculator en typescript con las operaciones básicas (+, -, *, /)  y manejo de división por cero"
+        "Crea una función en typescript que valide si un string tiene paréntesis balanceados, incluyendo [], {} y ()"
     }
 
     final_state = run_development_workflow(prompt, max_attempts=3)
