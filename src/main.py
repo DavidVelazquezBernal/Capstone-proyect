@@ -322,8 +322,14 @@ def main():
     # prompt = {
     #     "Crea en typescript un sistema de caché LRU (Least Recently Used) con tiempo de expiración configurable"
     # }
+    # prompt = {
+    #      "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
+    # }
+    # prompt = {
+    #     "Implementa en typescript el patrón Observer en TypeScript para un sistema de notificaciones"
+    # }
     prompt = {
-         "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
+        "Crea en typescript un middleware de logging que registre requests, responses y errores con diferentes niveles"
     }
 
     final_state = run_development_workflow(prompt, max_attempts=3)

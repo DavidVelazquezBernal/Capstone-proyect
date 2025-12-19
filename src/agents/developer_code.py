@@ -1,6 +1,6 @@
 """Agente: Developer-Code
 Responsable de generar código según requisitos formales y corregir errores.
-Corrige tanto errores de ejecución (traceback) como problemas de calidad (SonarQube).
+Corrige tanto errores de ejecución (traceback) como problemas de calidad (Sonar).
 Crea Tasks en Azure DevOps para implementación y testing.
 Crea branch en GitHub para análisis de SonarCloud.
 """
@@ -27,7 +27,7 @@ def developer_code_node(state: AgentState) -> AgentState:
     """
     Nodo del Developer-Code.
     Genera código que satisface los requisitos formales o corrige errores.
-    Puede corregir errores de ejecución (traceback) o issues de calidad (sonarqube_issues).
+    Puede corregir errores de ejecución (traceback) o issues de calidad (sonar_issues).
     """
 
     with agent_execution_context("💻 DEVELOPER-CODE", logger):
@@ -45,10 +45,10 @@ def developer_code_node(state: AgentState) -> AgentState:
             contexto_adicional += f"\nTraceback para corrección de errores de ejecución:\n{state['traceback']}\n"
             logger.info("🔧 Corrigiendo errores de ejecución basados en traceback")
         
-        # Añadir issues de SonarQube si hay problemas de calidad
+        # Añadir issues de Sonar si hay problemas de calidad
         if state.get('sonarqube_issues'):
-            contexto_adicional += f"\nInstrucciones de corrección de calidad (SonarQube):\n{state['sonarqube_issues']}\n"
-            logger.info("🔧 Corrigiendo issues de calidad de código (SonarQube)")
+            contexto_adicional += f"\nInstrucciones de corrección de calidad (Sonar):\n{state['sonarqube_issues']}\n"
+            logger.info("🔧 Corrigiendo issues de calidad de código (Sonar)")
         
         # Añadir código previo si existe para facilitar la corrección
         if state.get('codigo_generado') and (state['traceback'] or state.get('sonarqube_issues')):
@@ -117,11 +117,11 @@ def developer_code_node(state: AgentState) -> AgentState:
         if settings.GITHUB_ENABLED:
             import os
             
-            # Solo crear branch si no existe uno previo o si es una corrección de SonarQube
+            # Solo crear branch si no existe uno previo o si es una corrección de Sonar
             branch_existente = state.get('github_branch_name')
-            es_correccion_sonarqube = state['sonarqube_attempt_count'] > 0
+            es_correccion_sonar = state['sonarqube_attempt_count'] > 0
             
-            if not branch_existente or es_correccion_sonarqube:
+            if not branch_existente or es_correccion_sonar:
                 logger.info("🐙 Creando branch en GitHub...")
                 
                 try:

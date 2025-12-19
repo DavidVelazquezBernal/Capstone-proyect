@@ -1,6 +1,6 @@
 """
-Agente: Analizador SonarQube
-Responsable de verificar la calidad del código generado usando SonarQube antes de las pruebas funcionales.
+Agente: Analizador Sonar
+Responsable de verificar la calidad del código generado usando Sonar antes de las pruebas funcionales.
 """
 
 import re
@@ -20,12 +20,12 @@ logger = setup_logger(__name__, level=settings.get_log_level(), agent_mode=True)
 
 
 
-def sonarqube_node(state: AgentState) -> AgentState:
+def sonar_node(state: AgentState) -> AgentState:
     """
-    Nodo de SonarQube.
+    Nodo de Sonar.
     Analiza la calidad del código generado y determina si cumple los estándares.
     """
-    with agent_execution_context("🔍 SONARQUBE", logger):
+    with agent_execution_context("🔍 SONAR", logger):
         # Verificar si hay algún método de análisis habilitado
         if not settings.SONARCLOUD_ENABLED and not settings.SONARSCANNER_ENABLED:
             logger.warning("⚠️ SONARCLOUD_ENABLED=false y SONARSCANNER_ENABLED=false: omitiendo análisis de calidad y continuando el flujo")
@@ -169,7 +169,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
         logger.debug(f"Reporte generado:\n{reporte_formateado[:500]}...")
         
         # Guardar reporte SIEMPRE (tanto si pasa como si falla)
-        nombre_reporte = f"3_sonarqube_report_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}.txt"
+        nombre_reporte = f"3_sonar_report_req{state['attempt_count']}_sq{state['sonarqube_attempt_count']}.txt"
         guardar_fichero_texto(
             nombre_reporte,
             reporte_formateado,
@@ -248,7 +248,7 @@ def sonarqube_node(state: AgentState) -> AgentState:
             
             # Guardar instrucciones de corrección (usar el contador ANTES de incrementar)
             intento_actual = state['sonarqube_attempt_count'] - 1  # Ya fue incrementado en línea 243
-            nombre_instrucciones = f"3_sonarqube_instrucciones_req{state['attempt_count']}_sq{intento_actual}.txt"
+            nombre_instrucciones = f"3_sonar_instrucciones_req{state['attempt_count']}_sq{intento_actual}.txt"
             guardar_fichero_texto(
                 nombre_instrucciones,
                 instrucciones_correccion,
