@@ -18,6 +18,36 @@ from llm.mock_responses import get_mock_response
 
 logger = setup_logger(__name__, level=settings.get_log_level())
 
+
+def _list_available_models() -> list[str]:
+    """
+    Lista los modelos disponibles en la API de Gemini.
+    
+    Returns:
+        list[str]: Lista de nombres de modelos disponibles
+    """
+    try:
+        if not client:
+            return []
+        
+        models = client.models.list()
+        available_models = []
+        
+        for model in models:
+            # Filtrar solo modelos que soporten generateContent
+            if hasattr(model, 'supported_generation_methods'):
+                if 'generateContent' in model.supported_generation_methods:
+                    available_models.append(model.name)
+            else:
+                # Si no tiene el atributo, incluirlo por defecto
+                available_models.append(model.name)
+        
+        return available_models
+    except Exception as e:
+        logger.warning(f"⚠️ No se pudo listar modelos disponibles: {e}")
+        return []
+
+
 # Importación condicional del wrapper de LangChain
 _langchain_available = False
 if settings.USE_LANGCHAIN_WRAPPER:
@@ -217,9 +247,38 @@ def call_gemini(
         return response.text
 
     except APIError as e:
-        # Detectar errores 503 (Service Unavailable) o sobrecarga
+        # Detectar errores críticos que deben detener el flujo
         error_message = str(e)
         
+        # Error 404: Modelo no encontrado - DETENER FLUJO
+        if "404" in error_message or "NOT_FOUND" in error_message or "is not found" in error_message.lower():
+            logger.error("")
+            log_section(logger, "❌ ERROR 404: MODELO NO ENCONTRADO", level="error")
+            logger.error(f"❌ El modelo especificado no existe o no está disponible")
+            logger.error(f"📊 Detalles: {e}")
+            logger.error(f"� Modelo solicitado: {settings.MODEL_NAME}")
+            
+            # Intentar listar modelos disponibles
+            logger.error(f"\n🔍 Consultando modelos disponibles en tu API key...")
+            available_models = _list_available_models()
+            
+            if available_models:
+                logger.error(f"\n✅ Modelos disponibles con generateContent:")
+                for i, model in enumerate(available_models, 1):
+                    logger.error(f"   {i}. {model}")
+            else:
+                logger.error(f"\n⚠️ No se pudo obtener la lista de modelos disponibles")
+                logger.error(f"   Modelos comunes: gemini-2.0-flash-exp, gemini-1.5-flash, gemini-1.5-pro")
+            
+            logger.error(f"\n💡 RECOMENDACIONES:")
+            logger.error(f"   1. Verifica el nombre del modelo en .env (MODEL_NAME)")
+            logger.error(f"   2. Usa uno de los modelos listados arriba")
+            logger.error(f"   3. Consulta la documentación: https://ai.google.dev/gemini-api/docs/models")
+            logger.error(f"   4. Verifica que tu API key tenga acceso al modelo")
+            logger.error("")
+            raise RuntimeError(f"ERROR_404_MODEL_NOT_FOUND: {e}")
+        
+        # Detectar errores 503 (Service Unavailable) o sobrecarga
         if "503" in error_message or "UNAVAILABLE" in error_message or "overloaded" in error_message.lower():
             logger.error("")
             log_section(logger, "⚠️ ERROR 503: SERVICIO SOBRECARGADO", level="error")

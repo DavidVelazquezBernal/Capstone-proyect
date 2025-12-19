@@ -247,6 +247,11 @@ def _es_fallo_probablemente_de_tests(lenguaje: str, output: str, traceback: str,
     low = combined.lower()
 
     if lenguaje.lower() == 'typescript':
+        # Excluir fallos de aserción (AssertionError) que indican problemas en el código de producción
+        if 'assertionerror' in low and ('expected' in low or 'received' in low):
+            # Este es un fallo de test legítimo (expected vs received), NO regenerar tests
+            return False, ''
+        
         patterns = (
             'syntaxerror',
             'unexpected token',
