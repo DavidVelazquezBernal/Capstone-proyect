@@ -32,6 +32,15 @@ class RobustPydanticOutputParser(PydanticOutputParser):
         Raises:
             OutputParserException: Si el parsing falla después de todos los intentos
         """
+        # Detectar errores de API antes de intentar parsear
+        if text and isinstance(text, str):
+            text_lower = text.lower()
+            if any(error_marker in text_lower for error_marker in ['error_api:', 'error_404', 'error_503', 'error_general:']):
+                logger.error(f"❌ Respuesta del LLM contiene un error de API, no JSON válido")
+                raise OutputParserException(
+                    f"El LLM devolvió un error de API en lugar de JSON: {text[:200]}"
+                )
+        
         try:
             # Intento 1: Parsing directo
             return super().parse(text)

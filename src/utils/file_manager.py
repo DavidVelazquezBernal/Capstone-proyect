@@ -217,6 +217,14 @@ class FileManager:
         if not codigo:
             return codigo
         
+        # Validar que codigo sea string, no lista u otro tipo
+        if isinstance(codigo, list):
+            # Si es una lista, unir los elementos
+            codigo = '\n'.join(str(item) for item in codigo)
+        elif not isinstance(codigo, str):
+            # Si no es string ni lista, convertir a string
+            codigo = str(codigo)
+        
         resultado = codigo.strip()
         
         # Eliminar bloque de apertura: ```typescript, ```python, etc.
