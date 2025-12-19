@@ -146,7 +146,7 @@ IMPORTANTE: Sé constructivo pero exigente. Solo aprueba si el código es de cal
         
         # Guardar resultado de la revisión en archivo
         estado_revision = "APROBADO" if aprobado else "RECHAZADO"
-        nombre_archivo = f"4.5_reviewer_req{state['attempt_count']}_revisor{state.get('revisor_attempt_count', 0)}_{estado_revision}.txt"
+        nombre_archivo = f"5_reviewer_req{state['attempt_count']}_revisor{state.get('revisor_attempt_count', 0)}_{estado_revision}.txt"
         contenido_archivo = f"""Estado: {estado_revision}
 Puntuación: {puntuacion}/10
 

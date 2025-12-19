@@ -296,27 +296,34 @@ def main():
     #     "documentación JSDoc completa."
     # }
 
+    #====================
     #Básicas
+    #====================
     # prompt = {
     #     "Quiero una función simple en TypeScript que valide si un correo electrónico es válido, "
     #     "y quiero que la salida sea un string con una frase descriptiva."
     # }
-
     # prompt = {
     #     "Implementa una clase Stack (pila) en TypeScript con métodos push, pop, peek, isEmpty y size"
     # }
-
     # prompt = {
     #     "Implementa una clase Calculator en typescript con las operaciones básicas (+, -, *, /)  y manejo de división por cero"
     # }
 
+    #====================
     #Intermedias
+    #====================
     # prompt = {
     #     "Implementa un algoritmo de ordenamiento QuickSort en TypeScript con análisis de complejidad"
     # }
-
+    # prompt = {
+    #     "Crea una función en typescript que valide si un string tiene paréntesis balanceados, incluyendo [], {} y ()"
+    # }
+    # prompt = {
+    #     "Crea en typescript un sistema de caché LRU (Least Recently Used) con tiempo de expiración configurable"
+    # }
     prompt = {
-        "Crea una función en typescript que valide si un string tiene paréntesis balanceados, incluyendo [], {} y ()"
+         "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
     }
 
     final_state = run_development_workflow(prompt, max_attempts=3)

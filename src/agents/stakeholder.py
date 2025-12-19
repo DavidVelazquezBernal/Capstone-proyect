@@ -66,7 +66,7 @@ def stakeholder_node(state: AgentState) -> AgentState:
             
             # Guardar validación exitosa
             guardar_fichero_texto(
-                f"5_stakeholder_intento_{state['attempt_count']}_VALIDADO.txt",
+                f"7_stakeholder_intento_{state['attempt_count']}_VALIDADO.txt",
                 f"Validación: APROBADO\n\nRespuesta:\n{respuesta_llm}",
                 directorio=settings.OUTPUT_DIR
             )
@@ -107,7 +107,7 @@ def stakeholder_node(state: AgentState) -> AgentState:
             
             # Guardar validación rechazada
             guardar_fichero_texto(
-                f"5_stakeholder_intento_{state['attempt_count']}_RECHAZADO.txt",
+                f"7_stakeholder_intento_{state['attempt_count']}_RECHAZADO.txt",
                 f"Validación: RECHAZADO\n\nMotivo:\n{state['feedback_stakeholder']}\n\nRespuesta completa:\n{respuesta_llm}",
                 directorio=settings.OUTPUT_DIR
             )

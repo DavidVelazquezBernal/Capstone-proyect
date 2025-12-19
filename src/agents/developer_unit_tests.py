@@ -103,6 +103,39 @@ def developer_complete_pr_node(state: AgentState) -> AgentState:
             use_reviewer_token=False
         )
         state['pr_mergeada'] = bool(merged)
+        
+        # Guardar resultado del merge en archivo
+        estado_merge = "MERGED" if merged else "FAILED"
+        nombre_archivo = f"6_complete_pr_req{state['attempt_count']}_{estado_merge}.txt"
+        
+        if merged:
+            contenido = f"""Estado: MERGED
+PR: #{pr_number}
+Branch: {state.get('github_branch_name', 'N/A')}
+Método: squash
+
+✅ PR mergeada exitosamente por Developer-CompletePR
+"""
+        else:
+            contenido = f"""Estado: FAILED
+PR: #{pr_number}
+Branch: {state.get('github_branch_name', 'N/A')}
+
+⚠️ No se pudo mergear la PR
+"""
+        
+        success = guardar_fichero_texto(
+            nombre_archivo,
+            contenido,
+            directorio=settings.OUTPUT_DIR
+        )
+        
+        log_file_operation(
+            logger,
+            "guardar",
+            f"{settings.OUTPUT_DIR}/{nombre_archivo}",
+            success=success
+        )
 
         if merged:
             logger.info(f"✅ PR #{pr_number} mergeada (squash) por Developer-UnitTests")
@@ -141,18 +174,30 @@ def developer_complete_pr_node(state: AgentState) -> AgentState:
                             if checkout_result.returncode != 0:
                                 logger.warning(f"⚠️ Checkout falló: {checkout_result.stderr}")
 
-                        logger.info(f"🗑️ Eliminando branch local: {sanitized_branch}")
-                        delete_result = subprocess.run(
-                            ["git", "-C", repo_path, "branch", "-D", sanitized_branch],
+                        # Verificar si el branch existe localmente antes de intentar borrarlo
+                        list_result = subprocess.run(
+                            ["git", "-C", repo_path, "branch", "--list", sanitized_branch],
                             capture_output=True,
                             text=True,
                             check=False
                         )
                         
-                        if delete_result.returncode == 0:
-                            logger.info(f"🧹 Branch local eliminado: {sanitized_branch}")
+                        if list_result.stdout.strip():
+                            # Branch existe localmente, proceder a eliminarlo
+                            logger.info(f"🗑️ Eliminando branch local: {sanitized_branch}")
+                            delete_result = subprocess.run(
+                                ["git", "-C", repo_path, "branch", "-D", sanitized_branch],
+                                capture_output=True,
+                                text=True,
+                                check=False
+                            )
+                            
+                            if delete_result.returncode == 0:
+                                logger.info(f"🧹 Branch local eliminado: {sanitized_branch}")
+                            else:
+                                logger.warning(f"⚠️ No se pudo eliminar branch local: {delete_result.stderr.strip()}")
                         else:
-                            logger.warning(f"⚠️ No se pudo eliminar branch local: {delete_result.stderr.strip()}")
+                            logger.debug(f"ℹ️ Branch local no existe, omitiendo borrado: {sanitized_branch}")
                     else:
                         logger.warning(f"⚠️ No es un repositorio git: {repo_path}")
                 except Exception as e:
@@ -459,6 +504,29 @@ def developer_unit_tests_node(state: AgentState) -> AgentState:
                 fallo_ctx = _limpiar_ansi((result.get('traceback', '') or '') + "\n" + (result.get('output', '') or ''))
                 if len(fallo_ctx) > 3500:
                     fallo_ctx = fallo_ctx[-3500:]
+                
+                # Guardar error de tests malformados para diagnóstico
+                nombre_error = f"4_testing_req{attempt}_debug{debug_attempt}_MALFORMED_ATTEMPT{test_fix_attempt}.txt"
+                contenido_error = f"""Status: MALFORMED TESTS (Regenerando)
+Intento de corrección: {test_fix_attempt}/{max_test_fix_attempts}
+Razón: {reason}
+
+{'='*60}
+TRACEBACK Y OUTPUT:
+{'='*60}
+{fallo_ctx}
+
+{'='*60}
+TESTS ORIGINALES (con problemas):
+{'='*60}
+{tests_generados}
+"""
+                guardar_fichero_texto(
+                    nombre_error,
+                    contenido_error,
+                    directorio=settings.OUTPUT_DIR
+                )
+                log_file_operation(logger, "guardar", f"{settings.OUTPUT_DIR}/{nombre_error}", success=True)
 
                 prompt_fix = (
                     prompt_formateado
