@@ -260,6 +260,8 @@ def _es_fallo_probablemente_de_tests(lenguaje: str, output: str, traceback: str,
             'ts1005',
             'ts1109',
             'error: expected',
+            'has already been declared',
+            'already been declared',
         )
         if any(p in low for p in patterns) and (test_filename.lower() in low or '.spec.' in low):
             return True, 'Error de parsing/sintaxis en tests'
@@ -532,6 +534,12 @@ TESTS ORIGINALES (con problemas):
                     prompt_formateado
                     + "\n\nFALLO AL EJECUTAR TESTS. Analiza el error y REGENERA el archivo de tests corrigiendo exclusivamente el código de tests."
                       "\nNo modifiques el código de producción. No uses Markdown. Mantén el archivo muy corto (máximo 6 tests, sin describe anidados) y bien cerrado."
+                      f"\n\n**PROBLEMA DETECTADO:** {reason}"
+                      "\n\n**INSTRUCCIONES ESPECÍFICAS:**"
+                      "\n- Si el error es 'has already been declared' o 'already been declared', elimina imports o declaraciones duplicadas"
+                      "\n- Si el error es de parsing/sintaxis, verifica que el código esté bien formado y sin caracteres inválidos"
+                      "\n- Si el error es de módulos no encontrados, verifica las rutas de import"
+                      "\n- Asegúrate de que el archivo de tests esté completo y bien cerrado"
                       "\n\nSalida del runner (resumen):\n"
                     + fallo_ctx
                 )
