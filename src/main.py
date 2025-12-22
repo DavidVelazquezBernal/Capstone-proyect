@@ -328,8 +328,11 @@ def main():
     # prompt = {
     #     "Implementa en typescript el patrón Observer en TypeScript para un sistema de notificaciones"
     # }
+    # prompt = {
+    #     "Crea en typescript un middleware de logging que registre requests, responses y errores con diferentes niveles"
+    # }
     prompt = {
-        "Crea en typescript un middleware de logging que registre requests, responses y errores con diferentes niveles"
+        "Crea en typescript un sistema de permisos basado en roles (RBAC) con herencia de roles y permisos granulares"
     }
 
     final_state = run_development_workflow(prompt, max_attempts=3)

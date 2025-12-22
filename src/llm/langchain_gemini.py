@@ -12,6 +12,9 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__, level=settings.get_log_level())
 
+# Importar _safe_get_text para compatibilidad con Gemini 3
+# Evitar import circular usando import tardío dentro de la función
+
 
 def create_langchain_llm(
     streaming: bool = False,
@@ -83,11 +86,15 @@ Genera únicamente el bloque de texto solicitado en tu Output Esperado. No añad
         # Invocar el LLM
         response = llm.invoke(messages)
         
-        # Extraer el contenido de la respuesta
+        # Importar _safe_get_text aquí para evitar import circular
+        from llm.gemini_client import _safe_get_text
+        
+        # Extraer el contenido de la respuesta usando _safe_get_text para compatibilidad con Gemini 3
+        # En Gemini 3, response.content puede ser {'type': 'text', 'text': '...', 'extras': {...}}
         if hasattr(response, 'content'):
-            return response.content
+            return _safe_get_text(response.content)
         else:
-            return str(response)
+            return _safe_get_text(response)
             
     except Exception as e:
         logger.error(f"❌ Error en llamada LangChain: {e}")

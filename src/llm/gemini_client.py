@@ -6,7 +6,7 @@ Soporta wrapper de LangChain opcional para debugging avanzado.
 
 import os
 import time
-from typing import Optional
+from typing import Optional, Any, Union, List, Dict
 from pydantic import BaseModel
 from google import genai
 from google.genai.errors import APIError
@@ -46,6 +46,95 @@ def _list_available_models() -> list[str]:
     except Exception as e:
         logger.warning(f"⚠️ No se pudo listar modelos disponibles: {e}")
         return []
+
+
+def _safe_get_text(response: Any) -> str:
+    """
+    Extrae texto de forma segura de cualquier tipo de respuesta (objeto Response, str, dict, list).
+    Garantiza compatibilidad hacia atrás y con nuevas versiones de API (gemini-3).
+    
+    Args:
+        response: Respuesta del LLM en cualquier formato
+        
+    Returns:
+        str: Texto extraído o string vacío si no se puede extraer
+    """
+    try:
+        if response is None:
+            return ""
+            
+        # 1. Si ya es string
+        if isinstance(response, str):
+            return response
+            
+        # 2. Si es lista (caso gemini-3 content list o LangChain messages)
+        if isinstance(response, list):
+            logger.debug(f"ℹ️ Respuesta es lista, uniendo elementos: {len(response)}")
+            parts = []
+            for item in response:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    # Caso Gemini 3: {'type': 'text', 'text': '...'}
+                    if item.get('type') == 'text' and 'text' in item:
+                        parts.append(str(item['text']))
+                    elif 'text' in item:
+                        parts.append(str(item['text']))
+                    else:
+                        parts.append(str(item))
+                elif hasattr(item, 'text'):
+                    parts.append(item.text or "")
+                else:
+                    parts.append(str(item))
+            return "\n".join(parts)
+            
+        # 3. Si es diccionario
+        if isinstance(response, dict):
+            # Caso específico Gemini 3: {'type': 'text', 'text': '...'}
+            if response.get('type') == 'text' and 'text' in response:
+                logger.debug(f"ℹ️ Detectado formato Gemini 3: {{'type': 'text', 'text': '...'}}")
+                return str(response['text'])
+            
+            # Prioridad de claves comunes en APIs de LLM
+            for key in ['text', 'content', 'output', 'response', 'code']:
+                if key in response:
+                    val = response[key]
+                    return _safe_get_text(val)
+            # Si es un dict desconocido, convertir a str
+            return str(response)
+
+        # 4. Objeto Response de Google GenAI (prioridad a .text)
+        if hasattr(response, 'text'):
+            try:
+                # En algunas versiones .text puede lanzar error si fue bloqueado
+                text = response.text
+                if text:
+                    return text
+            except Exception:
+                pass # Intentar otras formas
+
+        # 5. Intentar extraer de candidates (estructura interna de Gemini)
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            # Caso standard: content.parts
+            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                parts = [part.text for part in candidate.content.parts if hasattr(part, 'text') and part.text]
+                if parts:
+                    return "\n".join(parts)
+            # Caso fallback: content directo
+            if hasattr(candidate, 'content') and isinstance(candidate.content, str):
+                return candidate.content
+
+        # 6. Objeto LangChain AIMessage
+        if hasattr(response, 'content'):
+            return _safe_get_text(response.content)
+
+        # Fallback final: representación string del objeto
+        return str(response)
+        
+    except Exception as e:
+        logger.error(f"❌ Error extrayendo texto de respuesta: {e}")
+        return str(response)
 
 
 # Importación condicional del wrapper de LangChain
@@ -176,14 +265,18 @@ def call_gemini(
             config=config,
         )
         _log_warning_if_truncated(response, config.get("max_output_tokens", settings.MAX_OUTPUT_TOKENS))
-        if not response.text or response.text == "None" or response.text.lower() == "none":
+        
+        # Extraer texto de forma segura usando la nueva función compatible con Gemini 3
+        text_response = _safe_get_text(response)
+        
+        if not text_response or text_response == "None" or text_response.lower() == "none":
             logger.error("")
             log_section(logger, "❌ ERROR: EL LLM NO DEVOLVIÓ RESPUESTA VÁLIDA", level="error")
             logger.error(f"📋 Información de diagnóstico:")
             logger.error(f"   • Modelo usado: {settings.MODEL_NAME}")
-            logger.error(f"   • Respuesta vacía: {response.text is None or response.text == ''}")
-            logger.error(f"   • Valor de response.text: {repr(response.text)}")
-            logger.error(f"   • Tipo de response: {type(response)}")
+            logger.error(f"   • Respuesta vacía: {not text_response}")
+            logger.error(f"   • Valor extraído: {repr(text_response)}")
+            logger.error(f"   • Tipo de response original: {type(response)}")
             
             # Verificar si hay candidatos en la respuesta
             if hasattr(response, 'candidates') and response.candidates:
@@ -244,8 +337,8 @@ def call_gemini(
                 logger.error(f"   • Prompt feedback: {response.prompt_feedback}")
             logger.error("")
             raise APIError("El LLM devolvió None o respuesta vacía.")
-        return response.text
-
+        return text_response
+    
     except APIError as e:
         # Detectar errores críticos que deben detener el flujo
         error_message = str(e)
@@ -302,7 +395,8 @@ def call_gemini(
                     )
                     _log_warning_if_truncated(response, config.get("max_output_tokens", settings.MAX_OUTPUT_TOKENS))
                     logger.info(f"✅ Reintento exitoso en intento {attempt}")
-                    return response.text
+                    # Usar _safe_get_text también en reintentos para compatibilidad con Gemini 3
+                    return _safe_get_text(response)
                 except APIError as retry_error:
                     if attempt == max_retries:
                         logger.error("")
