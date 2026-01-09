@@ -12,7 +12,7 @@ Capstone proyect v2/
 │   │
 │   ├── config/                      # Configuración
 │   │   ├── __init__.py
-│   │   ├── settings.py              # Variables de entorno y configuración
+│   │   ├── settings.py              # Variables de entorno y RetryConfig
 │   │   └── prompts.py               # Prompts centralizados de agentes
 │   │
 │   ├── models/                      # Modelos de datos
@@ -30,11 +30,11 @@ Capstone proyect v2/
 │   ├── agents/                      # Agentes del sistema
 │   │   ├── __init__.py
 │   │   ├── product_owner.py         # Agente 1: Formalización de requisitos
-│   │   ├── desarrollador.py         # Agente 2: Desarrollo y corrección
-│   │   ├── sonarqube.py             # Agente 3: Análisis de calidad
-│   │   ├── testing.py               # Agente 4: Generación y ejecución de tests
-│   │   ├── revisor_codigo.py        # Agente 5: Revisión de código
-│   │   └── stakeholder.py           # Agente 6: Validación final
+│   │   ├── developer_code.py        # Agente 2: Desarrollo y corrección de código
+│   │   ├── sonar.py                 # Agente 3: Análisis de calidad con SonarQube
+│   │   ├── developer_unit_tests.py  # Agente 4: Generación y ejecución de tests + PR completion
+│   │   ├── developer2_reviewer.py   # Agente 5: Revisión de código y aprobación de PR
+│   │   └── stakeholder.py           # Agente 6: Validación final de negocio
 │   │
 │   ├── llm/                         # Cliente LLM
 │   │   ├── __init__.py
@@ -47,7 +47,9 @@ Capstone proyect v2/
 │   │
 │   ├── services/                    # Servicios auxiliares
 │   │   ├── __init__.py
-│   │   └── github_service.py        # Integración con GitHub
+│   │   ├── github_service.py        # Integración con GitHub
+│   │   ├── azure_devops_service.py  # Servicio de Azure DevOps
+│   │   └── sonarcloud_service.py    # Servicio de SonarCloud
 │   │
 │   └── workflow/                    # Workflow LangGraph
 │       ├── __init__.py
@@ -104,6 +106,12 @@ E2B_API_KEY=tu_clave_e2b_aqui
 SONARQUBE_URL=https://sonarcloud.io
 SONARQUBE_TOKEN=tu_token_aqui
 SONARQUBE_PROJECT_KEY=tu_proyecto_key
+
+# SonarCloud (opcional - para análisis en la nube)
+SONARCLOUD_ENABLED=false
+SONARCLOUD_TOKEN=tu_token_sonarcloud
+SONARCLOUD_ORGANIZATION=tu-organizacion
+SONARCLOUD_PROJECT_KEY=tu_proyecto_key
 
 # 🔷 Azure DevOps (opcional - para integración con ADO)
 AZURE_DEVOPS_ENABLED=false
@@ -247,20 +255,20 @@ El código se limpia automáticamente de marcadores markdown (` ```python `, ` `
 ## 🔄 Flujo de Trabajo
 
 ```
-START → ProductOwner → Desarrollador → SonarQube
+START → ProductOwner → Developer-Code → Sonar
            ↑                ↑               ↓
            |                |          ¿Calidad OK?
            |                ←──────── NO (max 3 intentos)
            |                                ↓
-           |                            Testing
+           |                      Developer-UnitTests
            |                                ↓
            |                             ¿Pasa?
            |                ←──────── NO (max 3 intentos)
            |                                ↓
-           |                         RevisorCodigo
+           |                      Developer2-Reviewer
            |                                ↓
            |                           ¿Aprobado?
-           |                ←──────── NO (max 2 intentos)
+           |                ←──────── NO (max 3 intentos)
            |                                ↓
            |                    Developer-CompletePR
            |                                ↓
@@ -278,10 +286,10 @@ START → ProductOwner → Desarrollador → SonarQube
 ### Agentes
 
 1. **ProductOwner**: Formaliza especificaciones técnicas en JSON estructurado + 🔷 crea PBIs en Azure DevOps (opcional)
-2. **Desarrollador**: Genera y corrige código Python/TypeScript + 🐙 crea branch y commit en GitHub (opcional) + 🔷 crea Tasks en Azure DevOps (opcional)
-3. **SonarQube**: Verifica calidad del código (bugs, vulnerabilidades, code smells)
-4. **Testing**: Genera y ejecuta tests unitarios con vitest/pytest + 🐙 pushea tests a GitHub (opcional)
-5. **RevisorCodigo**: Revisa código con LLM y aprueba/rechaza PR + 🐙 aprueba PR en GitHub (opcional)
+2. **Developer-Code**: Genera y corrige código Python/TypeScript + 🐙 crea branch y commit en GitHub (opcional) + 🔷 crea Tasks en Azure DevOps (opcional)
+3. **Sonar**: Verifica calidad del código con SonarQube/SonarCloud (bugs, vulnerabilidades, code smells)
+4. **Developer-UnitTests**: Genera y ejecuta tests unitarios con vitest/pytest + 🐙 pushea tests a GitHub (opcional)
+5. **Developer2-Reviewer**: Revisa código con LLM, evalúa calidad y aprueba/rechaza PR + 🐙 aprueba PR en GitHub (opcional)
 6. **Developer-CompletePR**: Hace squash merge de PR + 🐙 limpia branches remotos y locales (opcional)
 7. **Stakeholder**: Valida cumplimiento de visión de negocio + 📎 adjunta código final a Azure DevOps (opcional)
 
@@ -298,9 +306,9 @@ El sistema implementa tres bucles de corrección:
    - Corrige errores de ejecución
    - Máximo 3 intentos (configurable)
 
-3. **Bucle de Revisión** (RevisorCodigo → Desarrollador):
-   - Corrige problemas de calidad detectados por revisión
-   - Máximo 2 intentos (configurable)
+3. **Bucle de Revisión** (Developer2-Reviewer → Developer-Code):
+   - Corrige problemas de calidad detectados por revisión de código
+   - Máximo 3 intentos (configurable)
 
 4. **Bucle de Validación** (Stakeholder → ProductOwner):
    - Reingeniería de requisitos si no cumple visión de negocio
@@ -314,6 +322,7 @@ El sistema implementa tres bucles de corrección:
 - **Vitest**: Testing framework para TypeScript/JavaScript
 - **Pytest**: Testing framework para Python
 - **SonarQube MCP**: Análisis estático de calidad de código
+- **SonarCloud**: Análisis de calidad en la nube (opcional)
 - **🔷 Azure DevOps REST API**: Integración con Azure DevOps (opcional)
 - **🐙 PyGithub**: Integración con GitHub API (opcional)
 - **Python-dotenv**: Gestión de entorno
@@ -321,10 +330,10 @@ El sistema implementa tres bucles de corrección:
 ## 📝 Configuración
 
 Editar `src/config/settings.py` para ajustar:
-- `MAX_ATTEMPTS`: Máximo de ciclos completos (default: 1)
+- `MAX_ATTEMPTS`: Máximo de ciclos completos (default: 3)
 - `MAX_DEBUG_ATTEMPTS`: Máximo intentos de depuración (default: 3)
 - `MAX_SONARQUBE_ATTEMPTS`: Máximo intentos de corrección de calidad (default: 3)
-- `MAX_REVISOR_ATTEMPTS`: Máximo intentos de revisión de código (default: 2)
+- `MAX_REVISOR_ATTEMPTS`: Máximo intentos de revisión de código (default: 3)
 - `TEMPERATURE`: Temperatura del LLM (default: 0.1)
 - `MAX_OUTPUT_TOKENS`: Tokens máximos de salida (default: 4000)
 - `LOG_LEVEL`: Nivel de logging (default: INFO)

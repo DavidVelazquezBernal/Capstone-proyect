@@ -35,6 +35,22 @@ def developer2_reviewer_node(state: AgentState) -> AgentState:
             logger.info("ℹ️ GitHub no está habilitado, saltando revisión de código")
             state['codigo_revisado'] = True
             state['revision_comentario'] = "Revisión omitida - GitHub no habilitado"
+            
+            # Guardar archivo indicando que se omitió la revisión
+            nombre_archivo = f"5_reviewer_req{state['attempt_count']}_revisor{state.get('revisor_attempt_count', 0)}_OMITIDO.txt"
+            contenido_archivo = f"""Estado: OMITIDO
+Motivo: GitHub no está habilitado
+
+La revisión de código fue omitida porque GitHub no está configurado.
+El código se considera aprobado automáticamente para continuar el flujo.
+"""
+            guardar_fichero_texto(
+                nombre_archivo,
+                contenido_archivo,
+                directorio=settings.OUTPUT_DIR
+            )
+            logger.info(f"💾 Archivo de revisión guardado: {nombre_archivo}")
+            
             return state
         
         pr_number = state.get('github_pr_number')

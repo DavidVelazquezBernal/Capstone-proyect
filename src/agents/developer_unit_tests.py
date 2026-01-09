@@ -83,6 +83,26 @@ def developer_complete_pr_node(state: AgentState) -> AgentState:
             logger.info("ℹ️ GitHub no está habilitado o no hay PR - continuando flujo sin merge")
             logger.info("✅ Precondiciones cumplidas: tests pasados y código aprobado")
             state['pr_mergeada'] = True
+            
+            # Guardar archivo indicando que se omitió el merge
+            nombre_archivo = f"6_complete_pr_req{state['attempt_count']}_OMITIDO.txt"
+            contenido = f"""Estado: OMITIDO
+Motivo: GitHub no está habilitado o no hay PR
+
+El merge de la PR fue omitido porque:
+- GitHub está {'deshabilitado' if not settings.GITHUB_ENABLED else 'habilitado'}
+- PR número: {pr_number if pr_number else 'N/A'}
+
+El flujo continúa normalmente hacia la validación del Stakeholder.
+✅ Precondiciones cumplidas: tests pasados y código aprobado
+"""
+            guardar_fichero_texto(
+                nombre_archivo,
+                contenido,
+                directorio=settings.OUTPUT_DIR
+            )
+            logger.info(f"💾 Archivo de merge guardado: {nombre_archivo}")
+            
             return state
 
         if not state.get('pruebas_superadas'):
