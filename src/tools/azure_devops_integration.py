@@ -12,6 +12,31 @@ from utils.logger import setup_logger, log_agent_execution
 
 logger = setup_logger(__name__, level=settings.get_log_level())
 
+# Límite de caracteres para System.Title en Azure DevOps
+AZURE_DEVOPS_TITLE_MAX_LENGTH = 255
+
+def _truncate_title(title: str, max_length: int = AZURE_DEVOPS_TITLE_MAX_LENGTH) -> str:
+    """
+    Trunca un título para que no exceda el límite de Azure DevOps.
+    
+    Args:
+        title: Título original
+        max_length: Longitud máxima permitida (default: 255)
+    
+    Returns:
+        str: Título truncado si es necesario, con '...' al final
+    """
+    if len(title) <= max_length:
+        return title
+    
+    # Truncar dejando espacio para '...'
+    truncated = title[:max_length - 3] + '...'
+    logger.warning(f"⚠️ Título truncado de {len(title)} a {len(truncated)} caracteres")
+    logger.debug(f"   Original: {title}")
+    logger.debug(f"   Truncado: {truncated}")
+    
+    return truncated
+
 
 class AzureDevOpsClient:
     """
@@ -119,6 +144,9 @@ class AzureDevOpsClient:
             assigned_to = settings.AZURE_ASSIGNED_TO
         
         try:
+            # Validar y truncar título si es necesario
+            title = _truncate_title(title)
+            
             url = (
                 f"{self.base_url}/{self.project}/_apis/wit/workitems/"
                 f"$Product Backlog Item?api-version={self.api_version}"
@@ -212,263 +240,6 @@ class AzureDevOpsClient:
             logger.error(f"❌ Excepción al crear PBI: {e}")
             return None
     
-    def update_work_item(
-        self,
-        work_item_id: int,
-        fields: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Actualiza un Work Item existente.
-        
-        Args:
-            work_item_id: ID del work item a actualizar
-            fields: Diccionario con campos a actualizar
-                    Ej: {"System.State": "Active", "System.AssignedTo": "user@domain.com"}
-        
-        Returns:
-            Dict con información del work item actualizado o None si falla
-        """
-        if not self._validate_config():
-            logger.error("❌ Configuración de Azure DevOps incompleta")
-            return None
-        
-        try:
-            url = (
-                f"{self.base_url}/{self.project}/_apis/wit/workitems/"
-                f"{work_item_id}?api-version={self.api_version}"
-            )
-            
-            # Construir operaciones de actualización
-            operations = [
-                {"op": "add", "path": f"/fields/{field_path}", "value": value}
-                for field_path, value in fields.items()
-            ]
-            
-            headers = self._get_headers("application/json-patch+json")
-            response = requests.patch(url, json=operations, headers=headers, timeout=30)
-            
-            if response.status_code == 200:
-                work_item = response.json()
-                logger.info(f"✅ Work Item {work_item_id} actualizado exitosamente")
-                
-                log_agent_execution(
-                    logger,
-                    "AzureDevOps",
-                    "Work Item actualizado",
-                    {"id": work_item_id, "fields": list(fields.keys())}
-                )
-                
-                return work_item
-            else:
-                logger.error(f"❌ Error al actualizar Work Item: {response.status_code}")
-                logger.error(f"Respuesta: {response.text}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ Excepción al actualizar Work Item: {e}")
-            return None
-    
-    def get_work_item(self, work_item_id: int) -> Optional[Dict[str, Any]]:
-        """
-        Obtiene información de un Work Item por ID.
-        
-        Args:
-            work_item_id: ID del work item
-        
-        Returns:
-            Dict con información del work item o None si falla
-        """
-        if not self._validate_config():
-            logger.error("❌ Configuración de Azure DevOps incompleta")
-            return None
-        
-        try:
-            url = (
-                f"{self.base_url}/{self.project}/_apis/wit/workitems/"
-                f"{work_item_id}?api-version={self.api_version}"
-            )
-            
-            response = requests.get(url, headers=self._get_headers(), timeout=30)
-            
-            if response.status_code == 200:
-                work_item = response.json()
-                logger.info(f"✅ Work Item {work_item_id} obtenido exitosamente")
-                return work_item
-            else:
-                logger.error(f"❌ Error al obtener Work Item: {response.status_code}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ Excepción al obtener Work Item: {e}")
-            return None
-    
-    def search_work_items(
-        self,
-        title_contains: str,
-        work_item_type: str = "Product Backlog Item",
-        tags: Optional[List[str]] = None,
-        max_results: int = 10
-    ) -> List[Dict[str, Any]]:
-        """
-        Busca work items por título y tipo, opcionalmente filtrando por tags.
-        
-        Args:
-            title_contains: Texto que debe contener el título
-            work_item_type: Tipo de work item ("Product Backlog Item", "Task", "Bug")
-            tags: Lista de tags para filtrar (opcional)
-            max_results: Número máximo de resultados
-        
-        Returns:
-            Lista de work items encontrados
-        """
-        if not self._validate_config():
-            logger.error("❌ Configuración de Azure DevOps incompleta")
-            return []
-        
-        try:
-            # Construir query WIQL (Work Item Query Language)
-            wiql_query = f"""
-            SELECT [System.Id], [System.Title], [System.State], [System.Tags], [System.CreatedDate]
-            FROM WorkItems
-            WHERE [System.TeamProject] = '{self.project}'
-            AND [System.WorkItemType] = '{work_item_type}'
-            AND [System.Title] CONTAINS '{title_contains}'
-            """
-            
-            # Agregar filtro por tags si se especifica
-            if tags:
-                tags_filter = " OR ".join([f"[System.Tags] CONTAINS '{tag}'" for tag in tags])
-                wiql_query += f" AND ({tags_filter})"
-            
-            wiql_query += f" ORDER BY [System.CreatedDate] DESC"
-            
-            url = f"{self.base_url}/{self.project}/_apis/wit/wiql?api-version={self.api_version}"
-            
-            body = {"query": wiql_query}
-            response = requests.post(url, json=body, headers=self._get_headers(), timeout=30)
-            
-            if response.status_code != 200:
-                logger.error(f"❌ Error en búsqueda WIQL: {response.status_code}")
-                return []
-            
-            result = response.json()
-            work_item_refs = result.get('workItems', [])
-            
-            if not work_item_refs:
-                logger.debug(f"🔍 No se encontraron work items con título '{title_contains}'")
-                return []
-            
-            # Limitar resultados
-            work_item_refs = work_item_refs[:max_results]
-            
-            # Obtener detalles de cada work item
-            work_items = []
-            for ref in work_item_refs:
-                work_item = self.get_work_item(ref['id'])
-                if work_item:
-                    work_items.append(work_item)
-            
-            logger.info(f"🔍 Encontrados {len(work_items)} work items con título '{title_contains}'")
-            return work_items
-            
-        except Exception as e:
-            logger.error(f"❌ Excepción al buscar work items: {e}")
-            return []
-    
-    def get_child_work_items(self, parent_id: int) -> List[Dict[str, Any]]:
-        """
-        Obtiene todos los work items hijos de un parent (Tasks de un PBI).
-        
-        Args:
-            parent_id: ID del work item padre
-        
-        Returns:
-            Lista de work items hijos
-        """
-        if not self._validate_config():
-            logger.error("❌ Configuración de Azure DevOps incompleta")
-            return []
-        
-        try:
-            # Obtener el work item padre con sus relaciones
-            url = (
-                f"{self.base_url}/{self.project}/_apis/wit/workitems/"
-                f"{parent_id}?$expand=relations&api-version={self.api_version}"
-            )
-            
-            response = requests.get(url, headers=self._get_headers(), timeout=30)
-            
-            if response.status_code != 200:
-                logger.error(f"❌ Error al obtener work item padre: {response.status_code}")
-                return []
-            
-            parent = response.json()
-            relations = parent.get('relations', [])
-            
-            # Filtrar solo relaciones de tipo hijo (Child)
-            child_ids = []
-            for relation in relations:
-                if relation.get('rel') == 'System.LinkTypes.Hierarchy-Forward':
-                    # Extraer ID de la URL
-                    child_url = relation['url']
-                    child_id = int(child_url.split('/')[-1])
-                    child_ids.append(child_id)
-            
-            if not child_ids:
-                logger.debug(f"🔍 No se encontraron work items hijos para el PBI #{parent_id}")
-                return []
-            
-            # Obtener detalles de cada hijo
-            children = []
-            for child_id in child_ids:
-                child = self.get_work_item(child_id)
-                if child:
-                    children.append(child)
-            
-            logger.info(f"🔍 Encontrados {len(children)} work items hijos del PBI #{parent_id}")
-            return children
-            
-        except Exception as e:
-            logger.error(f"❌ Excepción al obtener work items hijos: {e}")
-            return []
-    
-    def add_comment(self, work_item_id: int, comment: str) -> bool:
-        """
-        Agrega un comentario a un Work Item.
-        
-        Args:
-            work_item_id: ID del work item
-            comment: Texto del comentario
-        
-        Returns:
-            bool: True si se agregó exitosamente
-        """
-        if not self._validate_config():
-            logger.error("❌ Configuración de Azure DevOps incompleta")
-            return False
-        
-        try:
-            url = (
-                f"{self.base_url}/{self.project}/_apis/wit/workitems/"
-                f"{work_item_id}/comments?api-version={self.api_version}-preview.3"
-            )
-            
-            body = {"text": comment}
-            
-            response = requests.post(url, json=body, headers=self._get_headers(), timeout=30)
-            
-            if response.status_code == 200:
-                logger.info(f"✅ Comentario agregado al Work Item {work_item_id}")
-                return True
-            else:
-                logger.error(f"❌ Error al agregar comentario: {response.status_code}")
-                logger.error(f"Respuesta del servidor: {response.text[:500]}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"❌ Excepción al agregar comentario: {e}")
-            return False
-    
     def create_task(
         self,
         title: str,
@@ -501,6 +272,9 @@ class AzureDevOpsClient:
             assigned_to = settings.AZURE_ASSIGNED_TO
         
         try:
+            # Validar y truncar título si es necesario
+            title = _truncate_title(title)
+            
             url = (
                 f"{self.base_url}/{self.project}/_apis/wit/workitems/"
                 f"$Task?api-version={self.api_version}"
@@ -620,6 +394,9 @@ class AzureDevOpsClient:
             return None
         
         try:
+            # Validar y truncar título si es necesario
+            title = _truncate_title(title)
+            
             url = (
                 f"{self.base_url}/{self.project}/_apis/wit/workitems/"
                 f"$Bug?api-version={self.api_version}"

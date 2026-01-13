@@ -261,6 +261,11 @@ test.each([
   ✅ expect(Calculator.add(2, 3)).toBe(5)
 - **DECIMALES y DIVISIONES**: usar **.toBeCloseTo(expected, numDigits)**
   ✅ expect(Calculator.divide(10, 3)).toBeCloseTo(3.333, 3)
+- **LÍMITE DE DECIMALES**: Cuando uses números decimales en tests, MÁXIMO 4 dígitos decimales
+  ✅ CORRECTO: {{ a: 3.1416, b: 2.5, expectedResult: 7.8540 }}
+  ✅ CORRECTO: expect(result).toBeCloseTo(3.3333, 4)
+  ❌ INCORRECTO: {{ a: 3.141592653, b: 2.5 }} (demasiados decimales)
+  ❌ INCORRECTO: expectedResult: 7.85398163 (más de 4 decimales)
 - **EVITAR NÚMEROS > 1e9**: JavaScript tiene límites de precisión
   ❌ NUNCA: expect(calc.add(999999999999, 1))...
   ✅ EN SU LUGAR: expect(Calculator.add(1000000, 1)).toBe(1000001)

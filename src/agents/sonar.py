@@ -176,6 +176,9 @@ def sonar_node(state: AgentState) -> AgentState:
             directorio=settings.OUTPUT_DIR
         )
         
+        # Construir ruta completa del reporte para adjuntar
+        ruta_reporte = os.path.join(settings.OUTPUT_DIR, nombre_reporte)
+        
         # Determinar si el código pasa el análisis
         codigo_aceptable = es_codigo_aceptable(resultado_analisis)
         
@@ -196,16 +199,31 @@ def sonar_node(state: AgentState) -> AgentState:
             # Resetear contador cuando pasa
             state['sonarqube_attempt_count'] = 0
             
-            # === INICIO: Agregar comentario de aprobación en Azure DevOps ===
+            # === INICIO: Agregar comentario y adjuntar reporte en Azure DevOps ===
             if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
                 try:
                     task_id = state['azure_implementation_task_id']
+                    
+                    # Agregar comentario de aprobación
                     azure_service.add_sonarqube_approval_comment(task_id, nombre_reporte, state)
                     logger.info(f"📝 Comentario de aprobación agregado a Task #{task_id}")
+                    
+                    # Adjuntar reporte al work item
+                    success_attach = azure_service.client.attach_file(
+                        work_item_id=task_id,
+                        file_path=ruta_reporte,
+                        comment=f"✅ Reporte SonarQube - Código aprobado (req{state['attempt_count']}_sq{state['sonarqube_attempt_count']})"
+                    )
+                    
+                    if success_attach:
+                        logger.info(f"📎 Reporte SonarQube adjuntado a Task #{task_id}")
+                    else:
+                        logger.warning(f"⚠️ No se pudo adjuntar el reporte a Task #{task_id}")
+                        
                 except Exception as e:
-                    logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+                    logger.warning(f"⚠️ Error en operaciones de Azure DevOps: {e}")
                     logger.debug(f"Stack trace: {e}", exc_info=True)
-            # === FIN: Comentario en Azure DevOps ===
+            # === FIN: Comentario y adjunto en Azure DevOps ===
             
             log_agent_execution(logger, "SonarQube", "completado", {
                 "resultado": "aprobado",
@@ -257,10 +275,12 @@ def sonar_node(state: AgentState) -> AgentState:
             
             logger.info(f"➡️ Instrucciones de corrección generadas - Intento {state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']}")
             
-            # === INICIO: Agregar comentario de rechazo en Azure DevOps ===
+            # === INICIO: Agregar comentario y adjuntar reporte en Azure DevOps ===
             if settings.AZURE_DEVOPS_ENABLED and state.get('azure_implementation_task_id'):
                 try:
                     task_id = state['azure_implementation_task_id']
+                    
+                    # Agregar comentario de issues
                     azure_service.add_sonarqube_issues_comment(
                         task_id, 
                         state['sonarqube_attempt_count'], 
@@ -269,10 +289,23 @@ def sonar_node(state: AgentState) -> AgentState:
                         nombre_instrucciones
                     )
                     logger.info(f"📝 Comentario de issues agregado a Task #{task_id}")
+                    
+                    # Adjuntar reporte al work item
+                    success_attach = azure_service.client.attach_file(
+                        work_item_id=task_id,
+                        file_path=ruta_reporte,
+                        comment=f"⚠️ Reporte SonarQube - Requiere correcciones (intento {state['sonarqube_attempt_count']}/{state['max_sonarqube_attempts']})"
+                    )
+                    
+                    if success_attach:
+                        logger.info(f"📎 Reporte SonarQube adjuntado a Task #{task_id}")
+                    else:
+                        logger.warning(f"⚠️ No se pudo adjuntar el reporte a Task #{task_id}")
+                        
                 except Exception as e:
-                    logger.warning(f"⚠️ No se pudo agregar comentario en Azure DevOps: {e}")
+                    logger.warning(f"⚠️ Error en operaciones de Azure DevOps: {e}")
                     logger.debug(f"Stack trace: {e}", exc_info=True)
-            # === FIN: Comentario en Azure DevOps ===
+            # === FIN: Comentario y adjunto en Azure DevOps ===
             
             log_agent_execution(logger, "SonarQube", "completado", {
                 "resultado": "rechazado",

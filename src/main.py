@@ -340,11 +340,14 @@ def main():
     # prompt = {
     #     "Implementa en typescript un rate limiter (limitador de peticiones) con ventana deslizante en TypeScript"
     # }
+    # prompt = {
+    #     "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
+    # }
 
     prompt = {
-        "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
+        "crea en typescriptn un Singleton thread-safe para gestionar configuración de aplicación"
     }
-
+    
     final_state = run_development_workflow(prompt, max_attempts=3)
     
     if final_state and final_state.get('validado'):
