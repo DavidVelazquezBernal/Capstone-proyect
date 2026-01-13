@@ -100,6 +100,266 @@ class AzureDevOpsClient:
             logger.error(f"❌ Error al conectar con Azure DevOps: {e}")
             return False
     
+    def search_work_items(
+        self,
+        title_contains: str = "",
+        work_item_type: str = "Product Backlog Item",
+        tags: Optional[List[str]] = None,
+        max_results: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Busca work items en Azure DevOps usando WIQL (Work Item Query Language).
+        
+        Args:
+            title_contains: Texto que debe contener el título
+            work_item_type: Tipo de work item ("Product Backlog Item", "Task", "Bug")
+            tags: Lista de tags para filtrar (opcional)
+            max_results: Número máximo de resultados
+        
+        Returns:
+            Lista de work items encontrados
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return []
+        
+        try:
+            # Construir query WIQL
+            wiql_query = f"""
+            SELECT [System.Id], [System.Title], [System.State], [System.Tags], [System.CreatedDate]
+            FROM WorkItems
+            WHERE [System.TeamProject] = '{self.project}'
+            AND [System.WorkItemType] = '{work_item_type}'
+            """
+            
+            # Agregar filtro por título si se especifica
+            if title_contains:
+                wiql_query += f" AND [System.Title] CONTAINS '{title_contains}'"
+            
+            # Agregar filtro por tags si se especifica
+            if tags:
+                for tag in tags:
+                    wiql_query += f" AND [System.Tags] CONTAINS '{tag}'"
+            
+            # Ordenar por fecha de creación descendente
+            wiql_query += " ORDER BY [System.CreatedDate] DESC"
+            
+            # Ejecutar query WIQL
+            wiql_url = f"{self.base_url}/{self.project}/_apis/wit/wiql?api-version={self.api_version}"
+            wiql_body = {"query": wiql_query}
+            
+            wiql_response = requests.post(
+                wiql_url,
+                json=wiql_body,
+                headers=self._get_headers(),
+                timeout=30
+            )
+            
+            if wiql_response.status_code != 200:
+                logger.error(f"❌ Error en query WIQL: {wiql_response.status_code}")
+                logger.error(f"Respuesta: {wiql_response.text}")
+                return []
+            
+            wiql_result = wiql_response.json()
+            work_item_refs = wiql_result.get('workItems', [])
+            
+            if not work_item_refs:
+                logger.debug("No se encontraron work items")
+                return []
+            
+            # Limitar resultados
+            work_item_refs = work_item_refs[:max_results]
+            
+            # Obtener detalles completos de los work items
+            work_item_ids = [str(ref['id']) for ref in work_item_refs]
+            ids_param = ",".join(work_item_ids)
+            
+            details_url = (
+                f"{self.base_url}/{self.project}/_apis/wit/workitems?"
+                f"ids={ids_param}&api-version={self.api_version}"
+            )
+            
+            details_response = requests.get(
+                details_url,
+                headers=self._get_headers(),
+                timeout=30
+            )
+            
+            if details_response.status_code == 200:
+                result = details_response.json()
+                work_items = result.get('value', [])
+                logger.debug(f"✅ Encontrados {len(work_items)} work items")
+                return work_items
+            else:
+                logger.error(f"❌ Error al obtener detalles: {details_response.status_code}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción al buscar work items: {e}")
+            logger.debug(f"Stack trace: {e}", exc_info=True)
+            return []
+    
+    def get_child_work_items(self, parent_id: int) -> List[Dict[str, Any]]:
+        """
+        Obtiene los work items hijos de un work item padre.
+        
+        Args:
+            parent_id: ID del work item padre
+        
+        Returns:
+            Lista de work items hijos
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return []
+        
+        try:
+            # Obtener el work item padre con sus relaciones
+            url = (
+                f"{self.base_url}/{self.project}/_apis/wit/workitems/{parent_id}?"
+                f"$expand=relations&api-version={self.api_version}"
+            )
+            
+            response = requests.get(
+                url,
+                headers=self._get_headers(),
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"❌ Error al obtener work item #{parent_id}: {response.status_code}")
+                return []
+            
+            work_item = response.json()
+            relations = work_item.get('relations', [])
+            
+            # Filtrar relaciones de tipo hijo (System.LinkTypes.Hierarchy-Forward)
+            child_refs = [
+                rel for rel in relations
+                if rel.get('rel') == 'System.LinkTypes.Hierarchy-Forward'
+            ]
+            
+            if not child_refs:
+                logger.debug(f"No se encontraron work items hijos para #{parent_id}")
+                return []
+            
+            # Extraer IDs de los hijos
+            child_ids = []
+            for ref in child_refs:
+                url = ref.get('url', '')
+                # URL format: https://dev.azure.com/org/project/_apis/wit/workItems/123
+                if url:
+                    child_id = url.split('/')[-1]
+                    child_ids.append(child_id)
+            
+            if not child_ids:
+                return []
+            
+            # Obtener detalles completos de los work items hijos
+            ids_param = ",".join(child_ids)
+            details_url = (
+                f"{self.base_url}/{self.project}/_apis/wit/workitems?"
+                f"ids={ids_param}&api-version={self.api_version}"
+            )
+            
+            details_response = requests.get(
+                details_url,
+                headers=self._get_headers(),
+                timeout=30
+            )
+            
+            if details_response.status_code == 200:
+                result = details_response.json()
+                children = result.get('value', [])
+                logger.debug(f"✅ Encontrados {len(children)} work items hijos para #{parent_id}")
+                return children
+            else:
+                logger.error(f"❌ Error al obtener detalles de hijos: {details_response.status_code}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción al obtener work items hijos: {e}")
+            logger.debug(f"Stack trace: {e}", exc_info=True)
+            return []
+    
+    def update_work_item(
+        self,
+        work_item_id: int,
+        fields: Dict[str, Any],
+        comment: Optional[str] = None
+    ) -> bool:
+        """
+        Actualiza campos de un work item en Azure DevOps.
+        
+        Args:
+            work_item_id: ID del work item a actualizar
+            fields: Diccionario con los campos a actualizar {"System.State": "Done", "System.AssignedTo": "user@domain.com"}
+            comment: Comentario opcional para agregar al work item
+        
+        Returns:
+            bool: True si se actualizó exitosamente
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return False
+        
+        try:
+            url = (
+                f"{self.base_url}/{self.project}/_apis/wit/workitems/{work_item_id}?"
+                f"api-version={self.api_version}"
+            )
+            
+            # Construir operaciones JSON Patch
+            operations = []
+            
+            for field_path, value in fields.items():
+                operations.append({
+                    "op": "add",
+                    "path": f"/fields/{field_path}",
+                    "value": value
+                })
+            
+            # Agregar comentario si se especifica
+            if comment:
+                operations.append({
+                    "op": "add",
+                    "path": "/fields/System.History",
+                    "value": comment
+                })
+            
+            headers = self._get_headers("application/json-patch+json")
+            response = requests.patch(
+                url,
+                json=operations,
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                logger.info(f"✅ Work item #{work_item_id} actualizado exitosamente")
+                
+                # Log de campos actualizados
+                updated_fields = ", ".join([f"{k}={v}" for k, v in fields.items()])
+                logger.debug(f"   Campos actualizados: {updated_fields}")
+                
+                log_agent_execution(
+                    logger,
+                    "AzureDevOps",
+                    "Work item actualizado",
+                    {"id": work_item_id, "fields": fields}
+                )
+                
+                return True
+            else:
+                logger.error(f"❌ Error al actualizar work item #{work_item_id}: {response.status_code}")
+                logger.error(f"Respuesta: {response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción al actualizar work item: {e}")
+            logger.debug(f"Stack trace: {e}", exc_info=True)
+            return False
+    
     def create_pbi(
         self,
         title: str,
@@ -473,6 +733,59 @@ class AzureDevOpsClient:
         except Exception as e:
             logger.error(f"❌ Excepción al crear Bug: {e}")
             return None
+    
+    def add_comment(
+        self,
+        work_item_id: int,
+        comment: str
+    ) -> bool:
+        """
+        Agrega un comentario a un work item en Azure DevOps.
+        
+        Args:
+            work_item_id: ID del work item
+            comment: Texto del comentario (soporta HTML)
+        
+        Returns:
+            bool: True si se agregó exitosamente
+        """
+        if not self._validate_config():
+            logger.error("❌ Configuración de Azure DevOps incompleta")
+            return False
+        
+        try:
+            url = (
+                f"{self.base_url}/{self.project}/_apis/wit/workitems/{work_item_id}?"
+                f"api-version={self.api_version}"
+            )
+            
+            # Agregar comentario usando el campo System.History
+            operations = [{
+                "op": "add",
+                "path": "/fields/System.History",
+                "value": comment
+            }]
+            
+            headers = self._get_headers("application/json-patch+json")
+            response = requests.patch(
+                url,
+                json=operations,
+                headers=headers,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                logger.debug(f"✅ Comentario agregado al work item #{work_item_id}")
+                return True
+            else:
+                logger.error(f"❌ Error al agregar comentario: {response.status_code}")
+                logger.error(f"Respuesta: {response.text}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción al agregar comentario: {e}")
+            logger.debug(f"Stack trace: {e}", exc_info=True)
+            return False
     
     def attach_file(
         self,

@@ -77,6 +77,8 @@ class Prompts:
     SOLO las funciones y clases de NIVEL SUPERIOR (principales) DEBEN ser exportadas usando 'export' para que puedan ser importadas en los tests.
     Las funciones auxiliares o helpers internos NO deben usar 'export'.
     
+    TODAS las variables DEBEN tener tipado explícito. NO uses inferencia de tipos implícita.
+    
     Ejemplo correcto:
     ```typescript
     // ✅ Función principal - SÍ exportar
@@ -93,6 +95,18 @@ class Prompts:
     export class MiClase {
         // métodos de la clase
     }
+    
+    // ✅ Variables con tipado explícito
+    const resultado: number = 42;
+    let contador: number = 0;
+    const mensaje: string = "Hello";
+    const activo: boolean = true;
+    const items: string[] = ["a", "b"];
+    const config: { port: number; host: string } = { port: 3000, host: "localhost" };
+    
+    // ❌ INCORRECTO - Sin tipado explícito
+    const resultado = 42;  // NO hacer esto
+    let contador = 0;      // NO hacer esto
     ```
     
     IMPORTANTE - Manejo de precisión numérica:

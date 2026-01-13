@@ -327,20 +327,103 @@ El sistema implementa tres bucles de corrección:
    - Reingeniería de requisitos si no cumple visión de negocio
    - Máximo 1 ciclo completo (configurable)
 
-## 🛠️ Tecnologías
 
-- **LangGraph**: Framework de grafos de agentes
-- **Google Gemini**: Modelo LLM
-- **Pydantic**: Validación de datos
-- **Vitest**: Testing framework para TypeScript/JavaScript
-- **Pytest**: Testing framework para Python
-- **SonarQube MCP**: Análisis estático de calidad de código
-- **SonarCloud**: Análisis de calidad en la nube (opcional)
-- **🔷 Azure DevOps REST API**: Integración con Azure DevOps (opcional)
-- **🐙 PyGithub**: Integración con GitHub API (opcional)
-- **Python-dotenv**: Gestión de entorno
+## 🛠️  Dependencias Tecnológicas y Componentes de Terceros
 
-## 📝 Configuración
+### Core Framework y LLM
+
+| Componente | Versión | Propósito | Licencia |
+|------------|---------|-----------|----------|
+| **google-genai** | ≥0.3.0 | SDK oficial de Google Gemini para generación de código y análisis | Apache 2.0 |
+| **langgraph** | ≥0.2.0 | Framework de grafos para orquestación de agentes multiagente | MIT |
+| **langchain-core** | ≥0.3.0 | Abstracciones core de LangChain para LLMs y prompts | MIT |
+| **langchain-google-genai** | ≥2.0.0 | Wrapper LangChain para integración con Google Gemini | MIT |
+
+### Validación y Schemas
+
+| Componente | Versión | Propósito | Licencia |
+|------------|---------|-----------|----------|
+| **pydantic** | ≥2.0.0, <3.0.0 | Validación de datos y schemas para requisitos formales | MIT |
+| **pydantic-core** | ≥2.0.0 | Core de Pydantic (dependencia interna) | MIT |
+| **typing-extensions** | ≥4.0.0 | Extensiones de tipado para Python 3.8+ | PSF |
+| **annotated-types** | ≥0.4.0 | Tipos anotados para validación | MIT |
+
+### Ejecución de Código y Testing
+
+| Componente | Versión | Propósito | Licencia |
+|------------|---------|-----------|----------|
+| **e2b-code-interpreter** | ≥1.0.0 | Sandbox seguro para ejecución de código Python/TypeScript | Apache 2.0 |
+| **vitest** | ^4.0.15 | Framework de testing para TypeScript (npm) | MIT |
+| **pytest** | latest | Framework de testing para Python | MIT |
+
+### Análisis de Calidad de Código
+
+| Componente | Versión | Propósito | Licencia |
+|------------|---------|-----------|----------|
+| **SonarQube MCP** | - | Model Context Protocol para análisis estático de código | LGPL 3.0 |
+| **SonarCloud** | API REST | Servicio cloud de análisis de calidad de código | Propietario |
+| **SonarScanner CLI** | latest | Cliente CLI para análisis local con SonarQube Server | LGPL 3.0 |
+
+### Integraciones Externas
+
+| Componente | Versión | Propósito | Licencia |
+|------------|---------|-----------|----------|
+| **PyGithub** | ≥2.1.0 | SDK de GitHub API para gestión de repos, branches, PRs y commits | LGPL 3.0 |
+| **Azure DevOps REST API** | v7.0 | API REST para gestión de work items (PBIs, Tasks, Bugs) | Propietario |
+| **requests** | latest | Cliente HTTP para llamadas a APIs REST | Apache 2.0 |
+
+### Utilidades y Configuración
+
+| Componente | Versión | Propósito | Licencia |
+|------------|---------|-----------|----------|
+| **python-dotenv** | ≥1.0.0 | Gestión de variables de entorno desde archivos .env | BSD 3-Clause |
+| **zstandard** | ≥0.19.0 | Compresión/descompresión requerida por LangChain | BSD |
+| **ipython** | ≥8.0.0 | Shell interactivo mejorado (opcional para debugging) | BSD |
+| **pyppeteer** | ≥2.0.0, <3.0.0 | Renderizado de diagramas Mermaid (fallback local) | MIT |
+
+### Dependencias de Node.js (para TypeScript)
+
+| Componente | Versión | Propósito | Instalación |
+|------------|---------|-----------|-------------|
+| **vitest** | ^4.0.15 | Testing framework para TypeScript | `npm install -D vitest` |
+| **Node.js** | ≥18.0.0 | Runtime de JavaScript para ejecutar tests TypeScript | [nodejs.org](https://nodejs.org) |
+| **npm** | ≥9.0.0 | Gestor de paquetes de Node.js | Incluido con Node.js |
+
+### APIs y Servicios Externos Requeridos
+
+| Servicio | Propósito | Configuración |
+|----------|-----------|---------------|
+| **Google Gemini API** | Generación de código, análisis y validación con LLM | `GEMINI_API_KEY` en .env |
+| **E2B API** | Sandbox seguro para ejecución de código | `E2B_API_KEY` en .env |
+| **GitHub API** (opcional) | Gestión de repositorio, branches, PRs | `GITHUB_TOKEN` en .env |
+| **Azure DevOps API** (opcional) | Creación y gestión de work items | `AZURE_DEVOPS_PAT` en .env |
+| **SonarCloud API** (opcional) | Análisis de calidad en la nube | `SONARCLOUD_TOKEN` en .env |
+| **SonarQube Server** (opcional) | Análisis de calidad local | Servidor local en `http://localhost:9000` |
+
+### Notas de Compatibilidad
+
+- **Python**: Requiere Python 3.8 o superior
+- **Node.js**: Requiere Node.js 18.0 o superior para Vitest
+- **Sistema Operativo**: Compatible con Windows, Linux y macOS
+- **Azure DevOps**: Requiere API v7.0 o superior
+- **GitHub**: Requiere permisos de repo, PR y workflow en el token
+
+### Instalación de Dependencias
+
+```bash
+# Python dependencies
+pip install -r requirements.txt
+
+# Node.js dependencies (para testing TypeScript)
+cd output
+npm install -D vitest
+cd ..
+
+# Python testing
+pip install pytest
+```
+
+## �📝 Configuración
 
 Editar `src/config/settings.py` para ajustar:
 - `MAX_ATTEMPTS`: Máximo de ciclos completos (default: 3)
