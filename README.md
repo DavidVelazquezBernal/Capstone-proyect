@@ -102,8 +102,12 @@ Crear archivo `.env` en la raíz del proyecto:
 GEMINI_API_KEY=tu_clave_api_aqui
 E2B_API_KEY=tu_clave_e2b_aqui
 
-# SonarQube (opcional - para análisis avanzado)
-SONARQUBE_URL=https://sonarcloud.io
+# SonarScanner CLI (opcional - para análisis local con servidor SonarQube)
+# ⚠️ IMPORTANTE: Si SONARSCANNER_ENABLED=true, DEBES tener un servidor SonarQube corriendo
+# Ver README_SONARSCANNER.md para instrucciones de instalación
+SONARSCANNER_ENABLED=false
+SONARSCANNER_PATH=sonar-scanner.bat
+SONARQUBE_URL=http://localhost:9000
 SONARQUBE_TOKEN=tu_token_aqui
 SONARQUBE_PROJECT_KEY=tu_proyecto_key
 
@@ -136,7 +140,16 @@ LOG_LEVEL=INFO
 LOG_TO_FILE=true
 ```
 
-**Nota:** Las credenciales de SonarQube son **opcionales**. El sistema funciona con análisis estático básico sin ellas.
+**⚠️ Nota sobre SonarScanner CLI:**
+
+Si configuras `SONARSCANNER_ENABLED=true`, **DEBES tener un servidor SonarQube ejecutándose localmente**. De lo contrario, obtendrás errores de conexión (`Connection refused`).
+
+**Opciones de análisis de código:**
+1. **Análisis estático local** (por defecto) - Sin configuración adicional
+2. **SonarCloud** - Análisis en la nube (requiere cuenta y token)
+3. **SonarScanner CLI** - Análisis local con servidor SonarQube (requiere servidor corriendo)
+
+Ver **[README_SONARSCANNER.md](README_SONARSCANNER.md)** para instrucciones completas de instalación y configuración de SonarQube local.
 
 **🔷 Azure DevOps Integration**: Para habilitar la creación automática de PBIs y Tasks:
 

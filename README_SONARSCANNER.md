@@ -1,13 +1,39 @@
-# 🔍 SonarScanner CLI - Integración Completada
+# 🔍 SonarScanner CLI - Guía de Configuración
 
-## ✅ Cambios Realizados
+## ⚠️ IMPORTANTE: Requisito de Servidor SonarQube
 
-Se ha actualizado el sistema para usar **SonarScanner CLI** en lugar del análisis estático simulado.
+**Si configuras `SONARSCANNER_ENABLED=true`, DEBES tener un servidor SonarQube ejecutándose localmente.**
 
-### 1. Instalación de SonarScanner CLI
+Sin un servidor corriendo, obtendrás errores como:
+```
+java.net.ConnectException: Connection refused: getsockopt
+```
+
+## 🚀 Inicio Rápido
+
+### Arrancar Servidor SonarQube Local
+
+**Opción 1: Docker (Recomendado)**
+```bash
+docker run -d --name sonarqube -p 9000:9000 sonarqube:latest
+```
+
+**Opción 2: Manual**
+```bash
+# Descargar desde: https://www.sonarsource.com/products/sonarqube/downloads/
+# Ejecutar:
+C:\sonarqube\bin\windows-x86-64\StartSonar.bat
+```
+
+### Verificar que el Servidor está Corriendo
+- Abre: `http://localhost:9000`
+- Login: `admin` / `admin`
+- Genera un token en: **My Account** → **Security** → **Generate Token**
+
+## ✅ Instalación de SonarScanner CLI
 
 - **Ubicación**: `C:\sonar-scanner\sonar-scanner-6.2.1.4610-windows-x64\`
-- **PATH actualizado**: El ejecutable está disponible en el PATH del usuario
+- **Ejecutable**: `C:\sonar-scanner\sonar-scanner-6.2.1.4610-windows-x64\bin\sonar-scanner.bat`
 - **Versión**: 6.2.1.4610
 
 ### 2. Archivos Modificados
@@ -37,25 +63,37 @@ Se ha actualizado el sistema para usar **SonarScanner CLI** en lugar del anális
 
 ## 🚀 Cómo Usar
 
-### Opción 1: Análisis Local con SonarScanner CLI (Sin Servidor)
+### Opción 1: SonarScanner CLI con Servidor Local
+
+⚠️ **REQUISITO**: Servidor SonarQube debe estar corriendo en `http://localhost:9000`
 
 ```bash
-# En src/.env
+# 1. Arrancar servidor SonarQube (ver sección anterior)
+docker run -d --name sonarqube -p 9000:9000 sonarqube:latest
+
+# 2. Configurar en src/.env
 SONARSCANNER_ENABLED=true
-```
-
-**Resultado**: Análisis básico local sin necesidad de servidor SonarQube.
-
-### Opción 2: Análisis Completo con Servidor SonarQube
-
-```bash
-# En src/.env
-SONARSCANNER_ENABLED=true
+SONARSCANNER_PATH=C:\sonar-scanner\sonar-scanner-6.2.1.4610-windows-x64\bin\sonar-scanner.bat
 SONARQUBE_URL=http://localhost:9000
 SONARQUBE_TOKEN=tu-token-aqui
+SONARQUBE_PROJECT_KEY=capstone-project
 ```
 
 **Resultado**: Análisis completo con todas las reglas, métricas y Quality Gates.
+
+**Comando para verificar scanner:**
+```bash
+C:\sonar-scanner\sonar-scanner-6.2.1.4610-windows-x64\bin\sonar-scanner.bat --version
+```
+
+### Opción 2: Análisis Estático Local (Sin Servidor)
+
+```bash
+# En src/.env
+SONARSCANNER_ENABLED=false
+```
+
+**Resultado**: Análisis básico local sin necesidad de servidor SonarQube.
 
 ### Opción 3: Usar SonarCloud (Recomendado para proyectos públicos)
 

@@ -74,9 +74,26 @@ class Prompts:
     Tipos de entrada y salida tipados según el lenguaje pedido (type hints) cuando sea posible.
     
     CRÍTICO - Para TypeScript:
-    TODAS las funciones DEBEN ser exportadas usando 'export' para que puedan ser importadas en los tests.
-    Ejemplo correcto: export function nombreFuncion(param: tipo): tipo { ... }
-    O bien: export const nombreFuncion = (param: tipo): tipo => { ... }
+    SOLO las funciones y clases de NIVEL SUPERIOR (principales) DEBEN ser exportadas usando 'export' para que puedan ser importadas en los tests.
+    Las funciones auxiliares o helpers internos NO deben usar 'export'.
+    
+    Ejemplo correcto:
+    ```typescript
+    // ✅ Función principal - SÍ exportar
+    export function nombreFuncion(param: tipo): tipo { 
+        return helperInterno(param);
+    }
+    
+    // ✅ Función auxiliar interna - NO exportar
+    function helperInterno(param: tipo): tipo {
+        // lógica auxiliar
+    }
+    
+    // ✅ Clase principal - SÍ exportar
+    export class MiClase {
+        // métodos de la clase
+    }
+    ```
     
     IMPORTANTE - Manejo de precisión numérica:
     Para TypeScript: Si la función realiza operaciones con números de punto flotante (decimales), DEBE redondear el resultado 

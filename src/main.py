@@ -331,8 +331,18 @@ def main():
     # prompt = {
     #     "Crea en typescript un middleware de logging que registre requests, responses y errores con diferentes niveles"
     # }
+    # prompt = {
+    #     "Crea en typescript un sistema de permisos basado en roles (RBAC) con herencia de roles y permisos granulares"
+    # }
+    # prompt = {
+    #     "Crea en typescript un sistema de caché LRU (Least Recently Used) con tiempo de expiración configurable"
+    # }
+    # prompt = {
+    #     "Implementa en typescript un rate limiter (limitador de peticiones) con ventana deslizante en TypeScript"
+    # }
+
     prompt = {
-        "Crea en typescript un sistema de permisos basado en roles (RBAC) con herencia de roles y permisos granulares"
+        "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
     }
 
     final_state = run_development_workflow(prompt, max_attempts=3)
