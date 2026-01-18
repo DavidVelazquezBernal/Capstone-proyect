@@ -303,12 +303,6 @@ prompt_ts = "Quiero una función en TypeScript para sumar un array de números"
 final_state_ts = run_development_workflow(prompt_ts)
 ```
 
-**Valores por defecto** (definidos en `settings.py`):
-- `MAX_ATTEMPTS = 3` - Ciclos completos
-- `MAX_DEBUG_ATTEMPTS = 3` - Testing-Desarrollador
-- `MAX_SONARQUBE_ATTEMPTS = 3` - SonarQube-Desarrollador
-- `MAX_REVISOR_ATTEMPTS = 3` - Revisión de código
-
 ### Salida del código generado
 
 El sistema detecta automáticamente el lenguaje del código generado:
@@ -331,7 +325,7 @@ El código se limpia automáticamente de marcadores markdown (` ```python `, ` `
 >
 > **Output Esperado:** JSON estructurado con requisitos formales.
 >
-> **Integración Azure DevOps:** Si está habilitado, crea automáticamente un PBI con la especificación.
+>🔷**Azure DevOps:** Si está habilitado, crea automáticamente un PBI con la especificación.
 
 ### 2. 💻 Developer-Code (Role: Desarrollador y Corrector)
 
@@ -347,8 +341,8 @@ El código se limpia automáticamente de marcadores markdown (` ```python `, ` `
 > 4.  El código debe seguir mejores prácticas y estándares.
 >
 > **Output Esperado:** Código Python/TypeScript completo en bloque markdown.
->
-> **Integración Azure DevOps:** En primera ejecución, crea Tasks de Implementación y Testing.
+>🐙 GitHub: Crea branch y pushea código
+>🔷**Azure DevOps:** En primera ejecución, crea Tasks de Implementación y Testing.
 
 ### 3. 🔍 Sonar (Role: Control de Calidad)
 
@@ -367,6 +361,7 @@ El código se limpia automáticamente de marcadores markdown (` ```python `, ` `
 > - Máximo 2 issues CRITICAL
 >
 > **Output Esperado:** Reporte de análisis y decisión PASSED/FAILED.
+>🔷**Azure DevOps**: Comenta en Tasks
 
 ### 4. 🧪 Developer-UnitTests (Role: Generador y Ejecutor de Tests)
 
@@ -387,9 +382,8 @@ El código se limpia automáticamente de marcadores markdown (` ```python `, ` `
 >
 > **Output Esperado:** Tests generados, ejecutados y reporte completo.
 >
-> **Integración GitHub:** Si tests pasan, pushea tests al branch (opcional).
->
-> **Integración Azure DevOps:** Si tests pasan, adjuntar archivo de tests al PBI y Task de Testing (opcional).
+> 🐙**GitHub:** Si tests pasan, pushea tests al branch (opcional).
+> 🔷**Azure DevOps:** Si tests pasan, adjuntar archivo de tests al PBI y Task de Testing (opcional).
 
 ### 5. 👨‍💻 Developer2-Reviewer (Role: Revisor de Código)
 
@@ -407,7 +401,7 @@ El código se limpia automáticamente de marcadores markdown (` ```python `, ` `
 >
 > **Output Esperado:** Decisión APROBADO/RECHAZADO con puntuación y comentarios.
 >
-> **Integración GitHub:** Si aprueba, aprobar PR en GitHub (opcional).
+> 🐙**GitHub:** Si aprueba, aprobar PR en GitHub (opcional).
 
 ### 6. 🔀 Developer-CompletePR (Role: Completador de PR)
 
@@ -424,7 +418,7 @@ El código se limpia automáticamente de marcadores markdown (` ```python `, ` `
 >
 > **Output Esperado:** PR mergeada y branches limpiados.
 >
-> **Integración GitHub:** Merge automático en GitHub (opcional).
+>🐙**GitHub:** Merge automático en GitHub (opcional).
 
 ### 7. ✅ Stakeholder (Role: Validador de Negocio Final)
 
@@ -439,7 +433,7 @@ El código se limpia automáticamente de marcadores markdown (` ```python `, ` `
 >
 > **Output Esperado:** Un único bloque de texto bajo el título "**VALIDACIÓN FINAL**" que contenga **VALIDADO** o **RECHAZADO** y el **motivo** si es rechazado.
 >
-> **Integración Azure DevOps:** Si valida, adjuntar código final al PBI y Task de Implementación.
+> 🔷**Azure DevOps:** Si valida, adjuntar código final al PBI y Task de Implementación.
 
 ### Definición de Transiciones (Edges)
 
@@ -711,7 +705,7 @@ El sistema integra SonarQube mediante Model Context Protocol (MCP) para:
 
 Los reportes de SonarQube se guardan en `output/` junto con instrucciones de corrección detalladas.
 
-### 🔷 Integración con Azure DevOps (NUEVO)
+### 🔷 Integración con Azure DevOps
 
 El sistema ahora puede crear automáticamente **Product Backlog Items (PBIs)** en Azure DevOps durante la formalización de requisitos por el Product Owner.
 
