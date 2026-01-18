@@ -2,6 +2,9 @@
 .env
 *.env
 
+# SonarQube configuration with tokens
+sonar-project.properties
+
 # Python
 __pycache__/
 *.py[cod]

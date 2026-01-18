@@ -7,7 +7,7 @@ sonar.host.url=http://localhost:9000
 
 # Token de autenticación (generar en: My Account → Security → Generate Token)
 # Agregar tu token aquí (descomentar y reemplazar):
-sonar.token=sqp_a3d67c78c47283161cd6fe3052d9f27b89172b9e
+# sonar.token=tu-token-aqui
 
 # Información del proyecto
 sonar.projectKey=multiagentes-coding
