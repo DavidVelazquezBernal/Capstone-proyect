@@ -2,6 +2,87 @@
 
 Sistema multiagente para desarrollo automatizado de código Python y TypeScript usando LangGraph y Google Gemini.
 
+## 🎯 Objetivos y Filosofía del Proyecto
+
+### Objetivo Principal
+
+El objetivo principal es montar un **MVP (Minimum Viable Product)** que utilice múltiples agentes para el desarrollo de un código básico. Los agentes realizarán a partir de un prompt inicial:
+
+- ✅ Refinamiento de requisitos
+- ✅ Formalización de especificaciones técnicas
+- ✅ Generación de código en el lenguaje solicitado
+- ✅ Análisis de calidad con SonarQube/SonarCloud
+- ✅ Batería de pruebas unitarias que se ejecutan realmente
+- ✅ Revisión de código automatizada
+- ✅ Validación final de requisitos vs resultado obtenido
+
+### Filosofía: 100% VIBE CODING
+
+**No se añade manualmente ninguna línea de código**. La idea es que el propio código sea implementado por la IA y el desarrollador realice una labor de validación y de ampliación iterativa de requisitos.
+
+### LLMs Utilizados
+
+- **Vibe Coding**: Claude Sonnet 4.5
+- **Usado por los agentes**: Gemini 2.5 Flash, Gemini 3 flash-preview
+
+### Alcance del Proyecto
+
+- **Enfoque Backend**: Sin diseño Frontend (no UI ni UX)
+- **Lenguajes**: Python y TypeScript (con progresión futura hacia componentes Vue)
+- **Metodología**: Desarrollo iterativo de menos a más
+- **Integración**: Azure DevOps y GitHub para trazabilidad completa
+
+## 📊 Roadmap - Fases de Desarrollo
+
+### ✅ Fase 1: Construcción de funciones sencillas
+Se construirá una función sencilla en Python o TypeScript, que será probada y validada en el flujo de ejecución.
+
+**Estado**: ✅ **COMPLETADA**
+
+### ✅ Fase 2: Construcción de clases sencillas
+Se construirá una clase sencilla en TypeScript, que será probada y validada en el flujo de ejecución.
+
+**Estado**: ✅ **COMPLETADA**
+
+### ✅ Fase 3: Comunicación con Azure para crear PBIs
+El agente Product Owner se comunicará con Azure DevOps para crear el PBI respectivo.
+El agente Desarrollador se comunicará con Azure DevOps para crear el Work Item de codificación asociado al PBI anterior.
+
+**Estado**: ✅ **COMPLETADA**
+
+### ✅ Fase 4: Generación de Test Unitarios para el código generado
+El agente Generador de Pruebas generará un fichero con test unitarios para el código pedido y probará dichos tests en un framework asociado según el código fuente de la función (python, typescript, etc).
+También se generará un Work Item asociado a los Unit Test que prueban el código generado.
+
+**Estado**: ✅ **COMPLETADA**
+
+### ✅ Fase 5: Comunicación con SonarQube para mejorar código
+El agente Desarrollador se comunicará con un nuevo agente AnalizadorSonarQube que se puede comunicar vía MCP con SonarQube para mejorar su código. Si no es posible acceder a SonarQube, se validarán algunas reglas estáticas en local.
+
+**Estado**: ✅ **COMPLETADA** (con soporte SonarCloud adicional)
+
+### ✅ Fase 6: Validación del proceso por un StakeHolder
+El código será validado por un agente StakeHolder que verificará que el resultado satisface los requisitos iniciales. Si esta validación falla, el proceso volverá al Desarrollador.
+
+**Estado**: ✅ **COMPLETADA**
+
+### ✅ Fase 7: Subida de código y test a Azure
+De cara a demo se adjuntarán el código generado al Work Item asociado y al PBI asociado.
+De cara a demo se adjuntarán los unit test generados al Work Item asociado y al PBI asociado.
+
+**Estado**: ✅ **COMPLETADA**
+
+### ✅ Fase 8: Pull request con validación de código automática
+Se realizará una Pull Request con validación de código. Si no se satisface la pull request, entonces el código volverá al Desarrollador.
+Si se satisface, entonces se realizará un commit en un repositorio GitHub.
+
+**Estado**: ✅ **COMPLETADA** (incluye code review automático con LLM)
+
+### 🔄 Fase 9: Construcción de componentes Vue 3.0 sencillos
+Evolucionar el código para que la IA genere también componentes Vue basados en Vuetify sencillos.
+
+**Estado**: 🔄 **PENDIENTE**
+
 ## 📁 Estructura del Proyecto
 
 ```
@@ -22,7 +103,6 @@ Capstone proyect v2/
 │   │
 │   ├── tools/                       # Herramientas
 │   │   ├── __init__.py
-│   │   ├── code_executor.py         # Ejecución segura de código Python/TypeScript
 │   │   ├── sonarqube_mcp.py         # Integración con SonarQube MCP
 │   │   ├── azure_devops_integration.py  # 🔷 Cliente de Azure DevOps API
 │   │   └── file_utils.py            # Utilidades de archivos y detección de lenguaje
@@ -32,9 +112,9 @@ Capstone proyect v2/
 │   │   ├── product_owner.py         # Agente 1: Formalización de requisitos
 │   │   ├── developer_code.py        # Agente 2: Desarrollo y corrección de código
 │   │   ├── sonar.py                 # Agente 3: Análisis de calidad con SonarQube
-│   │   ├── developer_unit_tests.py  # Agente 4: Generación y ejecución de tests + PR completion
+│   │   ├── developer_unit_tests.py  # Agente 4: Tests + Agente 6: CompletePR
 │   │   ├── developer2_reviewer.py   # Agente 5: Revisión de código y aprobación de PR
-│   │   └── stakeholder.py           # Agente 6: Validación final de negocio
+│   │   └── stakeholder.py           # Agente 7: Validación final de negocio
 │   │
 │   ├── llm/                         # Cliente LLM
 │   │   ├── __init__.py
@@ -57,7 +137,9 @@ Capstone proyect v2/
 │
 ├── output/                          # Salidas generadas
 ├── .env                             # Variables de entorno
+├── .env.example                     # Ejemplo de variables de entorno
 ├── requirements.txt
+├── sonar-project.properties.example # Ejemplo de configuración SonarQube
 ├── DOCUMENTACION.md
 └── README.md
 ```
@@ -221,39 +303,11 @@ prompt_ts = "Quiero una función en TypeScript para sumar un array de números"
 final_state_ts = run_development_workflow(prompt_ts)
 ```
 
-### Configuración de Reintentos (RetryConfig)
-
-La clase `RetryConfig` centraliza toda la configuración de límites de reintentos:
-
-```python
-from src.config.settings import RetryConfig
-
-# Crear configuración desde valores por defecto de settings.py
-config = RetryConfig.from_settings()
-
-# Crear configuración personalizada
-config = RetryConfig(
-    max_attempts=2,              # Ciclos completos antes de fallo
-    max_debug_attempts=4,        # Intentos en bucle Testing-Desarrollador
-    max_sonarqube_attempts=3,    # Intentos en bucle SonarQube-Desarrollador
-    max_revisor_attempts=2       # Intentos de revisión de código
-)
-
-# Convertir a diccionario para inicializar estado
-state_dict = config.to_state_dict()
-# Retorna: {
-#   'max_attempts': 2, 'attempt_count': 0,
-#   'max_debug_attempts': 4, 'debug_attempt_count': 0,
-#   'max_sonarqube_attempts': 3, 'sonarqube_attempt_count': 0,
-#   'max_revisor_attempts': 2, 'revisor_attempt_count': 0
-# }
-```
-
 **Valores por defecto** (definidos en `settings.py`):
-- `MAX_ATTEMPTS = 1` - Ciclos completos
+- `MAX_ATTEMPTS = 3` - Ciclos completos
 - `MAX_DEBUG_ATTEMPTS = 3` - Testing-Desarrollador
 - `MAX_SONARQUBE_ATTEMPTS = 3` - SonarQube-Desarrollador
-- `MAX_REVISOR_ATTEMPTS = 2` - Revisión de código
+- `MAX_REVISOR_ATTEMPTS = 3` - Revisión de código
 
 ### Salida del código generado
 
@@ -264,50 +318,232 @@ El sistema detecta automáticamente el lenguaje del código generado:
 
 El código se limpia automáticamente de marcadores markdown (` ```python `, ` ```typescript `, ` ``` `).
 
-## 🔄 Flujo de Trabajo
+## ⚙️ Arquitectura del Sistema (LangGraph)
 
+
+### 1. 💼 Product Owner (Role: Formalizador de Requisitos)
+
+> **Tu rol es el de un Product Owner estricto y orientado a la entrega.**
+>
+> **Objetivo:** Recibir el prompt inicial y transformarlo en una especificación formal y ejecutable en formato JSON.
+>
+> **Instrucción Principal:** Desglosa el requisito en: 1. **Objetivo Funcional**. 2. **Lenguaje**. 3. **Función Principal** (Nombre y firma). 4. **Entradas Esperadas**. 5. **Salidas Esperadas**. 6. **Criterios de Aceptación**.
+>
+> **Output Esperado:** JSON estructurado con requisitos formales.
+>
+> **Integración Azure DevOps:** Si está habilitado, crea automáticamente un PBI con la especificación.
+
+### 2. 💻 Developer-Code (Role: Desarrollador y Corrector)
+
+> **Tu rol es el de un Desarrollador de Software sénior (Python/TypeScript).**
+>
+> **Objetivo:** Generar código que **satisface exactamente** todos los puntos de los `requisitos_formales`. Si hay feedback de SonarQube o errores de tests, corregir el código.
+>
+> **Instrucción Principal:**
+>
+> 1.  Si es primera ejecución, escribe el código desde cero.
+> 2.  Si hay issues de SonarQube, corrige los problemas de calidad.
+> 3.  Si hay errores de tests, corrige los bugs funcionales.
+> 4.  El código debe seguir mejores prácticas y estándares.
+>
+> **Output Esperado:** Código Python/TypeScript completo en bloque markdown.
+>
+> **Integración Azure DevOps:** En primera ejecución, crea Tasks de Implementación y Testing.
+
+### 3. 🔍 Sonar (Role: Control de Calidad)
+
+> **Tu rol es el de un Analista de Calidad de Código.**
+>
+> **Objetivo:** Analizar el código generado en busca de bugs, vulnerabilidades y code smells.
+>
+> **Instrucción Principal:**
+>
+> 1.  Ejecutar análisis estático del código.
+> 2.  Identificar issues por severidad (BLOCKER, CRITICAL, MAJOR, MINOR).
+> 3.  Generar reporte detallado con instrucciones de corrección.
+>
+> **Criterios de Aceptación:**
+> - 0 issues BLOCKER
+> - Máximo 2 issues CRITICAL
+>
+> **Output Esperado:** Reporte de análisis y decisión PASSED/FAILED.
+
+### 4. 🧪 Developer-UnitTests (Role: Generador y Ejecutor de Tests)
+
+> **Tu rol es el de un Ingeniero de Testing experto que genera y ejecuta tests.**
+>
+> **Objetivo:** Generar tests unitarios profesionales y ejecutarlos automáticamente.
+>
+> **Instrucción Principal:**
+>
+> 1.  Detectar lenguaje del código (Python/TypeScript).
+> 2.  Generar tests con framework apropiado (pytest/vitest).
+> 3.  Incluir casos normales, edge cases y manejo de errores.
+> 4.  Usar sintaxis moderna y mejores prácticas.
+> 5.  Ejecutar tests con vitest (TypeScript) o pytest (Python).
+> 6.  Parsear resultados y extraer estadísticas.
+> 7.  Generar reporte con tests pasados/fallidos.
+> 8.  Si hay errores, proporcionar traceback detallado.
+>
+> **Output Esperado:** Tests generados, ejecutados y reporte completo.
+>
+> **Integración GitHub:** Si tests pasan, pushea tests al branch (opcional).
+>
+> **Integración Azure DevOps:** Si tests pasan, adjuntar archivo de tests al PBI y Task de Testing (opcional).
+
+### 5. 👨‍💻 Developer2-Reviewer (Role: Revisor de Código)
+
+> **Tu rol es el de un Senior Code Reviewer experto.**
+>
+> **Objetivo:** Revisar el código generado y evaluar su calidad antes de aprobar la PR.
+>
+> **Instrucción Principal:**
+>
+> 1.  Analizar el código en profundidad (legibilidad, mantenibilidad, eficiencia).
+> 2.  Verificar cumplimiento de mejores prácticas y estándares.
+> 3.  Evaluar calidad con puntuación 1-10.
+> 4.  Si puntuación >= 7: Aprobar PR.
+> 5.  Si puntuación < 7: Rechazar con comentarios detallados de mejora.
+>
+> **Output Esperado:** Decisión APROBADO/RECHAZADO con puntuación y comentarios.
+>
+> **Integración GitHub:** Si aprueba, aprobar PR en GitHub (opcional).
+
+### 6. 🔀 Developer-CompletePR (Role: Completador de PR)
+
+> **Tu rol es el de un DevOps Engineer que completa el ciclo de PR.**
+>
+> **Objetivo:** Hacer squash merge de la PR y limpiar branches.
+>
+> **Instrucción Principal:**
+>
+> 1.  Verificar que la PR está aprobada.
+> 2.  Hacer squash merge a la rama base.
+> 3.  Limpiar branch remoto.
+> 4.  Limpiar branch local.
+>
+> **Output Esperado:** PR mergeada y branches limpiados.
+>
+> **Integración GitHub:** Merge automático en GitHub (opcional).
+
+### 7. ✅ Stakeholder (Role: Validador de Negocio Final)
+
+> **Tu rol es el de un Stakeholder de negocio de alto nivel.**
+>
+> **Objetivo:** Validar si el `codigo_generado`, que ha **pasado las pruebas técnicas**, cumple con la **visión de negocio**.
+>
+> **Instrucción Principal:** Evalúa si la implementación satisface la necesidad de negocio.
+>
+>   * **Si es SÍ:** El resultado es **VALIDADO**.
+>   * **Si es NO:** El resultado es **RECHAZADO**. Proporciona un **feedback claro** sobre el motivo conceptual.
+>
+> **Output Esperado:** Un único bloque de texto bajo el título "**VALIDACIÓN FINAL**" que contenga **VALIDADO** o **RECHAZADO** y el **motivo** si es rechazado.
+>
+> **Integración Azure DevOps:** Si valida, adjuntar código final al PBI y Task de Implementación.
+
+### Definición de Transiciones (Edges)
+
+| Origen | Destino | Condición |
+| :--- | :--- | :--- |
+| START | ProductOwner | Siempre (Inicio del flujo) |
+| ProductOwner | Developer-Code | Siempre (Una vez formalizados los requisitos) |
+| Developer-Code | Sonar | Siempre (Una vez generado el código) |
+| **Sonar** | **Developer-Code** | **Si Calidad Falla** (Bucle de calidad - max 3 intentos) |
+| Sonar | Developer-UnitTests | **Si Calidad OK** |
+| Developer-UnitTests | Developer-UnitTests | Siempre (Genera y ejecuta tests en mismo nodo) |
+| **Developer-UnitTests** | **Developer-Code** | **Si Falla Pruebas** (Bucle de depuración - max 3 intentos) |
+| Developer-UnitTests | Developer2-Reviewer | **Si Pasa Pruebas** |
+| **Developer2-Reviewer** | **Developer-Code** | **Si Rechazado** (Bucle de revisión - max 3 intentos) |
+| Developer2-Reviewer | Developer-CompletePR | **Si Aprobado** |
+| Developer-CompletePR | Stakeholder | **Si PR Merged** |
+| Developer-CompletePR | END | **Si Merge Failed** |
+| **Stakeholder** | **ProductOwner** | **Si Rechazado** (Bucle de validación - max 3 intentos) |
+| Stakeholder | **END** | **Si Validado** |
+
+### Variables de Estado (AgentState)
+
+| Variable de Estado | Tipo | Propósito |
+| :--- | :--- | :--- |
+| `prompt_inicial` | `str` | El texto inicial del usuario. |
+| `requisitos_formales` | `str` | La especificación técnica del Product Owner (JSON). |
+| `codigo_generado` | `str` | El código Python/TypeScript actual. |
+| `lenguaje_detectado` | `str` | Lenguaje detectado (python/typescript). |
+| `sonarqube_passed` | `bool` | `True` si pasa análisis de calidad. |
+| `sonarqube_report` | `str` | Reporte de análisis de SonarQube. |
+| `tests_unitarios_generados` | `str` | Tests unitarios generados. |
+| `pruebas_superadas` | `bool` | `True` si pasa las pruebas, `False` si falla. |
+| `resultado_ejecucion` | `str` | Resultado de ejecución de tests. |
+| `validado` | `bool` | `True` si Stakeholder valida. |
+| `azure_pbi_id` | `int \| None` | ID del PBI en Azure DevOps. |
+| `azure_implementation_task_id` | `int \| None` | ID de Task de Implementación. |
+| `azure_testing_task_id` | `int \| None` | ID de Task de Testing. |
+| `attempt_count` | `int` | Contador de ciclos completos. |
+| `debug_attempt_count` | `int` | Contador de intentos de depuración. |
+| `sonarqube_attempt_count` | `int` | Contador de intentos de calidad. |
+| `codigo_revisado` | `bool` | Si el código fue revisado y aprobado. |
+| `revision_comentario` | `str` | Comentario de la revisión de código. |
+| `revision_puntuacion` | `int \| None` | Puntuación de calidad (1-10). |
+| `pr_aprobada` | `bool` | Si la PR fue aprobada en GitHub. |
+| `pr_mergeada` | `bool` | Si la PR fue mergeada exitosamente. |
+| `github_branch_name` | `str \| None` | Nombre del branch en GitHub. |
+| `github_pr_number` | `int \| None` | Número de la PR en GitHub. |
+| `github_pr_url` | `str \| None` | URL de la PR en GitHub. |
+| `revisor_attempt_count` | `int` | Contador de intentos de revisión. |
+| `max_revisor_attempts` | `int` | Máximo de intentos de revisión. |
+
+
+## 🔄 Flujo Completo Detallado
+
+```mermaid
+graph TD
+    START([INICIO]) --> PO[1. 📋 Product Owner<br/>Formaliza requisitos<br/>🔷 Crea PBI en Azure DevOps]
+    PO --> DEV[2. 💻 Developer-Code<br/>Genera/Corrige código<br/>� Crea branch en GitHub<br/>🔷 Crea Tasks en Azure DevOps]
+    
+    DEV --> SQ[3. Analizador SonarQube<br/>Análisis de calidad]
+    
+    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| GUT[4. 🧪 Developer-UnitTests<br/>Genera y ejecuta tests<br/>vitest/pytest<br/>🐙 Pushea tests a GitHub]
+    SQ -->|❌ Issues encontrados| SQCHECK{Intentos SQ<br/>< MAX?}
+    SQCHECK -->|Sí| DEV
+    SQCHECK -->|No| ENDLIMIT1[❌ FIN<br/>Límite calidad excedido]
+    
+    GUT -->|✅ Tests pasan| REV[5. 🔍 Developer2-Reviewer<br/>Code Reviewer Senior<br/>🐙 Aprueba PR en GitHub]
+    GUT -->|❌ Tests fallan| DEBUGCHECK{Intentos Debug<br/>< MAX?}
+    DEBUGCHECK -->|Sí| DEV
+    DEBUGCHECK -->|No| ENDLIMIT2[❌ FIN<br/>Límite debug excedido]
+    
+    REV -->|✅ Código aprobado| MERGE[6. 🔀 Developer-CompletePR<br/>Integrador<br/>🐙 Squash merge PR<br/>🐙 Limpia branches]
+    REV -->|❌ Código rechazado| REVCHECK{Intentos Revisor<br/>< MAX?}
+    REVCHECK -->|Sí| DEV
+    REVCHECK -->|No| ENDLIMIT3[❌ FIN<br/>Límite revisor excedido]
+    
+    MERGE -->|✅ PR mergeado| SH[7. ✅ Stakeholder<br/>Validador de Negocio<br/>� Actualiza work items a Done<br/>�📎 Adjunta código a Azure DevOps]
+    MERGE -->|❌ Merge falló| ENDLIMIT4[❌ FIN<br/>Merge fallido]
+    
+    SH -->|✅ VALIDADO| ENDSUCCESS[✅ FIN<br/>Código aprobado]
+    SH -->|❌ RECHAZADO| ATTEMPTCHECK{Intentos Totales<br/>< MAX?}
+    ATTEMPTCHECK -->|Sí| PO
+    ATTEMPTCHECK -->|No| ENDFINAL[❌ FIN<br/>Límite total excedido]
+    
+    style START fill:#90EE90
+    style ENDSUCCESS fill:#90EE90
+    style ENDLIMIT1 fill:#FFB6C1
+    style ENDLIMIT2 fill:#FFB6C1
+    style ENDLIMIT3 fill:#FFB6C1
+    style ENDLIMIT4 fill:#FFB6C1
+    style ENDFINAL fill:#FFB6C1
+    style SQ fill:#87CEEB
+    style GUT fill:#98FB98
+    style DEV fill:#FFD700
+    style PROB fill:#FFA500
+    style REV fill:#DDA0DD
+    style MERGE fill:#87CEEB
+    style SH fill:#B0E0E6
+    style PO fill:#FFE4B5
 ```
-START → ProductOwner → Developer-Code → Sonar
-           ↑                ↑               ↓
-           |                |          ¿Calidad OK?
-           |                ←──────── NO (max 3 intentos)
-           |                                ↓
-           |                      Developer-UnitTests
-           |                                ↓
-           |                             ¿Pasa?
-           |                ←──────── NO (max 3 intentos)
-           |                                ↓
-           |                      Developer2-Reviewer
-           |                                ↓
-           |                           ¿Aprobado?
-           |                ←──────── NO (max 3 intentos)
-           |                                ↓
-           |                    Developer-CompletePR
-           |                                ↓
-           |                      Squash & Merge PR
-           |                      Cleanup branches
-           |                                ↓
-           |                           Stakeholder
-           |                                ↓
-           |                           ¿Validado?
-           ←──────────────────────────── NO
-                                           ↓
-                                          END
-```
-
-### Agentes
-
-1. **ProductOwner**: Formaliza especificaciones técnicas en JSON estructurado + 🔷 crea PBIs en Azure DevOps (opcional)
-2. **Developer-Code**: Genera y corrige código Python/TypeScript + 🐙 crea branch y commit en GitHub (opcional) + 🔷 crea Tasks en Azure DevOps (opcional)
-3. **Sonar**: Verifica calidad del código con SonarQube/SonarCloud (bugs, vulnerabilidades, code smells)
-4. **Developer-UnitTests**: Genera y ejecuta tests unitarios con vitest/pytest + 🐙 pushea tests a GitHub (opcional)
-5. **Developer2-Reviewer**: Revisa código con LLM, evalúa calidad y aprueba/rechaza PR + 🐙 aprueba PR en GitHub (opcional)
-6. **Developer-CompletePR**: Hace squash merge de PR + 🐙 limpia branches remotos y locales (opcional)
-7. **Stakeholder**: Valida cumplimiento de visión de negocio + 📎 adjunta código final a Azure DevOps (opcional)
 
 ### Bucles de Corrección
 
-El sistema implementa tres bucles de corrección:
+El sistema implementa cuatro bucles de corrección:
 
 1. **Bucle de Calidad** (SonarQube → Desarrollador):
    - Detecta issues de calidad, seguridad y code smells
@@ -427,8 +663,9 @@ Editar `src/config/settings.py` para ajustar:
 - `MAX_DEBUG_ATTEMPTS`: Máximo intentos de depuración (default: 3)
 - `MAX_SONARQUBE_ATTEMPTS`: Máximo intentos de corrección de calidad (default: 3)
 - `MAX_REVISOR_ATTEMPTS`: Máximo intentos de revisión de código (default: 3)
+- `MODEL_NAME`: Modelo LLM a usar (default: gemini-2.5-flash)
 - `TEMPERATURE`: Temperatura del LLM (default: 0.1)
-- `MAX_OUTPUT_TOKENS`: Tokens máximos de salida (default: 4000)
+- `MAX_OUTPUT_TOKENS`: Tokens máximos de salida (default: 8192)
 - `LOG_LEVEL`: Nivel de logging (default: INFO)
 - `LOG_TO_FILE`: Guardar logs en archivo (default: true)
 
@@ -494,7 +731,12 @@ El sistema ahora puede crear automáticamente **Product Backlog Items (PBIs)** e
 2. Habilitar `AZURE_DEVOPS_ENABLED=true`
 3. El flujo normal creará PBIs, Tasks y adjuntará archivos automáticamente
 
-**Documentación completa:** [`IMPLEMENTACION_ADJUNTOS_AZURE.md`](IMPLEMENTACION_ADJUNTOS_AZURE.md)
+
+## 📚 Documentación Adicional
+
+- **[QUICK_START.md](QUICK_START.md)** - Guía de inicio rápido (5 minutos)
+- **[FLOW_DIAGRAM.md](FLOW_DIAGRAM.md)** - Diagramas de flujo detallados y bucles de corrección
+- **[README_SONARSCANNER.md](README_SONARSCANNER.md)** - Configuración de SonarQube local
 
 ## 📄 Licencia
 
