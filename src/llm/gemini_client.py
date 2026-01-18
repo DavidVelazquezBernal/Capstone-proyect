@@ -13,7 +13,6 @@ from google.genai.errors import APIError
 from config.settings import settings
 from utils.logger import setup_logger
 from utils.logging_helpers import log_section
-from tools.code_executor import CodeExecutionToolWithInterpreterPY, CodeExecutionToolWithInterpreterTS
 from llm.mock_responses import get_mock_response
 
 logger = setup_logger(__name__, level=settings.get_log_level())
@@ -249,12 +248,6 @@ def call_gemini(
             f"esquema Pydantic: {response_schema.__name__}. "
             f"No añadas explicaciones ni texto adicional."
         )
-    elif allow_use_tool:
-        
-        # Proveer ambas herramientas para que el modelo elija según el lenguaje
-        available_tools = [CodeExecutionToolWithInterpreterPY, CodeExecutionToolWithInterpreterTS]
-        config["tools"] = available_tools
-        full_prompt += "Genera únicamente el bloque de texto solicitado en tu Output Esperado. No añadas explicaciones."
     else:
         full_prompt += "Genera únicamente el bloque de texto solicitado en tu Output Esperado. No añadas explicaciones."
 

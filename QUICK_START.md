@@ -23,10 +23,9 @@ cd ..
 # Copiar archivo de ejemplo
 copy .env.example .env
 
-# Editar .env y agregar tus API keys:
+# Editar .env y agregar tu API key:
 # - GEMINI_API_KEY (requerida)
-# - E2B_API_KEY (requerida)
-# - Otras opcionales (SonarQube, Azure DevOps, GitHub)
+# - Otras opcionales (SonarQube, Azure DevOps, GitHub, SonarCloud)
 ```
 
 ### 3. Ejecutar el sistema
@@ -45,7 +44,7 @@ explorer output\
 # - 2_desarrollador_req*_debug*_sq*.ts  → Código generado
 # - 3_sonarqube_report_req*_sq*.txt     → Reportes de calidad
 # - unit_tests_req*_sq*.test.ts         → Tests unitarios
-# - 5_probador_req*_debug*_[PASSED|FAILED].txt → Resultados de tests
+# - 4_testing_req*_debug*_[PASSED|FAILED].txt → Resultados de tests
 # - 6_stakeholder_validacion_req*.txt   → Validación final
 # - codigo_final.ts                     → Código final aprobado
 # - workflow_graph.png                  → Diagrama del flujo
@@ -86,13 +85,15 @@ if final_state:
 --- 3. 🔍 Analizador SonarQube ---
    -> Analizando código con SonarQube...
    ✅ Código aprobado por SonarQube
---- 4. 🧪 Generador Unit Tests ---
-   ✅ Tests unitarios generados
---- 5. 🧪 Ejecutor de Pruebas ---
+--- 4. 🧪 Developer-UnitTests ---
+   ✅ Tests unitarios generados y ejecutados
    -> Ejecutando tests con vitest/pytest...
    ✅ Tests pasados (40/40)
-   📎 Tests adjuntados a Azure DevOps (si está habilitado)
---- 6. 👔 Stakeholder ---
+--- 5. �‍💻 Developer2-Reviewer ---
+   ✅ Código revisado y aprobado
+--- 6. 📝 Developer-CompletePR ---
+   ✅ PR completado en GitHub (si está habilitado)
+--- 7. 👔 Stakeholder ---
    ✅ VALIDACIÓN FINAL: VALIDADO
    📎 Código final adjuntado a Azure DevOps (si está habilitado)
 ```
@@ -110,10 +111,12 @@ if final_state:
    -> Corrigiendo issues de calidad de código (SonarQube)
 --- 3. 🔍 Analizador SonarQube ---
    ✅ Código aprobado por SonarQube
---- 4. 🧪 Generador Unit Tests ---
---- 5. 🧪 Ejecutor de Pruebas ---
+--- 4. 🧪 Developer-UnitTests ---
    ✅ Tests pasados
---- 6. 👔 Stakeholder ---
+--- 5. 👨‍💻 Developer2-Reviewer ---
+   ✅ Código aprobado
+--- 6. 📝 Developer-CompletePR ---
+--- 7. 👔 Stakeholder ---
    ✅ VALIDADO
 ```
 
@@ -131,21 +134,56 @@ output/
 ├── 3_sonarqube_report_req0_sq1.txt             ← Segundo análisis
 ├── 3_sonarqube_instrucciones_req0_sq1.txt      ← Instrucciones de corrección
 ├── unit_tests_req0_sq1.test.ts                 ← Tests unitarios generados
-├── 5_probador_req0_debug0_PASSED.txt           ← Resultado de tests
+├── 4_testing_req0_debug0_PASSED.txt            ← Resultado de tests
+├── 5_reviewer_feedback_req0.txt                ← Feedback del revisor (si aplica)
 ├── 6_stakeholder_validacion_req0.txt           ← Validación final
 └── codigo_final.ts                             ← Código final aprobado
 ```
 
-## 🔧 Configuración Rápida
+## � Bucles de Corrección
+
+El sistema tiene **3 bucles de corrección automática** que mejoran iterativamente el código:
+
+### 1. Bucle de Calidad (Sonar ↔ Developer-Code)
+- **Trigger**: Código con issues críticos de SonarQube
+- **Límite**: `MAX_SONARQUBE_ATTEMPTS` (default: 3)
+- **Proceso**: 
+  1. Sonar analiza código con sonar-scanner.bat
+  2. Si detecta issues BLOCKER/CRITICAL → genera instrucciones
+  3. Developer-Code corrige según instrucciones
+  4. Vuelve a Sonar para nuevo análisis
+
+### 2. Bucle de Debug (Developer-UnitTests ↔ Developer-Code)
+- **Trigger**: Tests unitarios fallan
+- **Límite**: `MAX_DEBUG_ATTEMPTS` (default: 3)
+- **Proceso**:
+  1. Developer-UnitTests ejecuta tests con vitest/pytest
+  2. Si fallan → captura traceback
+  3. Developer-Code corrige basándose en el error
+  4. Vuelve a Sonar → Developer-UnitTests
+
+### 3. Bucle de Revisión (Developer2-Reviewer ↔ Developer-Code)
+- **Trigger**: Revisor rechaza el código
+- **Límite**: `MAX_REVISOR_ATTEMPTS` (default: 2)
+- **Proceso**:
+  1. Developer2-Reviewer analiza diseño y arquitectura
+  2. Si rechaza → genera feedback detallado
+  3. Developer-Code aplica mejoras
+  4. Vuelve a Sonar → Developer-UnitTests → Developer2-Reviewer
+
+**Importante**: Cada corrección pasa por **Sonar nuevamente**, garantizando que las correcciones no introducen nuevos problemas de calidad.
+
+## �🔧 Configuración Rápida
 
 ### Ajustar límites de intentos
 Edita `src/config/settings.py`:
 
 ```python
 class Settings:
-    MAX_ATTEMPTS = 1               # Ciclos completos
-    MAX_DEBUG_ATTEMPTS = 3         # Bucle debug
-    MAX_SONARQUBE_ATTEMPTS = 3     # Bucle calidad
+    MAX_ATTEMPTS = 1               # Ciclos completos (Product Owner → Stakeholder)
+    MAX_DEBUG_ATTEMPTS = 3         # Bucle debug (Developer-UnitTests ↔ Developer-Code)
+    MAX_SONARQUBE_ATTEMPTS = 3     # Bucle calidad (Sonar ↔ Developer-Code)
+    MAX_REVISOR_ATTEMPTS = 2       # Bucle revisión (Developer2-Reviewer ↔ Developer-Code)
     LOG_LEVEL = "INFO"             # Nivel de logging
     LOG_TO_FILE = True             # Guardar logs en archivo
 ```
@@ -162,13 +200,26 @@ AZURE_ITERATION_PATH=MiProyecto\Sprint 1
 AZURE_AREA_PATH=MiProyecto\Backend
 ```
 
-### Cambiar criterios de calidad
-Edita `src/agents/sonarqube.py` para ajustar los criterios de aceptación:
+### Habilitar integración con GitHub
+Edita `.env`:
 
-```python
-# Criterios actuales:
-# - 0 issues BLOCKER
-# - Máximo 2 issues CRITICAL
+```env
+GITHUB_ENABLED=true
+GITHUB_TOKEN=ghp_tu-token-aqui
+GITHUB_OWNER=tu-usuario-u-organizacion
+GITHUB_REPO=nombre-del-repositorio
+GITHUB_BASE_BRANCH=main
+GITHUB_REPO_PATH=C:\ruta\al\repositorio
+```
+
+### Habilitar SonarCloud
+Edita `.env`:
+
+```env
+SONARCLOUD_ENABLED=true
+SONARCLOUD_TOKEN=squ_tu-token-aqui
+SONARCLOUD_ORGANIZATION=tu-organizacion
+SONARCLOUD_PROJECT_KEY=usuario_nombre-repo
 ```
 
 ## 🎓 Casos de Prueba
@@ -205,11 +256,8 @@ Crea una clase Calculator en TypeScript con métodos:
 
 ### Error: "GEMINI_API_KEY not configured"
 ```bash
-# Crear/editar .env en src/
-cd src
+# Crear/editar .env en la raíz del proyecto
 echo GEMINI_API_KEY=tu_clave_aqui > .env
-echo E2B_API_KEY=tu_clave_e2b >> .env
-cd ..
 ```
 
 ### Error: "vitest not found"

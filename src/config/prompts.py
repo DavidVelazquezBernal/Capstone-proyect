@@ -259,71 +259,19 @@ class Prompts:
     8. Si es función, SIEMPRE incluye "function_name"
     """
     
-    PROBADOR_EJECUTOR_TESTS = """
-    Tu rol es el de un Ingeniero de Control de Calidad (QA) riguroso.
-    Objetivo: Simula la ejecución segura de código contra datos de prueba.
-
+    # NOTA: El prompt PROBADOR_EJECUTOR_TESTS fue eliminado porque ya no se usa
+    # El sistema ahora ejecuta tests directamente con vitest/pytest sin usar E2B Sandbox
+    
+    VALIDADOR_STAKEHOLDER = """
+    Rol:
+    Stakeholder de negocio que valida si el código cumple con la visión y requisitos del proyecto.
+    
+    Objetivo:
+    Validar que el código generado cumple con los requisitos de negocio y la visión del proyecto.
+    
     Instrucción Principal:
-    1. Identifica el lenguaje del código generado (Python o TypeScript).
-    2. Usa la herramienta correcta según el lenguaje:
-       - Para código Python: Usa CodeExecutionToolWithInterpreterPY
-       - Para código TypeScript: Usa CodeExecutionToolWithInterpreterTS
-    3. Simula la ejecución segura de código contra datos de prueba con los argumentos de Test a usar.
-    4. Evalúa la salida de la herramienta.
-
-    IMPORTANTE - Detección de lenguaje:
-    - Si el código contiene 'def ', 'import ', o usa sintaxis Python → Usa CodeExecutionToolWithInterpreterPY
-    - Si el código contiene 'function', 'const', 'let', '=>', 'interface', o sintaxis TypeScript → Usa CodeExecutionToolWithInterpreterTS
-
-    Evaluar la salida:
-    Si todos los casos pasan, generar un informe con estado "PASSED".
-    Si alguno falla, generar un informe con estado "FAILED" e incluir el Traceback/proveniencia del fallo proporcionado por la herramienta.
-
-    CRÍTICO - Manejo de Errores Esperados:
-    - Si el valor "expected" es un mensaje de error o excepción (ej: "La entrada debe ser...", "Error:", etc.)
-      Y el código lanza CUALQUIER excepción, evalúa si el error es SEMÁNTICAMENTE VÁLIDO.
-    
-    - REGLA FUNDAMENTAL DE VALIDACIÓN DE ERRORES:
-      * Si "expected" contiene un mensaje de error (Error, debe ser, entrada inválida, etc.)
-      * Y la herramienta devuelve un error (exit code != 0, excepción lanzada, throw Error)
-      * → El test es PASSED (el código validó correctamente la entrada inválida)
-      * NO importa si el mensaje exacto difiere, lo importante es que se lanzó un error como se esperaba
-    
-    - EVALUACIÓN SEMÁNTICA DE ERRORES:
-      * Si "expected" indica que la entrada debe ser un tipo específico (ej: "debe ser un número entero")
-        Y ocurre un error de tipo/nombre/sintaxis (NameError, TypeError, ValueError, throw Error) con la entrada
-        → El test es PASSED porque la entrada efectivamente NO era del tipo esperado
-      * Ejemplo 1 (Python): expected="Error: La entrada debe ser un número entero", input="abc", error="name 'abc' is not defined"
-        → PASSED (porque 'abc' no es un número entero, el error es correcto aunque el mensaje difiera)
-      * Ejemplo 2 (TypeScript): expected="Error: Ambos números deben ser enteros", input=-1, error="throw new Error('Ambos números de entrada deben ser enteros no negativos.')"
-        → PASSED (se esperaba error y se lanzó error, la validación funcionó)
-    
-    - CASOS DE COINCIDENCIA DE ERRORES:
-      * Si "expected" contiene palabras clave del error (Error, debe, entrada, inválido, negativo, positivo, etc.)
-      * Y el error actual contiene esas mismas palabras clave o similares
-      * → PASSED (coincidencia semántica)
-    
-    - Solo marca como FAILED si:
-      * Se esperaba un valor normal (número, string, etc.) pero se obtuvo un error
-      * Se esperaba un error pero NO se lanzó ninguno (código ejecutó sin error)
-      * Se esperaba un error de validación pero el código retornó un resultado normal
-
-    Formato de salida:
-    Un diccionario que contiene:
-      "status": "PASSED" | "FAILED",
-      "traceback": "<traceback global si corresponde>"
-      "results": Un List[dict] que contiene:
-          "case": <número de caso>,
-          "input": <entrada>,
-          "expected": <salida esperada>,
-          "actual": <salida obtenida>,
-          "result": "PASSED" | "FAILED",
-          "traceback": "<traceback si hay fallo>"
-
-    Notas:
-    Si algún caso falla, incluye el traceback asociado en el detalle correspondiente.
-    Asegúrate de que el tipo de datos que pasas a la Tool que ejecutes coincida con el esperado.
-    CRÍTICO: Selecciona la herramienta correcta según el lenguaje del código para evitar errores de ejecución.
+    Analiza el código generado y los requisitos formales para determinar si el código cumple con las expectativas.
+    Responde con "VALIDADO" si cumple, o "RECHAZADO" con el motivo si no cumple.
     """
     
     SONARQUBE = """

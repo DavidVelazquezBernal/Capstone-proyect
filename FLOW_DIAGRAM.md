@@ -17,29 +17,26 @@
 ```mermaid
 graph TD
     START([INICIO]) --> PO[1. 📋 Product Owner<br/>Formaliza requisitos<br/>🔷 Crea PBI en Azure DevOps]
-    PO --> DEV[2. 💻 Desarrollador<br/>Genera/Corrige código<br/>🔷 Crea Tasks en Azure DevOps]
-    PO --> DEV[2. Desarrollador<br/>Genera/Corrige código<br/>🔷 Crea Tasks en Azure DevOps]
+    PO --> DEV[2. 💻 Developer-Code<br/>Genera/Corrige código<br/>� Crea branch en GitHub<br/>🔷 Crea Tasks en Azure DevOps]
     
     DEV --> SQ[3. Analizador SonarQube<br/>Análisis de calidad]
     
-    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| GUT[4. Generador Unit Tests<br/>Genera tests vitest/pytest]
+    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| GUT[4. 🧪 Developer-UnitTests<br/>Genera y ejecuta tests<br/>vitest/pytest<br/>🐙 Pushea tests a GitHub]
     SQ -->|❌ Issues encontrados| SQCHECK{Intentos SQ<br/>< MAX?}
     SQCHECK -->|Sí| DEV
     SQCHECK -->|No| ENDLIMIT1[❌ FIN<br/>Límite calidad excedido]
     
-    GUT --> PROB[5. Ejecutor de Pruebas<br/>Ejecuta tests unitarios<br/>📎 Adjunta tests a Azure DevOps]
-    
-    PROB -->|✅ Tests pasan| REV[6. Developer2-Reviewer<br/>Code Reviewer Senior<br/>🐙 Aprueba PR en GitHub]
-    PROB -->|❌ Tests fallan| DEBUGCHECK{Intentos Debug<br/>< MAX?}
+    GUT -->|✅ Tests pasan| REV[5. 🔍 Developer2-Reviewer<br/>Code Reviewer Senior<br/>🐙 Aprueba PR en GitHub]
+    GUT -->|❌ Tests fallan| DEBUGCHECK{Intentos Debug<br/>< MAX?}
     DEBUGCHECK -->|Sí| DEV
     DEBUGCHECK -->|No| ENDLIMIT2[❌ FIN<br/>Límite debug excedido]
     
-    REV -->|✅ Código aprobado| MERGE[7. Developer-CompletePR<br/>Integrador<br/>🐙 Squash merge PR<br/>🐙 Limpia branches]
+    REV -->|✅ Código aprobado| MERGE[6. 🔀 Developer-CompletePR<br/>Integrador<br/>🐙 Squash merge PR<br/>🐙 Limpia branches]
     REV -->|❌ Código rechazado| REVCHECK{Intentos Revisor<br/>< MAX?}
     REVCHECK -->|Sí| DEV
     REVCHECK -->|No| ENDLIMIT3[❌ FIN<br/>Límite revisor excedido]
     
-    MERGE -->|✅ PR mergeado| SH[8. Stakeholder<br/>Validador de Negocio<br/>📎 Adjunta código a Azure DevOps]
+    MERGE -->|✅ PR mergeado| SH[7. ✅ Stakeholder<br/>Validador de Negocio<br/>� Actualiza work items a Done<br/>�📎 Adjunta código a Azure DevOps]
     MERGE -->|❌ Merge falló| ENDLIMIT4[❌ FIN<br/>Merge fallido]
     
     SH -->|✅ VALIDADO| ENDSUCCESS[✅ FIN<br/>Código aprobado]
@@ -66,68 +63,88 @@ graph TD
 
 ## Los Cuatro Bucles de Corrección
 
-### Bucle A: Calidad de Código
+### Bucle 1: Calidad de Código (Sonar ↔ Developer-Code)
 ```
-Desarrollador → SonarQube → [Issues?] → Desarrollador
+Developer-Code → Sonar → [Issues?] → Developer-Code
                   ↓
-              [OK] → Generador Unit Tests → Continúa
+              [OK] → Developer-UnitTests → Continúa
 ```
-- **Límite**: 3 intentos (configurable)
+- **Trigger**: Código con issues críticos de SonarQube (BLOCKER/CRITICAL)
+- **Límite**: `MAX_SONARQUBE_ATTEMPTS` = 3 intentos (configurable)
 - **Salida límite**: `QUALITY_LIMIT_EXCEEDED`
-- **Verifica**: Bugs, vulnerabilidades, code smells
-- **Genera**: Tests unitarios con vitest (TypeScript) o pytest (Python)
-- **Ejecuta**: Tests directamente sin sandbox (mejora de performance)
+- **Verifica**: Bugs, vulnerabilidades, code smells, complejidad
+- **Proceso**: 
+  1. Sonar analiza código con sonar-scanner.bat o SonarCloud
+  2. Si detecta issues → genera instrucciones de corrección
+  3. Developer-Code corrige según instrucciones
+  4. Vuelve a Sonar para nuevo análisis
+- **Importante**: Cada corrección pasa por Sonar nuevamente
 
-### Bucle B: Depuración Funcional
+### Bucle 2: Depuración Funcional (Developer-UnitTests ↔ Developer-Code)
 ```
-Generador Unit Tests → Ejecutor de Pruebas → [Falla?] → Codificador
-                            ↓
-                        [Pasa] → Continúa
+Developer-UnitTests → [Tests fallan?] → Developer-Code → Sonar → Developer-UnitTests
+         ↓
+     [Pasan] → Developer2-Reviewer
 ```
-- **Límite**: 3 intentos (configurable)
+- **Trigger**: Tests unitarios fallan
+- **Límite**: `MAX_DEBUG_ATTEMPTS` = 3 intentos (configurable)
 - **Salida límite**: `DEBUG_LIMIT_EXCEEDED`
 - **Verifica**: Ejecución correcta de tests unitarios
 - **Frameworks**: vitest para TypeScript, pytest para Python
+- **Proceso**:
+  1. Developer-UnitTests genera y ejecuta tests
+  2. Si fallan → captura traceback y estadísticas
+  3. Developer-Code corrige basándose en el error
+  4. Código corregido pasa por Sonar → Developer-UnitTests
 - **Reportes**: Estadísticas detalladas (total, pasados, fallidos)
+- **Ejecución**: Directa con subprocess (sin sandbox, ~3x más rápido)
 
-### Bucle C: Revisión de Código
+### Bucle 3: Revisión de Código (Developer2-Reviewer ↔ Developer-Code)
 ```
-Developer2-Reviewer → [Rechaza?] → Developer-Code
-                ↓
-            [Aprueba] → Developer-CompletePR
+Developer2-Reviewer → [Rechaza?] → Developer-Code → Sonar → Developer-UnitTests → Developer2-Reviewer
+         ↓
+     [Aprueba] → Developer-CompletePR
 ```
-- **Límite**: 2 intentos (configurable)
+- **Trigger**: Revisor rechaza el código por problemas de diseño/arquitectura
+- **Límite**: `MAX_REVISOR_ATTEMPTS` = 2 intentos (configurable)
 - **Salida límite**: `REVISOR_LIMIT_EXCEEDED`
-- **Verifica**: Legibilidad, mantenibilidad, buenas prácticas
-- **GitHub**: Aprueba PR automáticamente con token de revisor
+- **Verifica**: Legibilidad, mantenibilidad, buenas prácticas, arquitectura
+- **Proceso**:
+  1. Developer2-Reviewer analiza código con LLM
+  2. Si rechaza → genera feedback detallado
+  3. Developer-Code aplica mejoras según feedback
+  4. Código mejorado pasa por Sonar → Developer-UnitTests → Developer2-Reviewer
+- **GitHub**: Aprueba PR automáticamente con token de revisor (requiere token diferente al que crea el PR)
 
-### Bucle D: Validación de Negocio
+### Bucle 4: Validación de Negocio (Stakeholder ↔ Product Owner)
 ```
 Product Owner → ... → Stakeholder → [Rechaza?] → Product Owner
                             ↓
                         [Valida] → FIN
 ```
-- **Límite**: 1 ciclo completo (configurable)
+- **Límite**: `MAX_ATTEMPTS` = 1 ciclo completo (configurable)
 - **Salida límite**: `FAILED_FINAL`
 - **Verifica**: Cumplimiento de visión de negocio
 
 ## Contadores de Estado
 
-El estado mantiene tres contadores independientes:
+El estado mantiene cuatro contadores independientes:
 
 ```python
 state = {
-    'attempt_count': 0,          # Ciclo completo (Bucle C)
-    'debug_attempt_count': 0,    # Bucle depuración (Bucle B)
-    'sonarqube_attempt_count': 0 # Bucle calidad (Bucle A - NUEVO)
+    'attempt_count': 0,           # Ciclo completo (Bucle 4)
+    'debug_attempt_count': 0,     # Bucle depuración (Bucle 2)
+    'sonarqube_attempt_count': 0, # Bucle calidad (Bucle 1)
+    'revisor_attempt_count': 0    # Bucle revisión (Bucle 3)
 }
 ```
 
 ### Reseteo de Contadores
 
-- `attempt_count`: Se incrementa al volver desde Stakeholder
+- `attempt_count`: Se incrementa al volver desde Stakeholder a Product Owner
 - `debug_attempt_count`: Se resetea cuando tests pasan
 - `sonarqube_attempt_count`: Se resetea cuando calidad pasa
+- `revisor_attempt_count`: Se resetea cuando revisor aprueba el código
 
 ## Archivos Generados
 
@@ -138,16 +155,15 @@ state = {
 
 ### Ejemplos
 ```
-1_product_owner_req0.json
-2_desarrollador_req0_debug0_sq0.ts
 2_desarrollador_req0_debug0_sq1.ts    ← 1ra corrección calidad
 2_desarrollador_req0_debug1_sq0.ts    ← 1ra corrección después de test fallido
 3_sonarqube_report_req0_sq0.txt
 3_sonarqube_report_req0_sq1.txt
 3_sonarqube_instrucciones_req0_sq1.txt
 unit_tests_req0_sq1.test.ts          ← Tests generados (vitest)
-5_probador_req0_debug0_PASSED.txt    ← Resultado ejecución tests
-5_probador_req0_debug1_FAILED.txt    ← Tests fallidos con estadísticas
+4_testing_req0_debug0_PASSED.txt     ← Resultado ejecución tests
+4_testing_req0_debug1_FAILED.txt     ← Tests fallidos con estadísticas
+5_reviewer_feedback_req0.txt         ← Feedback del revisor (si rechaza)
 6_stakeholder_validacion_req0.txt
 codigo_final.ts
 ```
@@ -157,9 +173,10 @@ codigo_final.ts
 ```python
 # En src/config/settings.py
 
-MAX_ATTEMPTS = 1              # Ciclos completos
-MAX_DEBUG_ATTEMPTS = 3        # Intentos de depuración
-MAX_SONARQUBE_ATTEMPTS = 3    # Intentos de calidad
+MAX_ATTEMPTS = 1              # Ciclos completos (Product Owner → Stakeholder)
+MAX_DEBUG_ATTEMPTS = 3        # Intentos de depuración (Developer-UnitTests ↔ Developer-Code)
+MAX_SONARQUBE_ATTEMPTS = 3    # Intentos de calidad (Sonar ↔ Developer-Code)
+MAX_REVISOR_ATTEMPTS = 2      # Intentos de revisión (Developer2-Reviewer ↔ Developer-Code)
 ```
 
 ## Estados de Salida
@@ -168,9 +185,10 @@ MAX_SONARQUBE_ATTEMPTS = 3    # Intentos de calidad
 - ✅ `VALIDADO` - Código completamente aprobado
 
 ### Salidas de Límite
-- ❌ `QUALITY_LIMIT_EXCEEDED` - Calidad no alcanzada
-- ❌ `DEBUG_LIMIT_EXCEEDED` - Tests no pasan
-- ❌ `FAILED_FINAL` - Validación de negocio fallida
+- ❌ `QUALITY_LIMIT_EXCEEDED` - Calidad no alcanzada después de MAX_SONARQUBE_ATTEMPTS
+- ❌ `DEBUG_LIMIT_EXCEEDED` - Tests no pasan después de MAX_DEBUG_ATTEMPTS
+- ❌ `REVISOR_LIMIT_EXCEEDED` - Código no aprobado después de MAX_REVISOR_ATTEMPTS
+- ❌ `FAILED_FINAL` - Validación de negocio fallida después de MAX_ATTEMPTS
 
 ## Ventajas del Nuevo Flujo
 
@@ -182,16 +200,19 @@ Desarrollador → Probador
 - ⚠️ Code smells pasan desapercibidos
 - ⚠️ Vulnerabilidades no detectadas
 
-### Ahora (con SonarQube y Tests Modernos)
+### Ahora (con SonarQube, Tests Modernos, Code Review y GitHub)
 ```
-Desarrollador → SonarQube → Generador Tests → Ejecutor Pruebas
+Developer-Code → Sonar → Developer-UnitTests → Developer2-Reviewer → Developer-CompletePR → Stakeholder
 ```
-- ✅ Detección automática de issues
+- ✅ Detección automática de issues de calidad
 - ✅ Código más seguro y mantenible
 - ✅ Tests profesionales con vitest/pytest
 - ✅ Ejecución directa sin sandbox (~3x más rápido)
 - ✅ Estadísticas detalladas (total, pasados, fallidos)
 - ✅ Output limpio sin códigos ANSI
-- ✅ Estándares profesionales
+- ✅ Code review automatizado con LLM
+- ✅ Integración completa con GitHub (branches, commits, PRs, merge)
+- ✅ Integración completa con Azure DevOps (PBIs, Tasks, comentarios, adjuntos)
+- ✅ Estándares profesionales en todo el flujo
 - ✅ Reducción de deuda técnica
-- ✅ Integración con Azure DevOps (PBIs, Tasks, adjuntos)
+- ✅ Trazabilidad completa del código

@@ -21,7 +21,6 @@ class Settings:
     
     # API Keys
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    E2B_API_KEY: str = os.getenv("E2B_API_KEY", "")
     
     # Configuración de SonarScanner CLI (opcional - para análisis local)
     SONARSCANNER_ENABLED: bool = os.getenv("SONARSCANNER_ENABLED", "false").lower() == "true"

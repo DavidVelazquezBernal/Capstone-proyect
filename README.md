@@ -98,9 +98,8 @@ pip install pytest
 Crear archivo `.env` en la raíz del proyecto:
 
 ```env
-# APIs requeridas
+# API requerida
 GEMINI_API_KEY=tu_clave_api_aqui
-E2B_API_KEY=tu_clave_e2b_aqui
 
 # SonarScanner CLI (opcional - para análisis local con servidor SonarQube)
 # ⚠️ IMPORTANTE: Si SONARSCANNER_ENABLED=true, DEBES tener un servidor SonarQube corriendo
@@ -348,11 +347,10 @@ El sistema implementa tres bucles de corrección:
 | **typing-extensions** | ≥4.0.0 | Extensiones de tipado para Python 3.8+ | PSF |
 | **annotated-types** | ≥0.4.0 | Tipos anotados para validación | MIT |
 
-### Ejecución de Código y Testing
+### Testing
 
 | Componente | Versión | Propósito | Licencia |
 |------------|---------|-----------|----------|
-| **e2b-code-interpreter** | ≥1.0.0 | Sandbox seguro para ejecución de código Python/TypeScript | Apache 2.0 |
 | **vitest** | ^4.0.15 | Framework de testing para TypeScript (npm) | MIT |
 | **pytest** | latest | Framework de testing para Python | MIT |
 
@@ -394,7 +392,6 @@ El sistema implementa tres bucles de corrección:
 | Servicio | Propósito | Configuración |
 |----------|-----------|---------------|
 | **Google Gemini API** | Generación de código, análisis y validación con LLM | `GEMINI_API_KEY` en .env |
-| **E2B API** | Sandbox seguro para ejecución de código | `E2B_API_KEY` en .env |
 | **GitHub API** (opcional) | Gestión de repositorio, branches, PRs | `GITHUB_TOKEN` en .env |
 | **Azure DevOps API** (opcional) | Creación y gestión de work items | `AZURE_DEVOPS_PAT` en .env |
 | **SonarCloud API** (opcional) | Análisis de calidad en la nube | `SONARCLOUD_TOKEN` en .env |
@@ -435,16 +432,16 @@ Editar `src/config/settings.py` para ajustar:
 - `LOG_LEVEL`: Nivel de logging (default: INFO)
 - `LOG_TO_FILE`: Guardar logs en archivo (default: true)
 
-### Ejecución de Tests Moderna (Refactorizado)
+### Ejecución de Tests
 
 El sistema ejecuta directamente tests unitarios generados usando frameworks estándar:
 
 **Características:**
-- ✅ **TypeScript**: Ejecución directa con `vitest` (sin E2B)
-- ✅ **Python**: Ejecución directa con `pytest` (sin E2B)
-- ✅ **Sin dependencias externas**: No requiere E2B Sandbox
+- ✅ **TypeScript**: Ejecución directa con `vitest`
+- ✅ **Python**: Ejecución directa con `pytest`
+- ✅ **Sin dependencias externas**: No requiere servicios externos
 - ✅ **Debugging local**: Tests ejecutables manualmente en `output/`
-- ✅ **Performance mejorada**: ~3x más rápido que sandbox
+- ✅ **Performance optimizada**: Ejecución local rápida
 - ✅ **Reportes profesionales**: Salida estándar con estadísticas detalladas
 - ✅ **Estadísticas completas**: Total, pasados, fallidos para cada ejecución
 - ✅ **Output limpio**: Sin códigos ANSI en archivos guardados

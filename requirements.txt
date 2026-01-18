@@ -11,9 +11,6 @@ langchain-google-genai>=2.0.0  # Wrapper LangChain para Gemini
 pydantic>=2.0.0,<3.0.0
 pydantic-core>=2.0.0
 
-# Ejecución segura de código
-e2b-code-interpreter>=1.0.0
-
 # Gestión de entorno
 python-dotenv>=1.0.0
 

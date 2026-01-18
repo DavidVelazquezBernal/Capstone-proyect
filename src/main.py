@@ -343,11 +343,13 @@ def main():
     # prompt = {
     #     "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
     # }
-
+    # prompt = {
+    #     "crea en typescript un Singleton thread-safe para gestionar configuración de aplicación"
+    # }
     prompt = {
-        "crea en typescriptn un Singleton thread-safe para gestionar configuración de aplicación"
+        "Crea en typescript un cliente HTTP con retry logic, timeout y manejo de errores en TypeScript"
     }
-    
+
     final_state = run_development_workflow(prompt, max_attempts=3)
     
     if final_state and final_state.get('validado'):
