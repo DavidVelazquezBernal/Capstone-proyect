@@ -58,18 +58,22 @@ def create_workflow() -> StateGraph:
         }
     )
 
-    # B. Bucle de Depuración (Developer-UnitTests: Corrección de Código)
+    # B. Bucle de Depuración (Developer-UnitTests: Corrección de Código o Tests)
     # Incluye control de límite de intentos
+    # Si los tests fallan por estar mal construidos, vuelve a Developer-UnitTests para regenerarlos
+    # Si los tests fallan por el código de producción, vuelve a Developer-Code
     # Cuando pasa los tests siempre va a Developer2-Reviewer (que decide si va a Stakeholder o vuelve a Developer-Code)
     workflow.add_conditional_edges(
         "Developer-UnitTests",
         lambda x: (
             "PASSED" if x['pruebas_superadas']
             else ("DEBUG_LIMIT_EXCEEDED" if x['debug_attempt_count'] >= x['max_debug_attempts']
-                  else "FAILED")
+                  else ("TEST_REGENERATION" if x.get('test_regeneration_needed', False)
+                        else "FAILED"))
         ),
         {
-            "FAILED": "Developer-Code",
+            "FAILED": "Developer-Code",  # Problema en código de producción
+            "TEST_REGENERATION": "Developer-UnitTests",  # Problema en tests, regenerar
             "PASSED": "Developer2-Reviewer",
             "DEBUG_LIMIT_EXCEEDED": END
         }

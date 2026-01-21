@@ -523,6 +523,10 @@ def developer_unit_tests_node(state: AgentState) -> AgentState:
                     test_filename=test_filename
                 )
                 if (not should_fix) or (test_fix_attempt >= max_test_fix_attempts):
+                    # Si agotamos los intentos pero el problema sigue siendo de tests, marcar para regeneración
+                    if should_fix and test_fix_attempt >= max_test_fix_attempts:
+                        logger.warning(f"⚠️ Límite de corrección de tests alcanzado ({max_test_fix_attempts}). Marcando para regeneración completa.")
+                        state['test_regeneration_needed'] = True
                     break
 
                 test_fix_attempt += 1
@@ -596,8 +600,9 @@ TESTS ORIGINALES (con problemas):
             state['traceback'] = result['traceback']
             
             if result['success']:
-                # Tests pasaron - resetear contador de debug
+                # Tests pasaron - resetear contadores
                 state['debug_attempt_count'] = 0
+                state['test_regeneration_needed'] = False
                 
                 # Obtener estadísticas
                 stats = result.get('tests_run', {})
@@ -770,8 +775,24 @@ TESTS ORIGINALES (con problemas):
                         logger.debug(f"Stack trace: {e}", exc_info=True)
                 # === FIN: GitHub tests y PR ===
             else:
-                # Tests fallaron - incrementar contador de debug
-                state['debug_attempt_count'] += 1
+                # Tests fallaron - determinar si es problema de tests o de código
+                should_fix, reason = _es_fallo_probablemente_de_tests(
+                    lenguaje=lenguaje,
+                    output=result.get('output', ''),
+                    traceback=result.get('traceback', ''),
+                    test_filename=test_filename
+                )
+                
+                if should_fix:
+                    # El problema es de los tests, NO incrementar debug_attempt_count
+                    logger.warning(f"⚠️ Fallo detectado en los tests ({reason}), no en el código de producción")
+                    state['test_regeneration_needed'] = True
+                    # NO incrementar debug_attempt_count aquí
+                else:
+                    # El problema es del código de producción, incrementar contador
+                    state['debug_attempt_count'] += 1
+                    state['test_regeneration_needed'] = False
+                    logger.error(f"❌ Fallo en el código de producción. Intento de debug: {state['debug_attempt_count']}/{state['max_debug_attempts']}")
                 
                 # Obtener estadísticas
                 stats = result.get('tests_run', {})

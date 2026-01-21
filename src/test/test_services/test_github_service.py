@@ -40,10 +40,14 @@ class TestGitHubService:
     def test_service_deshabilitado_cuando_settings_false(self, monkeypatch):
         """Verifica que el servicio se deshabilita cuando settings es False"""
         from config.settings import settings
-        monkeypatch.setattr(settings, 'GITHUB_ENABLED', False)
         
-        service = GitHubService()
-        assert service.enabled is False
+        # Mockear settings y GITHUB_AVAILABLE ANTES de instanciar el servicio
+        with patch('services.github_service.settings') as mock_settings:
+            mock_settings.GITHUB_ENABLED = False
+            with patch('services.github_service.GITHUB_AVAILABLE', False):
+                service = GitHubService()
+                
+                assert service.enabled is False
     
     def test_sanitize_branch_name_limpia_caracteres_invalidos(self, service):
         """Verifica que sanitize_branch_name limpia caracteres inválidos"""
@@ -100,14 +104,17 @@ class TestGitHubService:
     def test_create_branch_and_commit_retorna_false_cuando_deshabilitado(self, monkeypatch):
         """Verifica que retorna False cuando está deshabilitado"""
         from config.settings import settings
-        monkeypatch.setattr(settings, 'GITHUB_ENABLED', False)
         
-        service = GitHubService()
-        files = {'test.py': 'code'}
-        success, sha = service.create_branch_and_commit('feature/test', files, 'commit')
-        
-        assert success is False
-        assert sha is None
+        # Mockear settings ANTES de instanciar el servicio
+        with patch('services.github_service.settings') as mock_settings:
+            mock_settings.GITHUB_ENABLED = False
+            with patch('services.github_service.GITHUB_AVAILABLE', False):
+                service = GitHubService()
+                files = {'test.py': 'code'}
+                success, sha = service.create_branch_and_commit('feature/test', files, 'commit')
+                
+                assert success is False
+                assert sha is None
     
     def test_create_branch_and_commit_maneja_excepciones(self, mock_settings):
         """Verifica que maneja excepciones correctamente"""
@@ -156,16 +163,19 @@ class TestGitHubService:
     def test_create_pull_request_retorna_false_cuando_deshabilitado(self, monkeypatch):
         """Verifica que retorna False cuando está deshabilitado"""
         from config.settings import settings
-        monkeypatch.setattr(settings, 'GITHUB_ENABLED', False)
         
-        service = GitHubService()
-        success, pr_number, pr_url = service.create_pull_request(
-            'feature/test', 'title', 'body'
-        )
-        
-        assert success is False
-        assert pr_number is None
-        assert pr_url is None
+        # Mockear settings ANTES de instanciar el servicio
+        with patch('services.github_service.settings') as mock_settings:
+            mock_settings.GITHUB_ENABLED = False
+            with patch('services.github_service.GITHUB_AVAILABLE', False):
+                service = GitHubService()
+                success, pr_number, pr_url = service.create_pull_request(
+                    'feature/test', 'title', 'body'
+                )
+                
+                assert success is False
+                assert pr_number is None
+                assert pr_url is None
     
     def test_create_pull_request_maneja_excepciones(self, mock_settings):
         """Verifica que maneja excepciones correctamente"""
@@ -208,12 +218,15 @@ class TestGitHubService:
     def test_add_comment_to_pr_retorna_false_cuando_deshabilitado(self, monkeypatch):
         """Verifica que retorna False cuando está deshabilitado"""
         from config.settings import settings
-        monkeypatch.setattr(settings, 'GITHUB_ENABLED', False)
         
-        service = GitHubService()
-        success = service.add_comment_to_pr(123, 'comment')
-        
-        assert success is False
+        # Mockear settings ANTES de instanciar el servicio
+        with patch('services.github_service.settings') as mock_settings:
+            mock_settings.GITHUB_ENABLED = False
+            with patch('services.github_service.GITHUB_AVAILABLE', False):
+                service = GitHubService()
+                success = service.add_comment_to_pr(123, 'comment')
+                
+                assert success is False
     
     def test_approve_pull_request_exitoso(self, service):
         """Verifica que approve_pull_request funciona correctamente"""

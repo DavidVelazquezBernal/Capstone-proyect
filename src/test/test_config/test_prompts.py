@@ -86,12 +86,8 @@ class TestPrompts:
             if isinstance(attr_value, str):
                 assert len(attr_value) > 50, f"{attr_name} debe tener contenido significativo"
     
-    def test_probador_ejecutor_menciona_herramientas_ejecucion(self):
-        """Verifica que el prompt de PROBADOR_EJECUTOR_TESTS menciona herramientas de ejecución"""
-        prompt = Prompts.PROBADOR_EJECUTOR_TESTS
-        
-        # Debe mencionar las herramientas de ejecución de código
-        assert 'CodeExecutionTool' in prompt or 'herramienta' in prompt.lower()
+    # NOTA: test_probador_ejecutor_menciona_herramientas_ejecucion fue eliminado
+    # porque PROBADOR_EJECUTOR_TESTS ya no existe (se ejecutan tests directamente con vitest/pytest)
     
     def test_codificador_menciona_lenguajes(self):
         """Verifica que el prompt de CODIFICADOR menciona lenguajes soportados"""

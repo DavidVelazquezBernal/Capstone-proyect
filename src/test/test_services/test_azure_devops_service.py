@@ -36,11 +36,14 @@ class TestAzureDevOpsService:
     def test_service_deshabilitado_cuando_settings_false(self, monkeypatch):
         """Verifica que el servicio se deshabilita cuando settings es False"""
         from config.settings import settings
-        monkeypatch.setattr(settings, 'AZURE_DEVOPS_ENABLED', False)
         
-        service = AzureDevOpsService()
-        assert service.enabled is False
-        assert service.client is None
+        # Mockear settings ANTES de importar/instanciar el servicio
+        with patch('services.azure_devops_service.settings') as mock_settings:
+            mock_settings.AZURE_DEVOPS_ENABLED = False
+            service = AzureDevOpsService()
+            
+            assert service.enabled is False
+            assert service.client is None
     
     def test_is_enabled_retorna_true_cuando_habilitado(self, service):
         """Verifica que is_enabled retorna True cuando está habilitado"""
@@ -49,21 +52,26 @@ class TestAzureDevOpsService:
     def test_is_enabled_retorna_false_cuando_deshabilitado(self, monkeypatch):
         """Verifica que is_enabled retorna False cuando está deshabilitado"""
         from config.settings import settings
-        monkeypatch.setattr(settings, 'AZURE_DEVOPS_ENABLED', False)
         
-        service = AzureDevOpsService()
-        assert service.is_enabled() is False
+        # Mockear settings ANTES de instanciar el servicio
+        with patch('services.azure_devops_service.settings') as mock_settings:
+            mock_settings.AZURE_DEVOPS_ENABLED = False
+            service = AzureDevOpsService()
+            
+            assert service.is_enabled() is False
     
     def test_create_pbi_from_requirements_retorna_none_cuando_deshabilitado(self, monkeypatch):
         """Verifica que create_pbi_from_requirements retorna None cuando está deshabilitado"""
         from config.settings import settings
-        monkeypatch.setattr(settings, 'AZURE_DEVOPS_ENABLED', False)
         
-        service = AzureDevOpsService()
-        requisitos = {'objetivo_funcional': 'Test'}
-        
-        result = service.create_pbi_from_requirements(requisitos)
-        assert result is None
+        # Mockear settings ANTES de instanciar el servicio
+        with patch('services.azure_devops_service.settings') as mock_settings:
+            mock_settings.AZURE_DEVOPS_ENABLED = False
+            service = AzureDevOpsService()
+            requisitos = {'objetivo_funcional': 'Test'}
+            
+            result = service.create_pbi_from_requirements(requisitos)
+            assert result is None
     
     def test_create_pbi_retorna_none_cuando_falla_conexion(self, service):
         """Verifica que retorna None cuando falla la conexión"""
@@ -123,15 +131,17 @@ class TestAzureDevOpsService:
     def test_generate_and_add_release_note_retorna_false_cuando_deshabilitado(self, monkeypatch):
         """Verifica que retorna False cuando está deshabilitado"""
         from config.settings import settings
-        monkeypatch.setattr(settings, 'AZURE_DEVOPS_ENABLED', False)
         
-        service = AzureDevOpsService()
-        mock_state = {
-            'azure_pbi_id': 123,
-            'requisitos_formales': '{"objetivo": "test"}',
-            'codigo_generado': 'def test(): pass'
-        }
-        
-        result = service.generate_and_add_release_note(mock_state)
-        
-        assert result is False
+        # Mockear settings ANTES de instanciar el servicio
+        with patch('services.azure_devops_service.settings') as mock_settings:
+            mock_settings.AZURE_DEVOPS_ENABLED = False
+            service = AzureDevOpsService()
+            mock_state = {
+                'azure_pbi_id': 123,
+                'requisitos_formales': '{"objetivo": "test"}',
+                'codigo_generado': 'def test(): pass'
+            }
+            
+            result = service.generate_and_add_release_note(mock_state)
+            
+            assert result is False

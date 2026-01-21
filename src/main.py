@@ -98,6 +98,7 @@ def run_development_workflow(
         "sonarqube_issues": "",
         "sonarqube_passed": False,
         "tests_unitarios_generados": "",
+        "test_regeneration_needed": False,
         "requisito_clarificado": "",
         "requisitos_formales": "",
         "codigo_generado": "",
@@ -221,134 +222,12 @@ def main():
     
     logger.info("🚀 Iniciando sistema multiagente de desarrollo")
     
-    # Ejemplos de uso - Descomentar el prompt que quieras usar
+    # Para ver ejemplos de uso, consulta: docs/examples.md
     
-    # ============================================
-    # EJEMPLO 1: Uso básico (configuración por defecto)
-    # ============================================
-    # prompt = "Crea una función para calcular el factorial de un número"
-    # final_state = run_development_workflow(prompt)
-    
-    # ============================================
-    # EJEMPLO 2: Uso con RetryConfig personalizado
-    # ============================================
-    # from config.settings import RetryConfig
-    # 
-    # prompt = "Implementa una clase Calculator con operaciones básicas"
-    # retry_config = RetryConfig(
-    #     max_attempts=2,              # Máximo de ciclos completos
-    #     max_debug_attempts=5,        # Máximo de intentos Testing-Desarrollador
-    #     max_sonarqube_attempts=2,    # Máximo de intentos SonarQube-Desarrollador
-    #     max_revisor_attempts=3       # Máximo de intentos de revisión
-    # )
-    # final_state = run_development_workflow(prompt, retry_config=retry_config)
-    
-    # ============================================
-    # EJEMPLO 3: Uso con max_attempts (DEPRECATED - usar retry_config)
-    # ============================================
-    # prompt = "Crea una función para validar emails"
-    # final_state = run_development_workflow(prompt, max_attempts=3)
-    
-    # Opción 1: Python
-    # prompt = (
-    #     "Quiero una función simple en Python para sumar una lista de números, "
-    #     "y quiero que la salida sea una frase."
-    # )
-
-    # prompt = (
-    #     "Quiero una función simple en Python para generar el factorial de un número, "
-    #     "y quiero que la salida sea un string con una frase descriptiva."
-    # )    
-
-    # prompt = (
-    #     "Quiero una función simple en Python que capitalice la primera letra de cada palabra "        
-    # )
-
-
-    # Opción 2: TypeScript
-    # prompt = (
-    #     "Quiero una función simple en TypeScript para sumar un array de números, "
-    #     "y quiero que la salida sea un string con una frase descriptiva."
-    # )
-
-    # prompt = (
-    #     "Quiero una función simple en TypeScript para generar el factorial de un número, "
-    #     "y quiero que la salida sea un string con una frase descriptiva."
-    # )
-
-    # prompt = (
-    #     "Quiero una función simple en TypeScript para generar el factorial de dos números y luego los sume, "
-    #     "y quiero que la salida sea un string con una frase descriptiva."
-    # )
-
-    # prompt = (
-    #      "Quiero una función simple en TypeScript que capitalice la primera letra de cada palabra "        
-    # )
-
-
-    
-
-
-    # prompt = {
-    #     "Implementa una clase BinarySearchTree en TypeScript con métodos insert, search, delete, "
-    #     "inorder traversal y balance check. Incluye manejo de casos edge como árboles vacíos, "
-    #     "nodos duplicados y eliminación de nodos con dos hijos. Añade validación de tipos y "
-    #     "documentación JSDoc completa."
-    # }
-
-    #====================
-    #Básicas
-    #====================
-    # prompt = {
-    #     "Quiero una función simple en TypeScript que valide si un correo electrónico es válido, "
-    #     "y quiero que la salida sea un string con una frase descriptiva."
-    # }
-    # prompt = {
-    #     "Implementa una clase Stack (pila) en TypeScript con métodos push, pop, peek, isEmpty y size"
-    # }
-    # prompt = {
-    #     "Implementa una clase Calculator en typescript con las operaciones básicas (+, -, *, /)  y manejo de división por cero"
-    # }
-
-    #====================
-    #Intermedias
-    #====================
-    # prompt = {
-    #     "Implementa un algoritmo de ordenamiento QuickSort en TypeScript con análisis de complejidad"
-    # }
-    # prompt = {
-    #     "Crea una función en typescript que valide si un string tiene paréntesis balanceados, incluyendo [], {} y ()"
-    # }
-    # prompt = {
-    #     "Crea en typescript un sistema de caché LRU (Least Recently Used) con tiempo de expiración configurable"
-    # }
-    # prompt = {
-    #      "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
-    # }
-    # prompt = {
-    #     "Implementa en typescript el patrón Observer en TypeScript para un sistema de notificaciones"
-    # }
-    # prompt = {
-    #     "Crea en typescript un middleware de logging que registre requests, responses y errores con diferentes niveles"
-    # }
-    # prompt = {
-    #     "Crea en typescript un sistema de permisos basado en roles (RBAC) con herencia de roles y permisos granulares"
-    # }
-    # prompt = {
-    #     "Crea en typescript un sistema de caché LRU (Least Recently Used) con tiempo de expiración configurable"
-    # }
-    # prompt = {
-    #     "Implementa en typescript un rate limiter (limitador de peticiones) con ventana deslizante en TypeScript"
-    # }
-    # prompt = {
-    #     "Crea en typescript un Factory Pattern para generar diferentes tipos de vehículos con sus características"
-    # }
-    # prompt = {
-    #     "crea en typescript un Singleton thread-safe para gestionar configuración de aplicación"
-    # }
-    prompt = {
-        "Crea en typescript un cliente HTTP con retry logic, timeout y manejo de errores en TypeScript"
-    }
+    prompt = (
+        "Quiero una función simple en TypeScript para sumar un array de números, "
+        "y quiero que la salida sea un string con una frase descriptiva."
+    )
 
     final_state = run_development_workflow(prompt, max_attempts=3)
     

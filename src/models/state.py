@@ -40,6 +40,7 @@ class AgentState(TypedDict):
 
     # Unit Tests Generation
     tests_unitarios_generados: str  # Tests unitarios generados (vitest/pytest)
+    test_regeneration_needed: bool  # Si los tests fallaron por estar mal construidos (no por código de producción)
 
     # GitHub Integration
     github_branch_name: str | None  # Nombre del branch creado
