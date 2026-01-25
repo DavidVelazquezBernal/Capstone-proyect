@@ -66,9 +66,8 @@ El código será validado por un agente StakeHolder que verificará que el resul
 
 **Estado**: ✅ **COMPLETADA**
 
-### ✅ Fase 7: Subida de código y test a Azure
-De cara a demo se adjuntarán el código generado al Work Item asociado y al PBI asociado.
-De cara a demo se adjuntarán los unit test generados al Work Item asociado y al PBI asociado.
+### ✅ Fase 7: Subida de código y test a Repositorio
+El código generado se subirá a un repositorio de GITHUB.
 
 **Estado**: ✅ **COMPLETADA**
 
@@ -635,20 +634,6 @@ El sistema implementa cuatro bucles de corrección:
 - **Azure DevOps**: Requiere API v7.0 o superior
 - **GitHub**: Requiere permisos de repo, PR y workflow en el token
 
-### Instalación de Dependencias
-
-```bash
-# Python dependencies
-pip install -r requirements.txt
-
-# Node.js dependencies (para testing TypeScript)
-cd output
-npm install -D vitest
-cd ..
-
-# Python testing
-pip install pytest
-```
 
 ## �📝 Configuración
 

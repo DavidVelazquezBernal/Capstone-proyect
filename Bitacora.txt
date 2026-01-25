@@ -3,7 +3,7 @@ El servicio de sonar en local se levanta: C:\sonarqube\sonarqube-25.12.0.117093\
 Pendiente:
     * Añadir información de la PR y los commits al PBI
     * Mejorar la gestión de errores en la creación de PBIs/WorkItems que ya existen (por reejecuciones de una misma petición)    
-    * Selección de agente óptimo para cada agente
+    * Selección de LLM óptimo para cada agente
     * Mejorar la revisión de errores en las ejecuciones de los test. Si los test están mal montados, no se le debe pasar el problema al Developer-code sino, al propio agente Developer-test
     * Generación de código VUE 
 

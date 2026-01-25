@@ -16,27 +16,30 @@
 
 ```mermaid
 graph TD
-    START([INICIO]) --> PO[1. 📋 Product Owner<br/>Formaliza requisitos<br/>🔷 Crea PBI en Azure DevOps]
-    PO --> DEV[2. 💻 Developer-Code<br/>Genera/Corrige código<br/>� Crea branch en GitHub<br/>🔷 Crea Tasks en Azure DevOps]
+    START([INICIO]) --> PO[1. 📋 <b>Product Owner</b><br/>Analista de Requisitos<br/>• Formaliza requisitos en JSON<br/>• Valida completitud y claridad<br/>• Gestiona feedback del Stakeholder<br/>🔷 Crea PBIs en Azure DevOps]
     
-    DEV --> SQ[3. Analizador SonarQube<br/>Análisis de calidad]
+    PO --> DEV[2. 💻 <b>Developer-Code</b><br/>Desarrollador Principal<br/>• Genera código Python/TypeScript<br/>• Corrige errores de ejecución<br/>• Corrige issues de calidad<br/>🐙 Crea branch en GitHub<br/>🔷 Crea Tasks en Azure DevOps]
     
-    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| GUT[4. 🧪 Developer-UnitTests<br/>Genera y ejecuta tests<br/>vitest/pytest<br/>🐙 Pushea tests a GitHub]
+    DEV --> SQ[3. 🔍 <b>SonarQube</b><br/>Analista de Calidad<br/>• Analiza bugs, vulnerabilidades, code smells<br/>• Genera reportes detallados<br/>• Polling inteligente hasta 5 min<br/>☁️ SonarCloud API<br/>🔷 Comenta en Tasks de Azure DevOps]
+    
+    SQ -->|✅ Calidad OK<br/>0 BLOCKER<br/>≤2 CRITICAL| GUT[4. 🧪 <b>Developer-UnitTests</b><br/>Ingeniero de Testing<br/>• Genera tests vitest/pytest<br/>• Ejecuta tests con timeout<br/>• Detección inteligente de fallos<br/>• Regenera tests malformados<br/>🐙 Pushea tests y crea PR en GitHub]
     SQ -->|❌ Issues encontrados| SQCHECK{Intentos SQ<br/>< MAX?}
     SQCHECK -->|Sí| DEV
     SQCHECK -->|No| ENDLIMIT1[❌ FIN<br/>Límite calidad excedido]
     
-    GUT -->|✅ Tests pasan| REV[5. 🔍 Developer2-Reviewer<br/>Code Reviewer Senior<br/>🐙 Aprueba PR en GitHub]
-    GUT -->|❌ Tests fallan| DEBUGCHECK{Intentos Debug<br/>< MAX?}
+    GUT -->|✅ Tests pasan| REV[5. 🔍 <b>Developer2-Reviewer</b><br/>Code Reviewer Senior<br/>• Revisa legibilidad y mantenibilidad<br/>• Valida cumplimiento de requisitos<br/>• Identifica aspectos a mejorar<br/>🐙 Aprueba PR en GitHub]
+    GUT -->|❌ Tests fallan| TESTCHECK{¿Problema de<br/>tests o código?}
+    TESTCHECK -->|Tests malformados| GUT
+    TESTCHECK -->|Código incorrecto| DEBUGCHECK{Intentos Debug<br/>< MAX?}
     DEBUGCHECK -->|Sí| DEV
     DEBUGCHECK -->|No| ENDLIMIT2[❌ FIN<br/>Límite debug excedido]
     
-    REV -->|✅ Código aprobado| MERGE[6. 🔀 Developer-CompletePR<br/>Integrador<br/>🐙 Squash merge PR<br/>🐙 Limpia branches]
+    REV -->|✅ Código aprobado| MERGE[6. 🔀 <b>Developer-CompletePR</b><br/>Integrador<br/>• Verifica precondiciones<br/>• Squash merge del PR<br/>• Limpia branches remotos y locales<br/>🐙 Merge + cleanup en GitHub]
     REV -->|❌ Código rechazado| REVCHECK{Intentos Revisor<br/>< MAX?}
     REVCHECK -->|Sí| DEV
     REVCHECK -->|No| ENDLIMIT3[❌ FIN<br/>Límite revisor excedido]
     
-    MERGE -->|✅ PR mergeado| SH[7. ✅ Stakeholder<br/>Validador de Negocio<br/>� Actualiza work items a Done<br/>�📎 Adjunta código a Azure DevOps]
+    MERGE -->|✅ PR mergeado| SH[7. ✅ <b>Stakeholder</b><br/>Validador de Negocio<br/>• Valida visión de negocio<br/>• Verifica alineación con requisitos<br/>• Decide completitud del proyecto<br/>🔷 Actualiza work items a Done<br/>🔷 Adjunta código final a PBI]
     MERGE -->|❌ Merge falló| ENDLIMIT4[❌ FIN<br/>Merge fallido]
     
     SH -->|✅ VALIDADO| ENDSUCCESS[✅ FIN<br/>Código aprobado]
@@ -54,7 +57,7 @@ graph TD
     style SQ fill:#87CEEB
     style GUT fill:#98FB98
     style DEV fill:#FFD700
-    style PROB fill:#FFA500
+    style TESTCHECK fill:#FFA500
     style REV fill:#DDA0DD
     style MERGE fill:#87CEEB
     style SH fill:#B0E0E6
@@ -82,9 +85,12 @@ Developer-Code → Sonar → [Issues?] → Developer-Code
 
 ### Bucle 2: Depuración Funcional (Developer-UnitTests ↔ Developer-Code)
 ```
-Developer-UnitTests → [Tests fallan?] → Developer-Code → Sonar → Developer-UnitTests
-         ↓
-     [Pasan] → Developer2-Reviewer
+Developer-UnitTests → [Tests fallan?] → ¿Problema de tests o código?
+         ↓                    ↓                      ↓
+     [Pasan]          [Tests mal construidos]  [Código de producción]
+         ↓                    ↓                      ↓
+  Developer2-Reviewer  Developer-UnitTests    Developer-Code → Sonar → Developer-UnitTests
+                       (Regenera tests)
 ```
 - **Trigger**: Tests unitarios fallan
 - **Límite**: `MAX_DEBUG_ATTEMPTS` = 3 intentos (configurable)
@@ -93,11 +99,21 @@ Developer-UnitTests → [Tests fallan?] → Developer-Code → Sonar → Develop
 - **Frameworks**: vitest para TypeScript, pytest para Python
 - **Proceso**:
   1. Developer-UnitTests genera y ejecuta tests
-  2. Si fallan → captura traceback y estadísticas
-  3. Developer-Code corrige basándose en el error
-  4. Código corregido pasa por Sonar → Developer-UnitTests
+  2. Si fallan → analiza si el problema es de tests o código:
+     - **Tests mal construidos** (sintaxis, imports, -0 vs +0, etc.):
+       - Marca `test_regeneration_needed = True`
+       - NO incrementa `debug_attempt_count`
+       - Vuelve a Developer-UnitTests para regenerar tests
+       - Límite interno: `MAX_TEST_FIX_ATTEMPTS` = 2 intentos
+     - **Código de producción con errores**:
+       - Marca `test_regeneration_needed = False`
+       - Incrementa `debug_attempt_count`
+       - Vuelve a Developer-Code para corregir código
+       - Código corregido pasa por Sonar → Developer-UnitTests
+  3. Captura traceback y estadísticas detalladas
 - **Reportes**: Estadísticas detalladas (total, pasados, fallidos)
 - **Ejecución**: Directa con subprocess (sin sandbox, ~3x más rápido)
+- **Detección inteligente**: Identifica automáticamente si el fallo es por tests malformados o código incorrecto
 
 ### Bucle 3: Revisión de Código (Developer2-Reviewer ↔ Developer-Code)
 ```
@@ -128,23 +144,31 @@ Product Owner → ... → Stakeholder → [Rechaza?] → Product Owner
 
 ## Contadores de Estado
 
-El estado mantiene cuatro contadores independientes:
+El estado mantiene cinco contadores y flags independientes:
 
 ```python
 state = {
-    'attempt_count': 0,           # Ciclo completo (Bucle 4)
-    'debug_attempt_count': 0,     # Bucle depuración (Bucle 2)
-    'sonarqube_attempt_count': 0, # Bucle calidad (Bucle 1)
-    'revisor_attempt_count': 0    # Bucle revisión (Bucle 3)
+    'attempt_count': 0,              # Ciclo completo (Bucle 4)
+    'debug_attempt_count': 0,        # Bucle depuración (Bucle 2)
+    'sonarqube_attempt_count': 0,    # Bucle calidad (Bucle 1)
+    'revisor_attempt_count': 0,      # Bucle revisión (Bucle 3)
+    'test_regeneration_needed': False # Flag para regeneración de tests
 }
 ```
 
 ### Reseteo de Contadores
 
 - `attempt_count`: Se incrementa al volver desde Stakeholder a Product Owner
-- `debug_attempt_count`: Se resetea cuando tests pasan
+- `debug_attempt_count`: 
+  - Se resetea cuando tests pasan
+  - **NO se incrementa** cuando el problema es de tests mal construidos
+  - Solo se incrementa cuando el problema es del código de producción
 - `sonarqube_attempt_count`: Se resetea cuando calidad pasa
 - `revisor_attempt_count`: Se resetea cuando revisor aprueba el código
+- `test_regeneration_needed`:
+  - Se marca como `True` cuando tests fallan por estar mal construidos
+  - Se marca como `False` cuando tests fallan por código de producción
+  - Se resetea a `False` cuando tests pasan exitosamente
 
 ## Archivos Generados
 
@@ -177,7 +201,14 @@ MAX_ATTEMPTS = 1              # Ciclos completos (Product Owner → Stakeholder)
 MAX_DEBUG_ATTEMPTS = 3        # Intentos de depuración (Developer-UnitTests ↔ Developer-Code)
 MAX_SONARQUBE_ATTEMPTS = 3    # Intentos de calidad (Sonar ↔ Developer-Code)
 MAX_REVISOR_ATTEMPTS = 2      # Intentos de revisión (Developer2-Reviewer ↔ Developer-Code)
+MAX_TEST_FIX_ATTEMPTS = 2     # Intentos de corrección de tests malformados (interno en Developer-UnitTests)
 ```
+
+### Diferencia entre MAX_DEBUG_ATTEMPTS y MAX_TEST_FIX_ATTEMPTS
+
+- **`MAX_DEBUG_ATTEMPTS`**: Controla cuántas veces el código de producción puede ser corregido por fallos en tests
+- **`MAX_TEST_FIX_ATTEMPTS`**: Controla cuántas veces los tests pueden ser regenerados cuando están mal construidos (límite interno)
+- Si los tests fallan por estar mal construidos y se alcanza `MAX_TEST_FIX_ATTEMPTS`, se marca para regeneración completa pero NO se incrementa `debug_attempt_count`
 
 ## Estados de Salida
 
@@ -211,8 +242,11 @@ Developer-Code → Sonar → Developer-UnitTests → Developer2-Reviewer → Dev
 - ✅ Estadísticas detalladas (total, pasados, fallidos)
 - ✅ Output limpio sin códigos ANSI
 - ✅ Code review automatizado con LLM
+- ✅ **Detección inteligente de fallos**: Distingue entre tests malformados y código incorrecto
+- ✅ **Regeneración automática de tests**: Cuando tests están mal construidos, se regeneran sin penalizar el contador de debug
 - ✅ Integración completa con GitHub (branches, commits, PRs, merge)
 - ✅ Integración completa con Azure DevOps (PBIs, Tasks, comentarios, adjuntos)
 - ✅ Estándares profesionales en todo el flujo
 - ✅ Reducción de deuda técnica
 - ✅ Trazabilidad completa del código
+- ✅ Optimización de ciclos de corrección (evita ciclos innecesarios al Developer-Code)
